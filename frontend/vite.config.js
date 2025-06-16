@@ -18,7 +18,7 @@ export default defineConfig({
     }
   },
   server: {
-    port: 3000,
+    // Remove the port: 3000 line to use default 5173
     open: true,
     cors: true,
     proxy: {
@@ -48,7 +48,7 @@ export default defineConfig({
     chunkSizeWarningLimit: 1000
   },
   preview: {
-    port: 3000,
+    // Also remove port: 3000 from preview to use default
     open: true
   },
   define: {
