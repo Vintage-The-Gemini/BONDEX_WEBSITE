@@ -11,12 +11,12 @@ import connectDB from "./src/config/database.js";
 import errorHandler from "./src/middleware/errorHandler.js";
 
 // Import routes
-import authRoutes from "./src/routes/authRoutes.js";
-import productRoutes from "./src/routes/productRoutes.js";
-import orderRoutes from "./src/routes/orderRoutes.js";
-import userRoutes from "./src/routes/userRoutes.js";
-import adminRoutes from "./src/routes/adminRoutes.js";
-import cartRoutes from "./src/routes/cartRoutes.js";
+import authRoutes from "./src/routes/auth.js";
+import productRoutes from "./src/routes/products.js";
+import orderRoutes from "./src/routes/orders.js";
+import userRoutes from "./src/routes/users.js";
+import adminRoutes from "./src/routes/admin.js";
+import cartRoutes from "./src/routes/cart.js";
 
 // Load environment variables
 dotenv.config();
