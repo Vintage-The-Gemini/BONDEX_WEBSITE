@@ -1,3 +1,4 @@
+// backend/src/models/Category.js
 import mongoose from 'mongoose';
 
 const categorySchema = new mongoose.Schema({
@@ -15,7 +16,8 @@ const categorySchema = new mongoose.Schema({
   slug: {
     type: String,
     unique: true,
-    lowercase: true
+    lowercase: true,
+    index: true // Use index: true in field definition instead of separate index
   },
   image: {
     public_id: String,
@@ -63,8 +65,7 @@ const categorySchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Indexes
-categorySchema.index({ slug: 1 });
+// Indexes (removed duplicate slug index)
 categorySchema.index({ protectionType: 1, industry: 1 });
 categorySchema.index({ isActive: 1, isFeatured: -1 });
 

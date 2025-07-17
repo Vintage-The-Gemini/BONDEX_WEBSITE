@@ -1,52 +1,68 @@
+// backend/src/config/cloudinary.js
 import { v2 as cloudinary } from 'cloudinary';
-import { CloudinaryStorage } from 'multer-storage-cloudinary';
-import multer from 'multer';
+import logger from './logger.js';
 
 // Configure Cloudinary
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
   api_key: process.env.CLOUDINARY_API_KEY,
   api_secret: process.env.CLOUDINARY_API_SECRET,
+  secure: true
 });
 
-// Storage for product images
-const productStorage = new CloudinaryStorage({
-  cloudinary: cloudinary,
-  params: {
-    folder: 'safety-equipment/products',
-    allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
-    transformation: [
-      { width: 800, height: 800, crop: 'fill', quality: 'auto' },
-      { fetch_format: 'auto' }
-    ],
-  },
+// Test connection
+const testCloudinaryConnection = async () => {
+  try {
+    // First check if credentials are set
+    if (!process.env.CLOUDINARY_CLOUD_NAME || !process.env.CLOUDINARY_API_KEY || !process.env.CLOUDINARY_API_SECRET) {
+      throw new Error('Cloudinary credentials not found in environment variables');
+    }
+
+    const result = await cloudinary.api.ping();
+    logger.info('☁️ Cloudinary connected successfully');
+    return result;
+  } catch (error) {
+    logger.error('❌ Cloudinary connection failed:', {
+      message: error.message,
+      cloudName: process.env.CLOUDINARY_CLOUD_NAME ? 'Set' : 'Missing',
+      apiKey: process.env.CLOUDINARY_API_KEY ? 'Set' : 'Missing',
+      apiSecret: process.env.CLOUDINARY_API_SECRET ? 'Set' : 'Missing'
+    });
+    throw error;
+  }
+};
+
+// Helper function to delete image
+export const deleteImage = async (publicId) => {
+  try {
+    const result = await cloudinary.uploader.destroy(publicId);
+    logger.info(`Image deleted from Cloudinary: ${publicId}`);
+    return result;
+  } catch (error) {
+    logger.error(`Failed to delete image ${publicId}:`, error.message);
+    throw error;
+  }
+};
+
+// Helper function to upload image
+export const uploadImage = async (file, folder = 'safety-equipment', transformation = {}) => {
+  try {
+    const result = await cloudinary.uploader.upload(file, {
+      folder,
+      transformation,
+      resource_type: 'auto'
+    });
+    logger.info(`Image uploaded to Cloudinary: ${result.public_id}`);
+    return result;
+  } catch (error) {
+    logger.error('Failed to upload image to Cloudinary:', error.message);
+    throw error;
+  }
+};
+
+// Initialize connection test
+testCloudinaryConnection().catch((error) => {
+  logger.warn('Cloudinary connection test failed - image uploads may not work');
 });
 
-// Storage for user avatars
-const avatarStorage = new CloudinaryStorage({
-  cloudinary: cloudinary,
-  params: {
-    folder: 'safety-equipment/avatars',
-    allowed_formats: ['jpg', 'jpeg', 'png'],
-    transformation: [
-      { width: 200, height: 200, crop: 'fill', quality: 'auto' }
-    ],
-  },
-});
-
-// Storage for category images
-const categoryStorage = new CloudinaryStorage({
-  cloudinary: cloudinary,
-  params: {
-    folder: 'safety-equipment/categories',
-    allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
-    transformation: [
-      { width: 400, height: 300, crop: 'fill', quality: 'auto' }
-    ],
-  },
-});
-
-export const uploadProduct = multer({ storage: productStorage });
-export const uploadAvatar = multer({ storage: avatarStorage });
-export const uploadCategory = multer({ storage: categoryStorage });
 export { cloudinary };

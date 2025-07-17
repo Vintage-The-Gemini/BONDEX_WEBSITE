@@ -1,145 +1,135 @@
+// backend/src/controllers/productController.js
 import Product from '../models/Product.js';
 import Category from '../models/Category.js';
 import asyncHandler from 'express-async-handler';
 import { cloudinary } from '../config/cloudinary.js';
 import logger from '../config/logger.js';
 
-// @desc    Get all products with filtering, sorting, and pagination (Public)
+// @desc    Get all products with filtering, sorting, pagination (Public)
 // @route   GET /api/products
 // @access  Public
 export const getProducts = asyncHandler(async (req, res) => {
-  const page = parseInt(req.query.page, 10) || 1;
-  const limit = parseInt(req.query.limit, 10) || 12;
-  const startIndex = (page - 1) * limit;
+  // Build query object
+  const queryObj = { status: 'active' };
 
-  // Build filter object
-  let filter = { status: 'active' };
-
-  // Protection type filter
+  // Filter by protection type
   if (req.query.protectionType) {
-    filter.protectionType = req.query.protectionType;
+    queryObj.protectionType = req.query.protectionType;
   }
 
-  // Industry filter
+  // Filter by industry
   if (req.query.industry) {
-    filter.industry = req.query.industry;
+    queryObj.industry = req.query.industry;
   }
 
-  // Category filter
+  // Filter by category
   if (req.query.category) {
-    filter.category = req.query.category;
+    queryObj.category = req.query.category;
   }
 
   // Price range filter
   if (req.query.minPrice || req.query.maxPrice) {
-    filter.price = {};
+    queryObj.price = {};
     if (req.query.minPrice) {
-      filter.price.$gte = parseFloat(req.query.minPrice);
+      queryObj.price.$gte = Number(req.query.minPrice);
     }
     if (req.query.maxPrice) {
-      filter.price.$lte = parseFloat(req.query.maxPrice);
+      queryObj.price.$lte = Number(req.query.maxPrice);
     }
   }
 
-  // In stock filter
+  // Stock filter
   if (req.query.inStock === 'true') {
-    filter.stock = { $gt: 0 };
+    queryObj.stock = { $gt: 0 };
   }
 
   // Featured filter
   if (req.query.featured === 'true') {
-    filter.featured = true;
+    queryObj.featured = true;
   }
 
   // On sale filter
   if (req.query.onSale === 'true') {
-    filter.onSale = true;
-    filter.saleStartDate = { $lte: new Date() };
-    filter.saleEndDate = { $gte: new Date() };
+    queryObj.onSale = true;
+    queryObj.saleStartDate = { $lte: new Date() };
+    queryObj.saleEndDate = { $gte: new Date() };
   }
 
   // Search functionality
+  let query = Product.find(queryObj);
+
   if (req.query.search) {
-    filter.$text = { $search: req.query.search };
+    query = Product.find({
+      ...queryObj,
+      $text: { $search: req.query.search }
+    });
   }
 
-  // Build sort object
-  let sort = {};
+  // Sorting
+  let sortBy = {};
   if (req.query.sort) {
-    const sortBy = req.query.sort;
-    switch (sortBy) {
-      case 'price_low':
-        sort = { price: 1 };
+    switch (req.query.sort) {
+      case 'price-low':
+        sortBy = { price: 1 };
         break;
-      case 'price_high':
-        sort = { price: -1 };
-        break;
-      case 'rating':
-        sort = { ratings: -1 };
+      case 'price-high':
+        sortBy = { price: -1 };
         break;
       case 'newest':
-        sort = { createdAt: -1 };
+        sortBy = { createdAt: -1 };
         break;
-      case 'oldest':
-        sort = { createdAt: 1 };
-        break;
-      case 'name':
-        sort = { name: 1 };
+      case 'rating':
+        sortBy = { ratings: -1 };
         break;
       case 'popular':
-        sort = { totalSold: -1 };
+        sortBy = { totalSold: -1 };
         break;
       default:
-        sort = { createdAt: -1 };
+        sortBy = { createdAt: -1 };
     }
   } else {
-    sort = { createdAt: -1 };
+    sortBy = { createdAt: -1 };
   }
 
-  // Execute queries
-  const total = await Product.countDocuments(filter);
-  const products = await Product.find(filter)
-    .populate('category', 'name slug')
-    .sort(sort)
-    .limit(limit)
-    .skip(startIndex)
-    .select('-reviews'); // Exclude reviews for performance
+  query = query.sort(sortBy);
 
-  // Pagination info
-  const pagination = {
-    currentPage: page,
-    totalPages: Math.ceil(total / limit),
-    totalProducts: total,
-    hasNext: page < Math.ceil(total / limit),
-    hasPrev: page > 1
-  };
+  // Pagination
+  const page = parseInt(req.query.page) || 1;
+  const limit = parseInt(req.query.limit) || 12;
+  const skip = (page - 1) * limit;
+
+  query = query.skip(skip).limit(limit);
+
+  // Populate category
+  query = query.populate('category', 'name slug');
+
+  // Execute query
+  const products = await query;
+  const total = await Product.countDocuments(queryObj);
 
   res.status(200).json({
     success: true,
     count: products.length,
-    pagination,
+    total,
+    page,
+    pages: Math.ceil(total / limit),
     data: products
   });
 });
 
-// @desc    Get single product by ID or slug (Public)
+// @desc    Get single product by ID (Public)
 // @route   GET /api/products/:id
 // @access  Public
 export const getProduct = asyncHandler(async (req, res) => {
-  const { id } = req.params;
-  
-  // Try to find by ID first, then by slug
-  let product = await Product.findById(id)
+  const product = await Product.findById(req.params.id)
     .populate('category', 'name slug description')
-    .populate('relatedProducts', 'name price images ratings protectionType industry')
+    .populate('relatedProducts', 'name price images ratings protectionType')
     .populate({
       path: 'reviews',
       populate: {
         path: 'user',
         select: 'name avatar'
-      },
-      match: { isApproved: true },
-      options: { sort: { createdAt: -1 }, limit: 10 }
+      }
     });
 
   if (!product) {
@@ -149,283 +139,15 @@ export const getProduct = asyncHandler(async (req, res) => {
     });
   }
 
-  // Check if product is available
-  if (product.status !== 'active') {
-    return res.status(404).json({
-      success: false,
-      message: 'Product not available'
-    });
-  }
+  // Increment view count (optional analytics)
+  // product.views = (product.views || 0) + 1;
+  // await product.save();
 
   res.status(200).json({
     success: true,
     data: product
   });
 });
-
-// @desc    Get products by protection type (Public)
-// @route   GET /api/products/protection/:type
-// @access  Public
-export const getProductsByProtectionType = asyncHandler(async (req, res) => {
-  const { type } = req.params;
-  const page = parseInt(req.query.page, 10) || 1;
-  const limit = parseInt(req.query.limit, 10) || 12;
-  const startIndex = (page - 1) * limit;
-
-  const validTypes = ['Head', 'Foot', 'Eye', 'Hand', 'Breathing'];
-  
-  if (!validTypes.includes(type)) {
-    return res.status(400).json({
-      success: false,
-      message: 'Invalid protection type'
-    });
-  }
-
-  const filter = { 
-    protectionType: type, 
-    status: 'active',
-    stock: { $gt: 0 }
-  };
-
-  // Add industry filter if provided
-  if (req.query.industry) {
-    filter.industry = req.query.industry;
-  }
-
-  const total = await Product.countDocuments(filter);
-  const products = await Product.find(filter)
-    .populate('category', 'name slug')
-    .sort({ featured: -1, createdAt: -1 })
-    .limit(limit)
-    .skip(startIndex)
-    .select('-reviews');
-
-  const pagination = {
-    currentPage: page,
-    totalPages: Math.ceil(total / limit),
-    totalProducts: total
-  };
-
-  res.status(200).json({
-    success: true,
-    protectionType: type,
-    count: products.length,
-    pagination,
-    data: products
-  });
-});
-
-// @desc    Get products by industry (Public)
-// @route   GET /api/products/industry/:industry
-// @access  Public
-export const getProductsByIndustry = asyncHandler(async (req, res) => {
-  const { industry } = req.params;
-  const page = parseInt(req.query.page, 10) || 1;
-  const limit = parseInt(req.query.limit, 10) || 12;
-  const startIndex = (page - 1) * limit;
-
-  const validIndustries = ['Medical', 'Construction', 'Manufacturing'];
-  
-  if (!validIndustries.includes(industry)) {
-    return res.status(400).json({
-      success: false,
-      message: 'Invalid industry type'
-    });
-  }
-
-  const filter = { 
-    industry, 
-    status: 'active',
-    stock: { $gt: 0 }
-  };
-
-  const total = await Product.countDocuments(filter);
-  const products = await Product.find(filter)
-    .populate('category', 'name slug')
-    .sort({ featured: -1, createdAt: -1 })
-    .limit(limit)
-    .skip(startIndex)
-    .select('-reviews');
-
-  const pagination = {
-    currentPage: page,
-    totalPages: Math.ceil(total / limit),
-    totalProducts: total
-  };
-
-  res.status(200).json({
-    success: true,
-    industry,
-    count: products.length,
-    pagination,
-    data: products
-  });
-});
-
-// @desc    Get featured products (Public)
-// @route   GET /api/products/featured
-// @access  Public
-export const getFeaturedProducts = asyncHandler(async (req, res) => {
-  const limit = parseInt(req.query.limit, 10) || 8;
-
-  const products = await Product.find({ 
-    featured: true, 
-    status: 'active',
-    stock: { $gt: 0 }
-  })
-    .populate('category', 'name slug')
-    .sort({ createdAt: -1 })
-    .limit(limit)
-    .select('-reviews');
-
-  res.status(200).json({
-    success: true,
-    count: products.length,
-    data: products
-  });
-});
-
-// @desc    Get products on sale (Public)
-// @route   GET /api/products/sale
-// @access  Public
-export const getProductsOnSale = asyncHandler(async (req, res) => {
-  const page = parseInt(req.query.page, 10) || 1;
-  const limit = parseInt(req.query.limit, 10) || 12;
-  const startIndex = (page - 1) * limit;
-
-  const filter = {
-    onSale: true,
-    status: 'active',
-    stock: { $gt: 0 },
-    saleStartDate: { $lte: new Date() },
-    saleEndDate: { $gte: new Date() }
-  };
-
-  const total = await Product.countDocuments(filter);
-  const products = await Product.find(filter)
-    .populate('category', 'name slug')
-    .sort({ saleEndDate: 1 }) // Show products ending sale soon first
-    .limit(limit)
-    .skip(startIndex)
-    .select('-reviews');
-
-  const pagination = {
-    currentPage: page,
-    totalPages: Math.ceil(total / limit),
-    totalProducts: total
-  };
-
-  res.status(200).json({
-    success: true,
-    count: products.length,
-    pagination,
-    data: products
-  });
-});
-
-// @desc    Search products (Public)
-// @route   GET /api/products/search
-// @access  Public
-export const searchProducts = asyncHandler(async (req, res) => {
-  const { q } = req.query;
-  const page = parseInt(req.query.page, 10) || 1;
-  const limit = parseInt(req.query.limit, 10) || 12;
-  const startIndex = (page - 1) * limit;
-
-  if (!q || q.trim().length < 2) {
-    return res.status(400).json({
-      success: false,
-      message: 'Search query must be at least 2 characters'
-    });
-  }
-
-  const filter = {
-    $text: { $search: q },
-    status: 'active'
-  };
-
-  const total = await Product.countDocuments(filter);
-  const products = await Product.find(filter, { score: { $meta: 'textScore' } })
-    .populate('category', 'name slug')
-    .sort({ score: { $meta: 'textScore' }, ratings: -1 })
-    .limit(limit)
-    .skip(startIndex)
-    .select('-reviews');
-
-  const pagination = {
-    currentPage: page,
-    totalPages: Math.ceil(total / limit),
-    totalProducts: total
-  };
-
-  res.status(200).json({
-    success: true,
-    searchQuery: q,
-    count: products.length,
-    pagination,
-    data: products
-  });
-});
-
-// @desc    Get product filters and aggregations (Public)
-// @route   GET /api/products/filters
-// @access  Public
-export const getProductFilters = asyncHandler(async (req, res) => {
-  // Get protection types with counts
-  const protectionTypes = await Product.aggregate([
-    { $match: { status: 'active', stock: { $gt: 0 } } },
-    { $group: { _id: '$protectionType', count: { $sum: 1 } } },
-    { $sort: { _id: 1 } }
-  ]);
-
-  // Get industries with counts
-  const industries = await Product.aggregate([
-    { $match: { status: 'active', stock: { $gt: 0 } } },
-    { $group: { _id: '$industry', count: { $sum: 1 } } },
-    { $sort: { _id: 1 } }
-  ]);
-
-  // Get price range
-  const priceRange = await Product.aggregate([
-    { $match: { status: 'active', stock: { $gt: 0 } } },
-    {
-      $group: {
-        _id: null,
-        minPrice: { $min: '$price' },
-        maxPrice: { $max: '$price' }
-      }
-    }
-  ]);
-
-  // Get brands with counts
-  const brands = await Product.aggregate([
-    { $match: { status: 'active', stock: { $gt: 0 } } },
-    { $group: { _id: '$brand', count: { $sum: 1 } } },
-    { $sort: { count: -1 } },
-    { $limit: 20 }
-  ]);
-
-  res.status(200).json({
-    success: true,
-    filters: {
-      protectionTypes: protectionTypes.map(item => ({
-        type: item._id,
-        count: item.count
-      })),
-      industries: industries.map(item => ({
-        industry: item._id,
-        count: item.count
-      })),
-      priceRange: priceRange[0] || { minPrice: 0, maxPrice: 0 },
-      brands: brands.map(item => ({
-        brand: item._id,
-        count: item.count
-      }))
-    }
-  });
-});
-
-// ADMIN ROUTES BELOW
 
 // @desc    Create new product (Admin)
 // @route   POST /api/products
@@ -434,27 +156,30 @@ export const createProduct = asyncHandler(async (req, res) => {
   // Add user to req.body
   req.body.createdBy = req.user.id;
 
-  // Handle images from multer
-  if (req.files && req.files.length > 0) {
-    req.body.images = req.files.map((file, index) => ({
-      public_id: file.filename,
-      url: file.path,
-      alt: `${req.body.name} - Image ${index + 1}`,
-      isPrimary: index === 0
-    }));
-  }
-
-  const product = await Product.create(req.body);
-
-  // Update category product count
-  if (product.category) {
-    const category = await Category.findById(product.category);
-    if (category) {
-      await category.updateProductCount();
+  // Validate required fields
+  const requiredFields = ['name', 'description', 'price', 'protectionType', 'industry', 'stock'];
+  for (const field of requiredFields) {
+    if (!req.body[field]) {
+      return res.status(400).json({
+        success: false,
+        message: `Please provide ${field}`
+      });
     }
   }
 
-  logger.info(`New product created: ${product.name} (ID: ${product._id}) - KES ${product.price}`);
+  // Handle image uploads
+  if (req.files && req.files.length > 0) {
+    req.body.images = req.files.map(file => ({
+      public_id: file.filename,
+      url: file.path,
+      alt: req.body.name
+    }));
+  }
+
+  // Create product
+  const product = await Product.create(req.body);
+
+  logger.info(`New product created: ${product.name} by ${req.user.email}`);
 
   res.status(201).json({
     success: true,
@@ -476,21 +201,35 @@ export const updateProduct = asyncHandler(async (req, res) => {
     });
   }
 
-  // Handle new images
+  // Handle new image uploads
   if (req.files && req.files.length > 0) {
-    const newImages = req.files.map((file, index) => ({
+    // Delete old images from cloudinary
+    if (product.images && product.images.length > 0) {
+      for (const image of product.images) {
+        if (image.public_id) {
+          try {
+            await cloudinary.uploader.destroy(image.public_id);
+          } catch (error) {
+            logger.error('Failed to delete old image:', error);
+          }
+        }
+      }
+    }
+
+    // Add new images
+    req.body.images = req.files.map(file => ({
       public_id: file.filename,
       url: file.path,
-      alt: `${req.body.name || product.name} - Image ${product.images.length + index + 1}`
+      alt: req.body.name || product.name
     }));
-    
-    req.body.images = [...product.images, ...newImages];
   }
 
   product = await Product.findByIdAndUpdate(req.params.id, req.body, {
     new: true,
     runValidators: true
   });
+
+  logger.info(`Product updated: ${product.name} by ${req.user.email}`);
 
   res.status(200).json({
     success: true,
@@ -513,25 +252,21 @@ export const deleteProduct = asyncHandler(async (req, res) => {
   }
 
   // Delete images from cloudinary
-  for (const image of product.images) {
-    try {
-      await cloudinary.uploader.destroy(image.public_id);
-    } catch (error) {
-      logger.error(`Failed to delete image ${image.public_id}:`, error);
+  if (product.images && product.images.length > 0) {
+    for (const image of product.images) {
+      if (image.public_id) {
+        try {
+          await cloudinary.uploader.destroy(image.public_id);
+        } catch (error) {
+          logger.error('Failed to delete product image:', error);
+        }
+      }
     }
   }
 
   await Product.findByIdAndDelete(req.params.id);
 
-  // Update category product count
-  if (product.category) {
-    const category = await Category.findById(product.category);
-    if (category) {
-      await category.updateProductCount();
-    }
-  }
-
-  logger.info(`Product deleted: ${product.name} (ID: ${product._id})`);
+  logger.info(`Product deleted: ${product.name} by ${req.user.email}`);
 
   res.status(200).json({
     success: true,
@@ -539,43 +274,218 @@ export const deleteProduct = asyncHandler(async (req, res) => {
   });
 });
 
-// @desc    Get all products for admin (Admin)
-// @route   GET /api/admin/products
-// @access  Private/Admin
-export const getAdminProducts = asyncHandler(async (req, res) => {
-  const page = parseInt(req.query.page, 10) || 1;
-  const limit = parseInt(req.query.limit, 10) || 20;
-  const startIndex = (page - 1) * limit;
+// @desc    Get products by category (Public)
+// @route   GET /api/products/category/:categoryId
+// @access  Public
+export const getProductsByCategory = asyncHandler(async (req, res) => {
+  const page = parseInt(req.query.page) || 1;
+  const limit = parseInt(req.query.limit) || 12;
+  const skip = (page - 1) * limit;
 
-  let filter = {};
-
-  // Status filter
-  if (req.query.status) {
-    filter.status = req.query.status;
-  }
-
-  // Low stock filter
-  if (req.query.lowStock === 'true') {
-    filter.$expr = { $lte: ['$stock', '$lowStockThreshold'] };
-  }
-
-  const total = await Product.countDocuments(filter);
-  const products = await Product.find(filter)
-    .populate('category', 'name')
-    .populate('createdBy', 'name')
+  const products = await Product.find({
+    category: req.params.categoryId,
+    status: 'active'
+  })
+    .populate('category', 'name slug')
     .sort({ createdAt: -1 })
-    .limit(limit)
-    .skip(startIndex)
-    .select('-reviews');
+    .skip(skip)
+    .limit(limit);
+
+  const total = await Product.countDocuments({
+    category: req.params.categoryId,
+    status: 'active'
+  });
 
   res.status(200).json({
     success: true,
     count: products.length,
-    pagination: {
-      currentPage: page,
-      totalPages: Math.ceil(total / limit),
-      totalProducts: total
-    },
+    total,
+    page,
+    pages: Math.ceil(total / limit),
     data: products
+  });
+});
+
+// @desc    Get featured products (Public)
+// @route   GET /api/products/featured
+// @access  Public
+export const getFeaturedProducts = asyncHandler(async (req, res) => {
+  const limit = parseInt(req.query.limit) || 8;
+
+  const products = await Product.find({
+    featured: true,
+    status: 'active',
+    stock: { $gt: 0 }
+  })
+    .populate('category', 'name slug')
+    .sort({ createdAt: -1 })
+    .limit(limit);
+
+  res.status(200).json({
+    success: true,
+    count: products.length,
+    data: products
+  });
+});
+
+// @desc    Get products on sale (Public)
+// @route   GET /api/products/sale
+// @access  Public
+export const getSaleProducts = asyncHandler(async (req, res) => {
+  const page = parseInt(req.query.page) || 1;
+  const limit = parseInt(req.query.limit) || 12;
+  const skip = (page - 1) * limit;
+
+  const products = await Product.find({
+    onSale: true,
+    saleStartDate: { $lte: new Date() },
+    saleEndDate: { $gte: new Date() },
+    status: 'active'
+  })
+    .populate('category', 'name slug')
+    .sort({ createdAt: -1 })
+    .skip(skip)
+    .limit(limit);
+
+  const total = await Product.countDocuments({
+    onSale: true,
+    saleStartDate: { $lte: new Date() },
+    saleEndDate: { $gte: new Date() },
+    status: 'active'
+  });
+
+  res.status(200).json({
+    success: true,
+    count: products.length,
+    total,
+    page,
+    pages: Math.ceil(total / limit),
+    data: products
+  });
+});
+
+// @desc    Search products (Public)
+// @route   GET /api/products/search
+// @access  Public
+export const searchProducts = asyncHandler(async (req, res) => {
+  const { q, protectionType, industry, minPrice, maxPrice } = req.query;
+
+  if (!q) {
+    return res.status(400).json({
+      success: false,
+      message: 'Search query is required'
+    });
+  }
+
+  const queryObj = {
+    $text: { $search: q },
+    status: 'active'
+  };
+
+  // Additional filters
+  if (protectionType) queryObj.protectionType = protectionType;
+  if (industry) queryObj.industry = industry;
+  if (minPrice || maxPrice) {
+    queryObj.price = {};
+    if (minPrice) queryObj.price.$gte = Number(minPrice);
+    if (maxPrice) queryObj.price.$lte = Number(maxPrice);
+  }
+
+  const page = parseInt(req.query.page) || 1;
+  const limit = parseInt(req.query.limit) || 12;
+  const skip = (page - 1) * limit;
+
+  const products = await Product.find(queryObj)
+    .populate('category', 'name slug')
+    .sort({ score: { $meta: 'textScore' } })
+    .skip(skip)
+    .limit(limit);
+
+  const total = await Product.countDocuments(queryObj);
+
+  res.status(200).json({
+    success: true,
+    query: q,
+    count: products.length,
+    total,
+    page,
+    pages: Math.ceil(total / limit),
+    data: products
+  });
+});
+
+// @desc    Get low stock products (Admin)
+// @route   GET /api/products/admin/low-stock
+// @access  Private/Admin
+export const getLowStockProducts = asyncHandler(async (req, res) => {
+  const threshold = parseInt(req.query.threshold) || 10;
+
+  const products = await Product.find({
+    stock: { $lte: threshold },
+    status: 'active'
+  })
+    .populate('category', 'name')
+    .sort({ stock: 1 });
+
+  res.status(200).json({
+    success: true,
+    threshold,
+    count: products.length,
+    data: products
+  });
+});
+
+// @desc    Bulk update product stock (Admin)
+// @route   PUT /api/products/admin/bulk-stock
+// @access  Private/Admin
+export const bulkUpdateStock = asyncHandler(async (req, res) => {
+  const { updates } = req.body; // Array of {productId, stock}
+
+  if (!updates || !Array.isArray(updates)) {
+    return res.status(400).json({
+      success: false,
+      message: 'Updates array is required'
+    });
+  }
+
+  const results = [];
+
+  for (const update of updates) {
+    try {
+      const product = await Product.findByIdAndUpdate(
+        update.productId,
+        { stock: update.stock },
+        { new: true }
+      );
+
+      if (product) {
+        results.push({
+          productId: update.productId,
+          name: product.name,
+          newStock: product.stock,
+          success: true
+        });
+      } else {
+        results.push({
+          productId: update.productId,
+          success: false,
+          error: 'Product not found'
+        });
+      }
+    } catch (error) {
+      results.push({
+        productId: update.productId,
+        success: false,
+        error: error.message
+      });
+    }
+  }
+
+  logger.info(`Bulk stock update performed by ${req.user.email} - ${results.length} products`);
+
+  res.status(200).json({
+    success: true,
+    message: 'Bulk stock update completed',
+    results
   });
 });

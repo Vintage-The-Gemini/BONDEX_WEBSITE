@@ -1,6 +1,25 @@
+// backend/src/middleware/upload.js
 import multer from 'multer';
-import { CloudinaryStorage } from 'multer-storage-cloudinary';
-import { cloudinary } from '../config/cloudinary.js';
+import path from 'path';
+import fs from 'fs';
+
+// Ensure upload directories exist
+const ensureUploadDirs = () => {
+  const dirs = [
+    'uploads/products',
+    'uploads/avatars', 
+    'uploads/categories',
+    'uploads/reviews'
+  ];
+  
+  dirs.forEach(dir => {
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+  });
+};
+
+ensureUploadDirs();
 
 // File filter for images
 const imageFilter = (req, file, cb) => {
@@ -11,85 +30,105 @@ const imageFilter = (req, file, cb) => {
   }
 };
 
-// Product images storage
-const productStorage = new CloudinaryStorage({
-  cloudinary: cloudinary,
-  params: {
-    folder: 'safety-equipment/products',
-    allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
-    transformation: [
-      { width: 800, height: 800, crop: 'fill', quality: 'auto' },
-      { fetch_format: 'auto' }
-    ],
-    public_id: (req, file) => {
-      const timestamp = Date.now();
-      const originalName = file.originalname.split('.')[0];
-      return `product-${timestamp}-${originalName}`;
+// Local storage configuration
+const createStorage = (subfolder) => {
+  return multer.diskStorage({
+    destination: (req, file, cb) => {
+      cb(null, `uploads/${subfolder}`);
+    },
+    filename: (req, file, cb) => {
+      const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+      const ext = path.extname(file.originalname);
+      const name = file.originalname.replace(ext, '').replace(/[^a-zA-Z0-9]/g, '-');
+      cb(null, `${name}-${uniqueSuffix}${ext}`);
     }
-  },
-});
+  });
+};
 
-// User avatar storage
-const avatarStorage = new CloudinaryStorage({
-  cloudinary: cloudinary,
-  params: {
-    folder: 'safety-equipment/avatars',
-    allowed_formats: ['jpg', 'jpeg', 'png'],
-    transformation: [
-      { width: 200, height: 200, crop: 'fill', quality: 'auto', gravity: 'face' }
-    ],
-    public_id: (req, file) => {
-      return `avatar-${req.user.id}-${Date.now()}`;
-    }
-  },
-});
+// Transform file object to match Cloudinary response format
+const transformFileResponse = (file) => {
+  if (!file) return null;
+  
+  return {
+    filename: file.filename,
+    path: `/uploads/${file.destination.split('/').pop()}/${file.filename}`,
+    size: file.size,
+    mimetype: file.mimetype,
+    // Cloudinary-like properties for compatibility
+    public_id: file.filename.split('.')[0],
+    url: `/uploads/${file.destination.split('/').pop()}/${file.filename}`
+  };
+};
 
-// Review images storage
-const reviewStorage = new CloudinaryStorage({
-  cloudinary: cloudinary,
-  params: {
-    folder: 'safety-equipment/reviews',
-    allowed_formats: ['jpg', 'jpeg', 'png'],
-    transformation: [
-      { width: 500, height: 500, crop: 'limit', quality: 'auto' }
-    ],
-  },
-});
+// Middleware to transform file responses
+const transformFiles = (req, res, next) => {
+  if (req.file) {
+    req.file = transformFileResponse(req.file);
+  }
+  if (req.files && Array.isArray(req.files)) {
+    req.files = req.files.map(transformFileResponse);
+  }
+  next();
+};
 
 // Upload configurations
-export const uploadProductImages = multer({
-  storage: productStorage,
-  fileFilter: imageFilter,
-  limits: {
-    fileSize: 5 * 1024 * 1024, // 5MB limit
-    files: 5 // Maximum 5 files
-  }
-}).array('images', 5);
+export const upload = {
+  // Product images (multiple files)
+  productImages: [
+    multer({
+      storage: createStorage('products'),
+      fileFilter: imageFilter,
+      limits: {
+        fileSize: 5 * 1024 * 1024, // 5MB per file
+        files: 5 // Maximum 5 images per product
+      }
+    }).array('images', 5),
+    transformFiles
+  ],
 
-export const uploadSingleProductImage = multer({
-  storage: productStorage,
-  fileFilter: imageFilter,
-  limits: {
-    fileSize: 5 * 1024 * 1024 // 5MB limit
-  }
-}).single('image');
+  // Single product image
+  productImage: [
+    multer({
+      storage: createStorage('products'),
+      fileFilter: imageFilter,
+      limits: { fileSize: 5 * 1024 * 1024 }
+    }).single('image'),
+    transformFiles
+  ],
 
-export const uploadAvatar = multer({
-  storage: avatarStorage,
-  fileFilter: imageFilter,
-  limits: {
-    fileSize: 2 * 1024 * 1024 // 2MB limit for avatars
-  }
-}).single('avatar');
+  // User avatar
+  avatar: [
+    multer({
+      storage: createStorage('avatars'),
+      fileFilter: imageFilter,
+      limits: { fileSize: 2 * 1024 * 1024 } // 2MB
+    }).single('avatar'),
+    transformFiles
+  ],
 
-export const uploadReviewImages = multer({
-  storage: reviewStorage,
-  fileFilter: imageFilter,
-  limits: {
-    fileSize: 3 * 1024 * 1024, // 3MB limit
-    files: 3 // Maximum 3 images per review
-  }
-}).array('images', 3);
+  // Category image
+  categoryImage: [
+    multer({
+      storage: createStorage('categories'),
+      fileFilter: imageFilter,
+      limits: { fileSize: 3 * 1024 * 1024 } // 3MB
+    }).single('image'),
+    transformFiles
+  ],
+
+  // Review images
+  reviewImages: [
+    multer({
+      storage: createStorage('reviews'),
+      fileFilter: imageFilter,
+      limits: {
+        fileSize: 3 * 1024 * 1024, // 3MB per file
+        files: 3 // Maximum 3 images per review
+      }
+    }).array('images', 3),
+    transformFiles
+  ]
+};
 
 // Error handling middleware for multer
 export const handleUploadError = (error, req, res, next) => {
@@ -97,21 +136,27 @@ export const handleUploadError = (error, req, res, next) => {
     if (error.code === 'LIMIT_FILE_SIZE') {
       return res.status(400).json({
         success: false,
-        message: 'File size too large'
+        message: 'File too large. Maximum size allowed is 5MB.'
       });
     }
     if (error.code === 'LIMIT_FILE_COUNT') {
       return res.status(400).json({
         success: false,
-        message: 'Too many files uploaded'
+        message: 'Too many files. Maximum 5 files allowed.'
+      });
+    }
+    if (error.code === 'LIMIT_UNEXPECTED_FILE') {
+      return res.status(400).json({
+        success: false,
+        message: 'Unexpected field name for file upload.'
       });
     }
   }
-  
+
   if (error.message === 'Only image files are allowed') {
     return res.status(400).json({
       success: false,
-      message: 'Only image files are allowed'
+      message: 'Only image files (JPG, JPEG, PNG, WEBP) are allowed.'
     });
   }
 

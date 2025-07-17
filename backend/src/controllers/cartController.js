@@ -1,140 +1,150 @@
+// backend/src/controllers/cartController.js
 import Cart from '../models/Cart.js';
 import Product from '../models/Product.js';
+import Coupon from '../models/Coupon.js';
 import asyncHandler from 'express-async-handler';
+import logger from '../config/logger.js';
 
-// @desc    Get cart (Public/Private)
+// @desc    Get user's cart (Private)
 // @route   GET /api/cart
-// @access  Public/Private
+// @access  Private
 export const getCart = asyncHandler(async (req, res) => {
-  let cart;
-
-  if (req.user) {
-    // Authenticated user
-    cart = await Cart.findOne({ user: req.user.id })
-      .populate({
-        path: 'items.product',
-        select: 'name price images stock status protectionType industry brand'
-      });
-  } else {
-    // Anonymous user
-    const sessionId = req.headers['x-session-id'];
-    if (sessionId) {
-      cart = await Cart.findOne({ sessionId })
-        .populate({
-          path: 'items.product',
-          select: 'name price images stock status protectionType industry brand'
-        });
-    }
-  }
+  let cart = await Cart.findOne({ user: req.user.id })
+    .populate('items.product', 'name price images stock status protectionType industry');
 
   if (!cart) {
-    return res.status(200).json({
-      success: true,
-      data: {
-        items: [],
-        totalItems: 0,
-        subtotal: 0,
-        formattedSubtotal: 'KES 0.00'
-      }
+    // Create empty cart for user
+    cart = await Cart.create({
+      user: req.user.id,
+      items: []
     });
   }
 
-  // Filter out products that are no longer available
-  cart.items = cart.items.filter(item => 
+  // Filter out inactive products or out of stock items
+  const validItems = cart.items.filter(item => 
     item.product && 
     item.product.status === 'active' && 
     item.product.stock > 0
   );
 
-  await cart.save();
+  // If items were filtered out, update cart
+  if (validItems.length !== cart.items.length) {
+    cart.items = validItems;
+    await cart.save();
+  }
 
   res.status(200).json({
     success: true,
     data: {
-      items: cart.items,
-      totalItems: cart.totalItems,
-      subtotal: cart.subtotal,
-      formattedSubtotal: cart.formattedSubtotal,
-      couponCode: cart.couponCode,
-      discountAmount: cart.discountAmount
+      cart,
+      summary: {
+        totalItems: cart.totalItems,
+        subtotal: cart.subtotal,
+        formattedSubtotal: cart.formattedSubtotal,
+        discountAmount: cart.discountAmount,
+        total: cart.subtotal - cart.discountAmount
+      }
     }
   });
 });
 
-// @desc    Add item to cart (Public/Private)
+// @desc    Add item to cart (Private)
 // @route   POST /api/cart/add
-// @access  Public/Private
+// @access  Private
 export const addToCart = asyncHandler(async (req, res) => {
   const { productId, quantity = 1 } = req.body;
 
-  // Validate product
+  // Validate product exists and is available
   const product = await Product.findById(productId);
-  if (!product || product.status !== 'active') {
+  
+  if (!product) {
     return res.status(404).json({
       success: false,
-      message: 'Product not found or unavailable'
+      message: 'Product not found'
     });
   }
 
-  // Check stock
+  if (product.status !== 'active') {
+    return res.status(400).json({
+      success: false,
+      message: 'Product is not available'
+    });
+  }
+
   if (product.stock < quantity) {
     return res.status(400).json({
       success: false,
-      message: `Only ${product.stock} items available in stock`
+      message: `Insufficient stock. Only ${product.stock} items available.`
     });
   }
 
-  let cart;
+  // Find or create cart
+  let cart = await Cart.findOne({ user: req.user.id });
+  
+  if (!cart) {
+    cart = new Cart({
+      user: req.user.id,
+      items: []
+    });
+  }
 
-  if (req.user) {
-    // Authenticated user
-    cart = await Cart.findOne({ user: req.user.id });
-    if (!cart) {
-      cart = new Cart({ user: req.user.id, items: [] });
-    }
-  } else {
-    // Anonymous user
-    const sessionId = req.headers['x-session-id'];
-    if (!sessionId) {
+  // Check if item already exists in cart
+  const existingItem = cart.items.find(item => 
+    item.product.toString() === productId
+  );
+
+  if (existingItem) {
+    // Update quantity (max 10 per product)
+    const newQuantity = existingItem.quantity + quantity;
+    if (newQuantity > 10) {
       return res.status(400).json({
         success: false,
-        message: 'Session ID required for anonymous users'
+        message: 'Cannot add more than 10 items of the same product'
       });
     }
 
-    cart = await Cart.findOne({ sessionId });
-    if (!cart) {
-      cart = new Cart({ sessionId, items: [] });
+    if (newQuantity > product.stock) {
+      return res.status(400).json({
+        success: false,
+        message: `Cannot add more items. Only ${product.stock} in stock.`
+      });
     }
+
+    existingItem.quantity = newQuantity;
+    existingItem.price = product.currentPrice; // Update price in case it changed
+  } else {
+    // Add new item
+    cart.items.push({
+      product: productId,
+      quantity,
+      price: product.currentPrice
+    });
   }
 
-  // Use current price (considering sales)
-  const currentPrice = product.currentPrice;
-
-  cart.addItem(productId, quantity, currentPrice);
   await cart.save();
 
-  // Populate the cart for response
-  await cart.populate({
-    path: 'items.product',
-    select: 'name price images stock status protectionType industry brand'
-  });
+  // Populate cart for response
+  await cart.populate('items.product', 'name price images stock');
+
+  logger.info(`Product ${product.name} added to cart for user ${req.user.email}`);
 
   res.status(200).json({
     success: true,
-    message: 'Item added to cart',
+    message: 'Item added to cart successfully',
     data: {
-      items: cart.items,
-      totalItems: cart.totalItems,
-      subtotal: cart.subtotal,
-      formattedSubtotal: cart.formattedSubtotal
+      cart,
+      summary: {
+        totalItems: cart.totalItems,
+        subtotal: cart.subtotal,
+        formattedSubtotal: cart.formattedSubtotal
+      }
     }
   });
 });
 
-// @desc    Update cart item quantity (Public/Private)
+// @desc    Update cart item quantity (Private)
 // @route   PUT /api/cart/update
-// @access  Public/Private
+// @access  Private
 export const updateCartItem = asyncHandler(async (req, res) => {
   const { productId, quantity } = req.body;
 
@@ -145,14 +155,7 @@ export const updateCartItem = asyncHandler(async (req, res) => {
     });
   }
 
-  let cart;
-
-  if (req.user) {
-    cart = await Cart.findOne({ user: req.user.id });
-  } else {
-    const sessionId = req.headers['x-session-id'];
-    cart = await Cart.findOne({ sessionId });
-  }
+  const cart = await Cart.findOne({ user: req.user.id });
 
   if (!cart) {
     return res.status(404).json({
@@ -161,52 +164,61 @@ export const updateCartItem = asyncHandler(async (req, res) => {
     });
   }
 
-  // Check product stock if increasing quantity
-  if (quantity > 0) {
-    const product = await Product.findById(productId);
-    if (!product || product.stock < quantity) {
-      return res.status(400).json({
-        success: false,
-        message: 'Insufficient stock'
-      });
-    }
+  const item = cart.items.find(item => 
+    item.product.toString() === productId
+  );
+
+  if (!item) {
+    return res.status(404).json({
+      success: false,
+      message: 'Item not found in cart'
+    });
   }
 
-  cart.updateQuantity(productId, quantity);
-  await cart.save();
+  // Check stock availability
+  const product = await Product.findById(productId);
+  if (quantity > product.stock) {
+    return res.status(400).json({
+      success: false,
+      message: `Only ${product.stock} items available in stock`
+    });
+  }
 
-  // Populate the cart for response
-  await cart.populate({
-    path: 'items.product',
-    select: 'name price images stock status protectionType industry brand'
-  });
+  if (quantity === 0) {
+    // Remove item from cart
+    cart.items = cart.items.filter(item => 
+      item.product.toString() !== productId
+    );
+  } else {
+    // Update quantity
+    item.quantity = quantity;
+    item.price = product.currentPrice; // Update price
+  }
+
+  await cart.save();
+  await cart.populate('items.product', 'name price images stock');
 
   res.status(200).json({
     success: true,
-    message: quantity === 0 ? 'Item removed from cart' : 'Cart updated',
+    message: 'Cart updated successfully',
     data: {
-      items: cart.items,
-      totalItems: cart.totalItems,
-      subtotal: cart.subtotal,
-      formattedSubtotal: cart.formattedSubtotal
+      cart,
+      summary: {
+        totalItems: cart.totalItems,
+        subtotal: cart.subtotal,
+        formattedSubtotal: cart.formattedSubtotal
+      }
     }
   });
 });
 
-// @desc    Remove item from cart (Public/Private)
+// @desc    Remove item from cart (Private)
 // @route   DELETE /api/cart/remove/:productId
-// @access  Public/Private
+// @access  Private
 export const removeFromCart = asyncHandler(async (req, res) => {
   const { productId } = req.params;
 
-  let cart;
-
-  if (req.user) {
-    cart = await Cart.findOne({ user: req.user.id });
-  } else {
-    const sessionId = req.headers['x-session-id'];
-    cart = await Cart.findOne({ sessionId });
-  }
+  const cart = await Cart.findOne({ user: req.user.id });
 
   if (!cart) {
     return res.status(404).json({
@@ -215,39 +227,41 @@ export const removeFromCart = asyncHandler(async (req, res) => {
     });
   }
 
-  cart.removeItem(productId);
-  await cart.save();
+  // Remove item
+  const initialLength = cart.items.length;
+  cart.items = cart.items.filter(item => 
+    item.product.toString() !== productId
+  );
 
-  // Populate the cart for response
-  await cart.populate({
-    path: 'items.product',
-    select: 'name price images stock status protectionType industry brand'
-  });
+  if (cart.items.length === initialLength) {
+    return res.status(404).json({
+      success: false,
+      message: 'Item not found in cart'
+    });
+  }
+
+  await cart.save();
+  await cart.populate('items.product', 'name price images stock');
 
   res.status(200).json({
     success: true,
-    message: 'Item removed from cart',
+    message: 'Item removed from cart successfully',
     data: {
-      items: cart.items,
-      totalItems: cart.totalItems,
-      subtotal: cart.subtotal,
-      formattedSubtotal: cart.formattedSubtotal
+      cart,
+      summary: {
+        totalItems: cart.totalItems,
+        subtotal: cart.subtotal,
+        formattedSubtotal: cart.formattedSubtotal
+      }
     }
   });
 });
 
-// @desc    Clear cart (Public/Private)
+// @desc    Clear entire cart (Private)
 // @route   DELETE /api/cart/clear
-// @access  Public/Private
+// @access  Private
 export const clearCart = asyncHandler(async (req, res) => {
-  let cart;
-
-  if (req.user) {
-    cart = await Cart.findOne({ user: req.user.id });
-  } else {
-    const sessionId = req.headers['x-session-id'];
-    cart = await Cart.findOne({ sessionId });
-  }
+  const cart = await Cart.findOne({ user: req.user.id });
 
   if (!cart) {
     return res.status(404).json({
@@ -256,52 +270,40 @@ export const clearCart = asyncHandler(async (req, res) => {
     });
   }
 
-  cart.clearCart();
+  cart.items = [];
+  cart.couponCode = undefined;
+  cart.discountAmount = 0;
   await cart.save();
 
   res.status(200).json({
     success: true,
-    message: 'Cart cleared',
+    message: 'Cart cleared successfully',
     data: {
-      items: [],
-      totalItems: 0,
-      subtotal: 0,
-      formattedSubtotal: 'KES 0.00'
+      cart,
+      summary: {
+        totalItems: 0,
+        subtotal: 0,
+        formattedSubtotal: 'KES 0'
+      }
     }
   });
 });
 
-// @desc    Apply coupon to cart (Public/Private)
+// @desc    Apply coupon to cart (Private)
 // @route   POST /api/cart/coupon
-// @access  Public/Private
+// @access  Private
 export const applyCoupon = asyncHandler(async (req, res) => {
   const { couponCode } = req.body;
 
-  // Import Coupon model here to avoid circular dependency
-  const Coupon = (await import('../models/Coupon.js')).default;
-
-  const coupon = await Coupon.findOne({ 
-    code: couponCode.toUpperCase(),
-    isActive: true,
-    startDate: { $lte: new Date() },
-    endDate: { $gte: new Date() }
-  });
-
-  if (!coupon || !coupon.isValid) {
+  if (!couponCode) {
     return res.status(400).json({
       success: false,
-      message: 'Invalid or expired coupon code'
+      message: 'Coupon code is required'
     });
   }
 
-  let cart;
-
-  if (req.user) {
-    cart = await Cart.findOne({ user: req.user.id });
-  } else {
-    const sessionId = req.headers['x-session-id'];
-    cart = await Cart.findOne({ sessionId });
-  }
+  const cart = await Cart.findOne({ user: req.user.id })
+    .populate('items.product');
 
   if (!cart || cart.items.length === 0) {
     return res.status(400).json({
@@ -310,47 +312,81 @@ export const applyCoupon = asyncHandler(async (req, res) => {
     });
   }
 
-  const discount = coupon.calculateDiscount(cart.subtotal);
+  // Find coupon
+  const coupon = await Coupon.findOne({
+    code: couponCode.toUpperCase(),
+    isActive: true
+  });
 
-  if (discount === 0) {
-    return res.status(400).json({
+  if (!coupon) {
+    return res.status(404).json({
       success: false,
-      message: `Minimum order amount is KES ${coupon.minimumOrderAmount}`
+      message: 'Invalid coupon code'
     });
   }
 
-  cart.couponCode = couponCode.toUpperCase();
-  cart.discountAmount = discount;
+  // Check if coupon is valid
+  if (!coupon.isValid) {
+    return res.status(400).json({
+      success: false,
+      message: 'Coupon has expired or reached usage limit'
+    });
+  }
+
+  // Check minimum order amount
+  if (cart.subtotal < coupon.minimumOrderAmount) {
+    return res.status(400).json({
+      success: false,
+      message: `Minimum order amount of KES ${coupon.minimumOrderAmount.toLocaleString()} required`
+    });
+  }
+
+  // Calculate discount
+  let discountAmount = 0;
+  if (coupon.type === 'percentage') {
+    discountAmount = (cart.subtotal * coupon.value) / 100;
+    if (coupon.maximumDiscountAmount) {
+      discountAmount = Math.min(discountAmount, coupon.maximumDiscountAmount);
+    }
+  } else {
+    discountAmount = coupon.value;
+  }
+
+  // Apply coupon
+  cart.couponCode = coupon.code;
+  cart.discountAmount = discountAmount;
   await cart.save();
 
   res.status(200).json({
     success: true,
     message: 'Coupon applied successfully',
     data: {
-      couponCode: cart.couponCode,
-      discountAmount: cart.discountAmount,
-      formattedDiscount: new Intl.NumberFormat('en-KE', {
-        style: 'currency',
-        currency: 'KES'
-      }).format(discount),
-      subtotal: cart.subtotal,
-      finalAmount: cart.subtotal - discount
+      cart,
+      coupon: {
+        code: coupon.code,
+        type: coupon.type,
+        value: coupon.value,
+        discountAmount
+      },
+      summary: {
+        totalItems: cart.totalItems,
+        subtotal: cart.subtotal,
+        discountAmount,
+        total: cart.subtotal - discountAmount,
+        formattedTotal: new Intl.NumberFormat('en-KE', {
+          style: 'currency',
+          currency: 'KES'
+        }).format(cart.subtotal - discountAmount)
+      }
     }
   });
 });
 
-// @desc    Remove coupon from cart (Public/Private)
+// @desc    Remove coupon from cart (Private)
 // @route   DELETE /api/cart/coupon
-// @access  Public/Private
+// @access  Private
 export const removeCoupon = asyncHandler(async (req, res) => {
-  let cart;
-
-  if (req.user) {
-    cart = await Cart.findOne({ user: req.user.id });
-  } else {
-    const sessionId = req.headers['x-session-id'];
-    cart = await Cart.findOne({ sessionId });
-  }
+  const cart = await Cart.findOne({ user: req.user.id });
 
   if (!cart) {
     return res.status(404).json({
@@ -363,12 +399,58 @@ export const removeCoupon = asyncHandler(async (req, res) => {
   cart.discountAmount = 0;
   await cart.save();
 
+  await cart.populate('items.product', 'name price images stock');
+
   res.status(200).json({
     success: true,
-    message: 'Coupon removed',
+    message: 'Coupon removed successfully',
     data: {
+      cart,
+      summary: {
+        totalItems: cart.totalItems,
+        subtotal: cart.subtotal,
+        formattedSubtotal: cart.formattedSubtotal
+      }
+    }
+  });
+});
+
+// @desc    Get cart summary (Private)
+// @route   GET /api/cart/summary
+// @access  Private
+export const getCartSummary = asyncHandler(async (req, res) => {
+  const cart = await Cart.findOne({ user: req.user.id });
+
+  if (!cart) {
+    return res.status(200).json({
+      success: true,
+      data: {
+        totalItems: 0,
+        subtotal: 0,
+        discountAmount: 0,
+        total: 0,
+        formattedTotal: 'KES 0',
+        isEmpty: true
+      }
+    });
+  }
+
+  const total = cart.subtotal - cart.discountAmount;
+
+  res.status(200).json({
+    success: true,
+    data: {
+      totalItems: cart.totalItems,
       subtotal: cart.subtotal,
-      discountAmount: 0
+      discountAmount: cart.discountAmount,
+      total,
+      formattedSubtotal: cart.formattedSubtotal,
+      formattedTotal: new Intl.NumberFormat('en-KE', {
+        style: 'currency',
+        currency: 'KES'
+      }).format(total),
+      isEmpty: cart.items.length === 0,
+      couponCode: cart.couponCode
     }
   });
 });

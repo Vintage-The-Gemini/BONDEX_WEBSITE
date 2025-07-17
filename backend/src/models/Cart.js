@@ -1,3 +1,4 @@
+// backend/src/models/Cart.js
 import mongoose from 'mongoose';
 
 const cartItemSchema = new mongoose.Schema({
@@ -41,16 +42,16 @@ const cartSchema = new mongoose.Schema({
   expiresAt: {
     type: Date,
     default: Date.now,
-    expires: 7 * 24 * 60 * 60 // 7 days for anonymous carts
+    expires: 7 * 24 * 60 * 60, // 7 days for anonymous carts
+    index: true // Use index: true in field definition instead of separate index
   }
 }, {
   timestamps: true
 });
 
-// Indexes
+// Indexes (removed duplicate expiresAt index)
 cartSchema.index({ user: 1 });
 cartSchema.index({ sessionId: 1 });
-cartSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 
 // Virtual properties
 cartSchema.virtual('totalItems').get(function() {

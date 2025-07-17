@@ -1,20 +1,19 @@
+// backend/src/config/database.js
 import mongoose from 'mongoose';
-import winston from 'winston';
+import logger from './logger.js';
 
 const connectDB = async () => {
   try {
-    const conn = await mongoose.connect(process.env.MONGODB_URI, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-    });
+    // Remove deprecated options - they're no longer needed in v4+
+    const conn = await mongoose.connect(process.env.MONGODB_URI);
 
-    winston.info(`✅ MongoDB Connected: ${conn.connection.host}`);
-    winston.info(`💰 Currency: KES (Kenyan Shilling)`);
-    winston.info(`🛒 Safety Equipment E-commerce Database Ready`);
+    logger.info(`✅ MongoDB Connected: ${conn.connection.host}`);
+    logger.info(`💰 Currency: KES (Kenyan Shilling)`);
+    logger.info(`🛒 Safety Equipment E-commerce Database Ready`);
     
     return conn;
   } catch (error) {
-    winston.error(`❌ Database connection error: ${error.message}`);
+    logger.error(`❌ Database connection error: ${error.message}`);
     process.exit(1);
   }
 };

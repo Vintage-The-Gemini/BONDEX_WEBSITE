@@ -1,3 +1,4 @@
+// backend/src/models/Coupon.js
 import mongoose from 'mongoose';
 
 const couponSchema = new mongoose.Schema({
@@ -6,7 +7,8 @@ const couponSchema = new mongoose.Schema({
     required: true,
     unique: true,
     uppercase: true,
-    trim: true
+    trim: true,
+    index: true // Use index: true in field definition instead of separate index
   },
   description: {
     type: String,
@@ -86,8 +88,7 @@ const couponSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Indexes
-couponSchema.index({ code: 1 });
+// Indexes (removed duplicate code index)
 couponSchema.index({ isActive: 1, startDate: 1, endDate: 1 });
 couponSchema.index({ endDate: 1 });
 
@@ -112,39 +113,28 @@ couponSchema.virtual('formattedValue').get(function() {
 });
 
 // Methods
-couponSchema.methods.calculateDiscount = function(orderAmount, items = []) {
-  if (!this.isValid) {
-    return 0;
-  }
-
-  if (orderAmount < this.minimumOrderAmount) {
-    return 0;
-  }
-
-  let applicableAmount = orderAmount;
-
-  // If coupon is restricted to specific products/categories
-  if (this.applicableProducts.length > 0 || this.applicableCategories.length > 0) {
-    applicableAmount = 0;
-    // Calculate applicable amount based on items
-    // This would need to be implemented based on the items passed
-  }
-
+couponSchema.methods.calculateDiscount = function(orderAmount) {
+  if (!this.isValid) return 0;
+  
+  if (orderAmount < this.minimumOrderAmount) return 0;
+  
   let discount = 0;
+  
   if (this.type === 'percentage') {
-    discount = (applicableAmount * this.value) / 100;
-    if (this.maximumDiscountAmount && discount > this.maximumDiscountAmount) {
-      discount = this.maximumDiscountAmount;
+    discount = (orderAmount * this.value) / 100;
+    if (this.maximumDiscountAmount) {
+      discount = Math.min(discount, this.maximumDiscountAmount);
     }
   } else {
-    discount = Math.min(this.value, applicableAmount);
+    discount = this.value;
   }
-
-  return Math.round(discount * 100) / 100; // Round to 2 decimal places
+  
+  return Math.min(discount, orderAmount);
 };
 
 couponSchema.methods.incrementUsage = function() {
   this.usedCount += 1;
+  return this.save();
 };
 
 export default mongoose.model('Coupon', couponSchema);
