@@ -259,39 +259,6 @@ export const defaultCategories = [
     metaTitle: 'Industrial Safety Equipment - Manufacturing PPE',
     metaDescription: 'Professional industrial safety equipment and PPE for manufacturing facilities, factories, and industrial workers.',
     keywords: ['industrial safety', 'manufacturing PPE', 'factory equipment', 'industrial gear']
-  },
-  {
-    name: 'Oil & Gas',
-    description: 'Safety equipment for oil rigs, gas plants, and petroleum industry',
-    type: 'industry',
-    icon: '⛽',
-    colors: { primary: '#7c2d12', secondary: '#fed7aa' },
-    sortOrder: 13,
-    metaTitle: 'Oil & Gas Safety Equipment - Petroleum Industry PPE',
-    metaDescription: 'Professional oil and gas safety equipment and PPE for petroleum industry, refineries, and offshore operations.',
-    keywords: ['oil gas safety', 'petroleum PPE', 'refinery equipment', 'offshore safety']
-  },
-  {
-    name: 'Mining & Quarrying',
-    description: 'Safety equipment for mines, quarries, and extraction operations',
-    type: 'industry',
-    icon: '⛏️',
-    colors: { primary: '#92400e', secondary: '#fef3c7' },
-    sortOrder: 14,
-    metaTitle: 'Mining Safety Equipment - Quarrying PPE & Gear',
-    metaDescription: 'Professional mining safety equipment and PPE for mines, quarries, and mineral extraction operations.',
-    keywords: ['mining safety', 'quarry PPE', 'mining equipment', 'extraction gear']
-  },
-  {
-    name: 'Agriculture & Forestry',
-    description: 'Safety equipment for farms, forestry, and agricultural operations',
-    type: 'industry',
-    icon: '🌾',
-    colors: { primary: '#16a34a', secondary: '#dcfce7' },
-    sortOrder: 15,
-    metaTitle: 'Agricultural Safety Equipment - Farming & Forestry PPE',
-    metaDescription: 'Professional agricultural safety equipment and PPE for farms, forestry operations, and agricultural workers.',
-    keywords: ['agricultural safety', 'farming PPE', 'forestry equipment', 'farm gear']
   }
 ];
 
