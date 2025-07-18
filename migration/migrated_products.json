@@ -1,0 +1,56 @@
+[
+  {
+    "product_id": "96",
+    "product_name": "Maud sneaker",
+    "product_brand": "Safety jogger",
+    "category": "Foot protection",
+    "product_description": "Designed to keep your feet cool no matter how long your shift is. With SR slip resistance. The removable footbed lets you customize your comfort. The 3D mesh keeps your feet dry. Perfect for those working in the cleaning, food and beverage, medical, and catering industries",
+    "links": "https://www.safetyjogger.com/fr/eu/chaussures/maud",
+    "product_price": 0,
+    "product_image": "https://res.cloudinary.com/dbidxxqxr/image/upload/v1752855660/bondex-safety/products/foot-protection/maud-sneaker-1752855576119.webp",
+    "images": [
+      {
+        "url": "https://res.cloudinary.com/dbidxxqxr/image/upload/v1752855660/bondex-safety/products/foot-protection/maud-sneaker-1752855576119.webp",
+        "public_id": "bondex-safety/products/foot-protection/maud-sneaker-1752855576119",
+        "alt": "Maud sneaker"
+      }
+    ],
+    "mainImage": "https://res.cloudinary.com/dbidxxqxr/image/upload/v1752855660/bondex-safety/products/foot-protection/maud-sneaker-1752855576119.webp",
+    "slug": "maud-sneaker",
+    "status": "active",
+    "stock": 10,
+    "rating": 0,
+    "reviewCount": 0,
+    "salesCount": 0,
+    "isOnSale": false,
+    "isFeatured": false,
+    "lowStockThreshold": 5
+  },
+  {
+    "product_id": "97",
+    "product_name": "Oxypas sneaker",
+    "product_brand": "Safety jogger",
+    "category": "Foot protection",
+    "product_description": "Equipped with a certified anti-slip sole. Non-slip rubber sole for better grip. Coolmax inner lining: keeps the foot cool and wicks away perspiration.",
+    "links": "https://safetyjogger.ru/shop/oxypas-evan-wht/",
+    "product_price": 0,
+    "product_image": "https://res.cloudinary.com/dbidxxqxr/image/upload/v1752855663/bondex-safety/products/foot-protection/oxypas-sneaker-1752855577955.jpg",
+    "images": [
+      {
+        "url": "https://res.cloudinary.com/dbidxxqxr/image/upload/v1752855663/bondex-safety/products/foot-protection/oxypas-sneaker-1752855577955.jpg",
+        "public_id": "bondex-safety/products/foot-protection/oxypas-sneaker-1752855577955",
+        "alt": "Oxypas sneaker"
+      }
+    ],
+    "mainImage": "https://res.cloudinary.com/dbidxxqxr/image/upload/v1752855663/bondex-safety/products/foot-protection/oxypas-sneaker-1752855577955.jpg",
+    "slug": "oxypas-sneaker",
+    "status": "active",
+    "stock": 10,
+    "rating": 0,
+    "reviewCount": 0,
+    "salesCount": 0,
+    "isOnSale": false,
+    "isFeatured": false,
+    "lowStockThreshold": 5
+  }
+]
