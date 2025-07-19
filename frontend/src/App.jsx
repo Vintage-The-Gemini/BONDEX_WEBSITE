@@ -1,237 +1,141 @@
-// src/App.jsx
-import React, { useState } from 'react'
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
-import Header from './components/Header'
-import UrgencyBanner from './components/UrgencyBanner'
-import Hero from './components/Hero'
-import Categories from './components/Categories'
-import FeaturedProducts from './components/FeaturedProducts'
-import QuickBuy from './components/QuickBuy'
-import WhyChooseUs from './components/WhyChooseUs'
-import Testimonials from './components/Testimonials'
-import Newsletter from './components/Newsletter'
-import CallToAction from './components/CallToAction'
-import Footer from './components/Footer'
-import ShoppingCart from './components/ShoppingCart'
-import ProductModal from './components/ProductModal'
-import Products from './pages/Products'
+// frontend/src/App.jsx
+import React from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { Toaster } from 'react-hot-toast';
 
-// Homepage Component
-const HomePage = ({ onOpenProductModal }) => (
-  <>
-    <Hero />
-    <Categories />
-    <FeaturedProducts onOpenProductModal={onOpenProductModal} />
-    <QuickBuy />
-    <WhyChooseUs />
-    <Testimonials />
-    <Newsletter />
-    <CallToAction />
-  </>
-);
+// Admin Components
+import AdminLayout from './components/admin/AdminLayout';
+import AdminLogin from './pages/admin/AdminLogin';
+import AdminDashboard from './pages/admin/AdminDashboard';
+import ProductList from './pages/admin/ProductList';
+import CreateProduct from './pages/admin/CreateProduct';
+import EditProduct from './pages/admin/EditProduct';
+import ProductDetail from './pages/admin/ProductDetail';
 
-function App() {
-  const [isCartOpen, setIsCartOpen] = useState(false);
-  const [isProductModalOpen, setIsProductModalOpen] = useState(false);
-  const [selectedProduct, setSelectedProduct] = useState(null);
-  const [cartItems, setCartItems] = useState([]);
+// Customer Components (will be created later)
+// import CustomerLayout from './components/customer/CustomerLayout';
+// import HomePage from './pages/customer/HomePage';
+// import ProductCatalog from './pages/customer/ProductCatalog';
+// import ProductPage from './pages/customer/ProductPage';
 
-  const openCart = () => setIsCartOpen(true);
-  const closeCart = () => setIsCartOpen(false);
+// Utility Components
+import NotFound from './pages/NotFound';
+import ProtectedRoute from './components/ProtectedRoute';
 
-  const openProductModal = (product) => {
-    setSelectedProduct(product);
-    setIsProductModalOpen(true);
-  };
+// Global CSS
+import './index.css';
 
-  const closeProductModal = () => {
-    setIsProductModalOpen(false);
-    setSelectedProduct(null);
-  };
-
-  const addToCart = (product) => {
-    console.log('Adding to cart:', product);
-    setCartItems(prev => {
-      const existingItem = prev.find(item => item.id === product.id);
-      if (existingItem) {
-        return prev.map(item =>
-          item.id === product.id
-            ? { ...item, quantity: item.quantity + (product.quantity || 1) }
-            : item
-        );
-      }
-      return [...prev, { ...product, quantity: product.quantity || 1 }];
-    });
-    
-    // Show success notification (you can implement toast notifications here)
-    console.log('Item added to cart successfully!');
-  };
-
+const App = () => {
   return (
     <Router>
-      <div className="min-h-screen bg-gray-50">
-        {/* Urgency Banner for immediate conversions */}
-        <UrgencyBanner />
-        
-        <Header onOpenCart={openCart} cartCount={cartItems.length} />
-        
+      <div className="App">
+        {/* Global toast notifications */}
+        <Toaster
+          position="top-right"
+          toastOptions={{
+            duration: 4000,
+            style: {
+              background: '#fff',
+              color: '#333',
+              border: '1px solid #e5e5e5',
+              borderRadius: '8px',
+              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)'
+            },
+            success: {
+              style: {
+                border: '1px solid #10b981',
+                color: '#065f46'
+              }
+            },
+            error: {
+              style: {
+                border: '1px solid #ef4444',
+                color: '#7f1d1d'
+              }
+            }
+          }}
+        />
+
         <Routes>
-          {/* Homepage Route */}
-          <Route 
-            path="/" 
-            element={<HomePage onOpenProductModal={openProductModal} />} 
-          />
-          
-          {/* Products Catalog Route */}
-          <Route 
-            path="/products" 
+          {/* Root Redirect */}
+          <Route path="/" element={<Navigate to="/admin/login" replace />} />
+
+          {/* Admin Authentication Routes (No Layout) */}
+          <Route path="/admin/login" element={<AdminLogin />} />
+
+          {/* Protected Admin Routes (With AdminLayout) */}
+          <Route
+            path="/admin/*"
             element={
-              <Products 
-                onOpenProductModal={openProductModal} 
-                onAddToCart={addToCart}
-              />
-            } 
-          />
-          
-          {/* Category Routes */}
-          <Route 
-            path="/products/head-protection" 
-            element={
-              <Products 
-                defaultCategory="Head Protection"
-                onOpenProductModal={openProductModal} 
-                onAddToCart={addToCart}
-              />
-            } 
-          />
-          <Route 
-            path="/products/foot-protection" 
-            element={
-              <Products 
-                defaultCategory="Foot Protection"
-                onOpenProductModal={openProductModal} 
-                onAddToCart={addToCart}
-              />
-            } 
-          />
-          <Route 
-            path="/products/eye-protection" 
-            element={
-              <Products 
-                defaultCategory="Eye Protection"
-                onOpenProductModal={openProductModal} 
-                onAddToCart={addToCart}
-              />
-            } 
-          />
-          <Route 
-            path="/products/hand-protection" 
-            element={
-              <Products 
-                defaultCategory="Hand Protection"
-                onOpenProductModal={openProductModal} 
-                onAddToCart={addToCart}
-              />
-            } 
-          />
-          <Route 
-            path="/products/breathing-protection" 
-            element={
-              <Products 
-                defaultCategory="Breathing Protection"
-                onOpenProductModal={openProductModal} 
-                onAddToCart={addToCart}
-              />
-            } 
-          />
-          <Route 
-            path="/products/workwear" 
-            element={
-              <Products 
-                defaultCategory="Workwear"
-                onOpenProductModal={openProductModal} 
-                onAddToCart={addToCart}
-              />
-            } 
-          />
-          
-          {/* Industry Routes */}
-          <Route 
-            path="/industries/medical" 
-            element={
-              <Products 
-                defaultIndustry="Medical"
-                onOpenProductModal={openProductModal} 
-                onAddToCart={addToCart}
-              />
-            } 
-          />
-          <Route 
-            path="/industries/construction" 
-            element={
-              <Products 
-                defaultIndustry="Construction"
-                onOpenProductModal={openProductModal} 
-                onAddToCart={addToCart}
-              />
-            } 
-          />
-          <Route 
-            path="/industries/manufacturing" 
-            element={
-              <Products 
-                defaultIndustry="Manufacturing"
-                onOpenProductModal={openProductModal} 
-                onAddToCart={addToCart}
-              />
-            } 
+              <ProtectedRoute>
+                <AdminLayout>
+                  <Routes>
+                    {/* Admin Dashboard */}
+                    <Route path="dashboard" element={<AdminDashboard />} />
+                    
+                    {/* Product Management Routes */}
+                    <Route path="products" element={<ProductList />} />
+                    <Route path="products/create" element={<CreateProduct />} />
+                    <Route path="products/new" element={<CreateProduct />} />
+                    <Route path="products/:id" element={<ProductDetail />} />
+                    <Route path="products/:id/edit" element={<EditProduct />} />
+                    
+                    {/* Category Management Routes (to be created) */}
+                    {/* <Route path="categories" element={<CategoryList />} />
+                    <Route path="categories/create" element={<CreateCategory />} />
+                    <Route path="categories/:id/edit" element={<EditCategory />} /> */}
+                    
+                    {/* Order Management Routes (to be created) */}
+                    {/* <Route path="orders" element={<OrderList />} />
+                    <Route path="orders/:id" element={<OrderDetail />} /> */}
+                    
+                    {/* Customer Management Routes (to be created) */}
+                    {/* <Route path="customers" element={<CustomerList />} />
+                    <Route path="customers/:id" element={<CustomerDetail />} /> */}
+                    
+                    {/* Analytics Routes (to be created) */}
+                    {/* <Route path="analytics" element={<Analytics />} />
+                    <Route path="analytics/sales" element={<SalesAnalytics />} />
+                    <Route path="analytics/products" element={<ProductAnalytics />} /> */}
+                    
+                    {/* Settings Routes (to be created) */}
+                    {/* <Route path="settings" element={<Settings />} />
+                    <Route path="settings/profile" element={<AdminProfile />} />
+                    <Route path="settings/general" element={<GeneralSettings />} /> */}
+                    
+                    {/* Admin Default Route */}
+                    <Route path="" element={<Navigate to="dashboard" replace />} />
+                    
+                    {/* Admin 404 */}
+                    <Route path="*" element={<NotFound />} />
+                  </Routes>
+                </AdminLayout>
+              </ProtectedRoute>
+            }
           />
 
-          {/* Search Results Route */}
-          <Route 
-            path="/search" 
-            element={
-              <Products 
-                onOpenProductModal={openProductModal} 
-                onAddToCart={addToCart}
-              />
-            } 
-          />
-          
-          {/* Sale/Special Offers Route */}
-          <Route 
-            path="/sale" 
-            element={
-              <Products 
-                defaultFilter="onSale"
-                onOpenProductModal={openProductModal} 
-                onAddToCart={addToCart}
-              />
-            } 
-          />
+          {/* Customer Routes (Public - to be implemented later) */}
+          {/* <Route path="/shop/*" element={
+            <CustomerLayout>
+              <Routes>
+                <Route path="" element={<HomePage />} />
+                <Route path="products" element={<ProductCatalog />} />
+                <Route path="products/:slug" element={<ProductPage />} />
+                <Route path="categories/:category" element={<ProductCatalog />} />
+                <Route path="cart" element={<ShoppingCart />} />
+                <Route path="checkout" element={<Checkout />} />
+                <Route path="orders" element={<OrderHistory />} />
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </CustomerLayout>
+          } /> */}
+
+          {/* Global 404 Route */}
+          <Route path="*" element={<NotFound />} />
         </Routes>
-        
-        <Footer />
-        
-        {/* Shopping Cart Sidebar */}
-        <ShoppingCart 
-          isOpen={isCartOpen} 
-          onClose={closeCart}
-          cartItems={cartItems}
-          setCartItems={setCartItems}
-        />
-        
-        {/* Product Quick View Modal */}
-        <ProductModal
-          product={selectedProduct}
-          isOpen={isProductModalOpen}
-          onClose={closeProductModal}
-          onAddToCart={addToCart}
-        />
       </div>
     </Router>
-  )
-}
+  );
+};
 
-export default App
-
+export default App;
