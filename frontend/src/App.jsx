@@ -1,6 +1,8 @@
 // src/App.jsx
 import React, { useState } from 'react'
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
+import { Routes, Route } from 'react-router-dom'
+
+// Customer-facing components (your existing components)
 import Header from './components/Header'
 import UrgencyBanner from './components/UrgencyBanner'
 import Hero from './components/Hero'
@@ -16,7 +18,11 @@ import ShoppingCart from './components/ShoppingCart'
 import ProductModal from './components/ProductModal'
 import Products from './pages/Products'
 
-// Homepage Component
+// Admin components and context
+import { AdminProvider } from './context/AdminContext'
+import AdminRouter from './routes/AdminRouter'
+
+// Homepage Component (your existing)
 const HomePage = ({ onOpenProductModal }) => (
   <>
     <Hero />
@@ -30,7 +36,8 @@ const HomePage = ({ onOpenProductModal }) => (
   </>
 );
 
-function App() {
+// Customer App Component (your existing functionality)
+const CustomerApp = () => {
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
@@ -68,170 +75,182 @@ function App() {
   };
 
   return (
-    <Router>
-      <div className="min-h-screen bg-gray-50">
-        {/* Urgency Banner for immediate conversions */}
-        <UrgencyBanner />
+    <div className="min-h-screen bg-gray-50">
+      {/* Urgency Banner for immediate conversions */}
+      <UrgencyBanner />
+      
+      <Header onOpenCart={openCart} cartCount={cartItems.length} />
+      
+      <Routes>
+        {/* Homepage Route */}
+        <Route 
+          path="/" 
+          element={<HomePage onOpenProductModal={openProductModal} />} 
+        />
         
-        <Header onOpenCart={openCart} cartCount={cartItems.length} />
+        {/* Products Catalog Route */}
+        <Route 
+          path="/products" 
+          element={
+            <Products 
+              onOpenProductModal={openProductModal} 
+              onAddToCart={addToCart}
+            />
+          } 
+        />
         
-        <Routes>
-          {/* Homepage Route */}
-          <Route 
-            path="/" 
-            element={<HomePage onOpenProductModal={openProductModal} />} 
-          />
-          
-          {/* Products Catalog Route */}
-          <Route 
-            path="/products" 
-            element={
-              <Products 
-                onOpenProductModal={openProductModal} 
-                onAddToCart={addToCart}
-              />
-            } 
-          />
-          
-          {/* Category Routes */}
-          <Route 
-            path="/products/head-protection" 
-            element={
-              <Products 
-                defaultCategory="Head Protection"
-                onOpenProductModal={openProductModal} 
-                onAddToCart={addToCart}
-              />
-            } 
-          />
-          <Route 
-            path="/products/foot-protection" 
-            element={
-              <Products 
-                defaultCategory="Foot Protection"
-                onOpenProductModal={openProductModal} 
-                onAddToCart={addToCart}
-              />
-            } 
-          />
-          <Route 
-            path="/products/eye-protection" 
-            element={
-              <Products 
-                defaultCategory="Eye Protection"
-                onOpenProductModal={openProductModal} 
-                onAddToCart={addToCart}
-              />
-            } 
-          />
-          <Route 
-            path="/products/hand-protection" 
-            element={
-              <Products 
-                defaultCategory="Hand Protection"
-                onOpenProductModal={openProductModal} 
-                onAddToCart={addToCart}
-              />
-            } 
-          />
-          <Route 
-            path="/products/breathing-protection" 
-            element={
-              <Products 
-                defaultCategory="Breathing Protection"
-                onOpenProductModal={openProductModal} 
-                onAddToCart={addToCart}
-              />
-            } 
-          />
-          <Route 
-            path="/products/workwear" 
-            element={
-              <Products 
-                defaultCategory="Workwear"
-                onOpenProductModal={openProductModal} 
-                onAddToCart={addToCart}
-              />
-            } 
-          />
-          
-          {/* Industry Routes */}
-          <Route 
-            path="/industries/medical" 
-            element={
-              <Products 
-                defaultIndustry="Medical"
-                onOpenProductModal={openProductModal} 
-                onAddToCart={addToCart}
-              />
-            } 
-          />
-          <Route 
-            path="/industries/construction" 
-            element={
-              <Products 
-                defaultIndustry="Construction"
-                onOpenProductModal={openProductModal} 
-                onAddToCart={addToCart}
-              />
-            } 
-          />
-          <Route 
-            path="/industries/manufacturing" 
-            element={
-              <Products 
-                defaultIndustry="Manufacturing"
-                onOpenProductModal={openProductModal} 
-                onAddToCart={addToCart}
-              />
-            } 
-          />
+        {/* Category Routes */}
+        <Route 
+          path="/products/head-protection" 
+          element={
+            <Products 
+              defaultCategory="Head Protection"
+              onOpenProductModal={openProductModal} 
+              onAddToCart={addToCart}
+            />
+          } 
+        />
+        <Route 
+          path="/products/foot-protection" 
+          element={
+            <Products 
+              defaultCategory="Foot Protection"
+              onOpenProductModal={openProductModal} 
+              onAddToCart={addToCart}
+            />
+          } 
+        />
+        <Route 
+          path="/products/eye-protection" 
+          element={
+            <Products 
+              defaultCategory="Eye Protection"
+              onOpenProductModal={openProductModal} 
+              onAddToCart={addToCart}
+            />
+          } 
+        />
+        <Route 
+          path="/products/hand-protection" 
+          element={
+            <Products 
+              defaultCategory="Hand Protection"
+              onOpenProductModal={openProductModal} 
+              onAddToCart={addToCart}
+            />
+          } 
+        />
+        <Route 
+          path="/products/breathing-protection" 
+          element={
+            <Products 
+              defaultCategory="Breathing Protection"
+              onOpenProductModal={openProductModal} 
+              onAddToCart={addToCart}
+            />
+          } 
+        />
+        <Route 
+          path="/products/workwear" 
+          element={
+            <Products 
+              defaultCategory="Workwear"
+              onOpenProductModal={openProductModal} 
+              onAddToCart={addToCart}
+            />
+          } 
+        />
+        
+        {/* Industry Routes */}
+        <Route 
+          path="/industries/medical" 
+          element={
+            <Products 
+              defaultIndustry="Medical"
+              onOpenProductModal={openProductModal} 
+              onAddToCart={addToCart}
+            />
+          } 
+        />
+        <Route 
+          path="/industries/construction" 
+          element={
+            <Products 
+              defaultIndustry="Construction"
+              onOpenProductModal={openProductModal} 
+              onAddToCart={addToCart}
+            />
+          } 
+        />
+        <Route 
+          path="/industries/manufacturing" 
+          element={
+            <Products 
+              defaultIndustry="Manufacturing"
+              onOpenProductModal={openProductModal} 
+              onAddToCart={addToCart}
+            />
+          } 
+        />
 
-          {/* Search Results Route */}
-          <Route 
-            path="/search" 
-            element={
-              <Products 
-                onOpenProductModal={openProductModal} 
-                onAddToCart={addToCart}
-              />
-            } 
-          />
-          
-          {/* Sale/Special Offers Route */}
-          <Route 
-            path="/sale" 
-            element={
-              <Products 
-                defaultFilter="onSale"
-                onOpenProductModal={openProductModal} 
-                onAddToCart={addToCart}
-              />
-            } 
-          />
-        </Routes>
-        
-        <Footer />
-        
-        {/* Shopping Cart Sidebar */}
-        <ShoppingCart 
-          isOpen={isCartOpen} 
-          onClose={closeCart}
-          cartItems={cartItems}
-          setCartItems={setCartItems}
+        {/* Search Results Route */}
+        <Route 
+          path="/search" 
+          element={
+            <Products 
+              onOpenProductModal={openProductModal} 
+              onAddToCart={addToCart}
+            />
+          } 
         />
         
-        {/* Product Quick View Modal */}
-        <ProductModal
-          product={selectedProduct}
-          isOpen={isProductModalOpen}
-          onClose={closeProductModal}
-          onAddToCart={addToCart}
+        {/* Sale/Special Offers Route */}
+        <Route 
+          path="/sale" 
+          element={
+            <Products 
+              defaultFilter="onSale"
+              onOpenProductModal={openProductModal} 
+              onAddToCart={addToCart}
+            />
+          } 
         />
-      </div>
-    </Router>
+      </Routes>
+      
+      <Footer />
+      
+      {/* Shopping Cart Sidebar */}
+      <ShoppingCart 
+        isOpen={isCartOpen} 
+        onClose={closeCart}
+        cartItems={cartItems}
+        setCartItems={setCartItems}
+      />
+      
+      {/* Product Quick View Modal */}
+      <ProductModal
+        product={selectedProduct}
+        isOpen={isProductModalOpen}
+        onClose={closeProductModal}
+        onAddToCart={addToCart}
+      />
+    </div>
+  );
+};
+
+// Main App Component
+function App() {
+  return (
+    <AdminProvider>
+      <Routes>
+        {/* Admin Panel Routes */}
+        <Route path="/admin/*" element={<AdminRouter />} />
+        
+        {/* Customer-facing Routes (your existing app) */}
+        <Route path="/*" element={<CustomerApp />} />
+      </Routes>
+    </AdminProvider>
   )
 }
 
 export default App
-
