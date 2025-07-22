@@ -1,157 +1,182 @@
 // backend/server.js
 import express from 'express';
-import dotenv from 'dotenv';
 import cors from 'cors';
-import morgan from 'morgan';
+import dotenv from 'dotenv';
 import helmet from 'helmet';
+import morgan from 'morgan';
+import compression from 'compression';
 import rateLimit from 'express-rate-limit';
+import mongoSanitize from 'express-mongo-sanitize';
+import hpp from 'hpp';
 import cookieParser from 'cookie-parser';
 import path from 'path';
 import { fileURLToPath } from 'url';
+
+// ES6 __dirname alternative
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Load environment variables FIRST
+dotenv.config();
+
+// Import database connection
 import connectDB from './config/database.js';
 
 // Import routes
-import categoryRoutes from './routes/categoryRoutes.js';
 import productRoutes from './routes/productRoutes.js';
+import uploadRoutes from './routes/uploadRoutes.js';
+import categoryRoutes from './routes/categoryRoutes.js';
 import adminRoutes from './routes/adminRoutes.js';
 import adminProductRoutes from './routes/adminProductRoutes.js';
-import uploadRoutes from './routes/uploadRoutes.js';
 
-// Load environment variables
-dotenv.config();
+// Import error handlers
+import { notFound, errorHandler } from './middleware/errorHandler.js';
 
-// Get directory name for ES modules
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const app = express();
 
 // Connect to database
 connectDB();
 
-// Initialize Express app
-const app = express();
+// Trust proxy for accurate IP addresses (MUST be early)
+app.set('trust proxy', 1);
 
-// Security middleware
-app.use(helmet());
+// ============================================
+// MIDDLEWARE CONFIGURATION (ORDER MATTERS!)
+// ============================================
 
-// Rate limiting
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100 // limit each IP to 100 requests per windowMs
-});
-app.use('/api/', limiter);
-
-// CORS configuration
-app.use(cors({
-  origin: ['http://localhost:3000', 'http://localhost:5173'],
+// 1. CORS - MUST come first
+const corsOptions = {
+  origin: process.env.NODE_ENV === 'production' 
+    ? process.env.CLIENT_URL || 'http://localhost:3000'
+    : ['http://localhost:3000', 'http://localhost:5173', 'http://127.0.0.1:5173'],
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'x-setup-token']
+  optionsSuccessStatus: 200,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-csrf-token'],
+};
+app.use(cors(corsOptions));
+
+// 2. Security middleware
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https:"],
+      scriptSrc: ["'self'", "https:"],
+      imgSrc: ["'self'", "data:", "https:"],
+    },
+  },
 }));
 
-// Logging middleware
-if (process.env.NODE_ENV === 'development') {
-  app.use(morgan('dev'));
-}
-
-// Body parsing middleware
+// 3. Body parsing middleware - BEFORE routes
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(cookieParser());
 
-// Static file serving
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+// 4. Data sanitization
+app.use(mongoSanitize());
+app.use(hpp({
+  whitelist: ['price', 'category', 'rating', 'brand', 'sort', 'fields']
+}));
+
+// 5. Compression
+app.use(compression());
+
+// 6. Logging
+if (process.env.NODE_ENV === 'development') {
+  app.use(morgan('dev'));
+}
+
+// 7. Request logging for debugging
+app.use((req, res, next) => {
+  console.log(`📝 ${new Date().toISOString()} - ${req.method} ${req.originalUrl}`);
+  next();
+});
 
 // ============================================
-// ROUTE REGISTRATION LOGGING
+// RATE LIMITING (BEFORE ROUTES)
 // ============================================
-console.log('🚀 Starting Bondex Safety API Server...');
-console.log('📋 Registering routes...');
+
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100,
+  message: {
+    success: false,
+    error: 'Too many requests from this IP, please try again later.',
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+app.use('/api/', limiter);
 
 // ============================================
-// HEALTH CHECK ENDPOINTS
+// HEALTH CHECK ROUTES (FIRST - BEFORE OTHER ROUTES)
 // ============================================
 
 app.get('/api/health', (req, res) => {
-  console.log('🏥 Health check endpoint hit');
-  res.status(200).json({
+  console.log('🏥 Health check called');
+  res.json({
     success: true,
-    message: 'Bondex Safety API is running',
+    message: 'BONDEX Safety API is running!',
     timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV || 'development'
+    environment: process.env.NODE_ENV || 'development',
+    currency: 'KES'
   });
 });
 
 app.get('/api/test', (req, res) => {
-  console.log('🧪 Test endpoint hit');
-  res.status(200).json({
+  console.log('🧪 Test endpoint called');
+  res.json({
     success: true,
     message: 'API test endpoint working',
-    timestamp: new Date().toISOString()
-  });
-});
-
-// Debug endpoint for categories
-app.get('/api/categories-debug', (req, res) => {
-  console.log('🔍 Categories debug endpoint hit');
-  res.status(200).json({
-    success: true,
-    message: 'Categories debug endpoint working',
-    route: '/api/categories-debug',
+    server: 'Bondex Safety Backend',
     timestamp: new Date().toISOString()
   });
 });
 
 // ============================================
-// API ROUTES
+// API ROUTES REGISTRATION (EXACT ORDER!)
 // ============================================
+
+console.log('🚀 Registering API routes...');
 
 // Public routes
 app.use('/api/categories', categoryRoutes);
-console.log('✅ Categories routes registered: /api/categories');
-
 app.use('/api/products', productRoutes);
-console.log('✅ Products routes registered: /api/products');
-
 app.use('/api/upload', uploadRoutes);
-console.log('✅ Upload routes registered: /api/upload');
 
-// Admin routes
+// Admin routes  
 app.use('/api/admin', adminRoutes);
-console.log('✅ Admin routes registered: /api/admin');
-
 app.use('/api/admin/products', adminProductRoutes);
-console.log('✅ Admin products routes registered: /api/admin/products');
+
+console.log('✅ All API routes registered successfully');
 
 // ============================================
-// ERROR HANDLING
+// STATIC FILES (PRODUCTION ONLY)
 // ============================================
 
-// 404 handler
-app.all('*', (req, res) => {
-  console.log(`❌ 404 - Route not found: ${req.method} ${req.originalUrl}`);
-  res.status(404).json({
-    success: false,
-    message: `Route ${req.originalUrl} not found`,
-    method: req.method,
-    availableRoutes: [
-      'GET /api/health',
-      'GET /api/test', 
-      'GET /api/categories-debug',
-      'GET /api/categories',
-      'POST /api/admin/login',
-      'GET /api/admin/dashboard'
-    ]
+if (process.env.NODE_ENV === 'production') {
+  const frontendPath = path.join(__dirname, '../frontend/dist');
+  app.use(express.static(frontendPath));
+  
+  // Handle React routing - serve index.html for non-API routes
+  app.get('*', (req, res) => {
+    if (!req.path.startsWith('/api')) {
+      res.sendFile(path.join(frontendPath, 'index.html'));
+    }
   });
-});
+}
+
+// ============================================
+// ERROR HANDLING (MUST BE LAST!)
+// ============================================
+
+// 404 handler for unknown routes
+app.use(notFound);
 
 // Global error handler
-app.use((error, req, res, next) => {
-  console.error('❌ Global error:', error);
-  res.status(error.status || 500).json({
-    success: false,
-    message: error.message || 'Internal server error'
-  });
-});
+app.use(errorHandler);
 
 // ============================================
 // START SERVER
@@ -160,14 +185,40 @@ app.use((error, req, res, next) => {
 const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, () => {
-  console.log('\n🎉 SERVER STARTED SUCCESSFULLY!');
-  console.log('=================================');
-  console.log(`🚀 Server running on: http://localhost:${PORT}`);
-  console.log(`🏥 Health check: http://localhost:${PORT}/api/health`);
-  console.log(`🧪 Test endpoint: http://localhost:${PORT}/api/test`);
-  console.log(`🔍 Debug categories: http://localhost:${PORT}/api/categories-debug`);
-  console.log(`📂 Categories API: http://localhost:${PORT}/api/categories`);
-  console.log('=================================\n');
+  console.log(`
+🚀 BONDEX Safety Server Running Successfully!
+📍 Server: http://localhost:${PORT}
+🏥 Health: http://localhost:${PORT}/api/health
+📂 Categories: http://localhost:${PORT}/api/categories
+💰 Currency: KES (Kenya Shillings)
+🌍 Environment: ${process.env.NODE_ENV || 'development'}
+⏰ Started: ${new Date().toLocaleString()}
+
+📋 Available API Endpoints:
+   GET  /api/health
+   GET  /api/test  
+   GET  /api/categories
+   GET  /api/products
+   POST /api/admin/login
+  `);
+});
+
+// ============================================
+// PROCESS HANDLERS
+// ============================================
+
+// Handle unhandled promise rejections
+process.on('unhandledRejection', (err) => {
+  console.log('💥 UNHANDLED REJECTION! Shutting down...');
+  console.log(err.name, err.message);
+  process.exit(1);
+});
+
+// Handle uncaught exceptions
+process.on('uncaughtException', (err) => {
+  console.log('💥 UNCAUGHT EXCEPTION! Shutting down...');
+  console.log(err.name, err.message);
+  process.exit(1);
 });
 
 export default app;
