@@ -1,54 +1,64 @@
 // backend/routes/categoryRoutes.js
 import express from 'express';
-import {
-  getCategories,
-  getCategory,
-  createCategory,
-  updateCategory,
-  deleteCategory,
-  seedCategories,
-  getCategoriesByType
+import { 
+  getCategories, 
+  getCategory, 
+  createCategory, 
+  updateCategory, 
+  deleteCategory 
 } from '../controllers/categoryController.js';
+import { protect, adminOnly } from '../middleware/adminAuth.js';
 
 const router = express.Router();
 
-// Public Routes
+// Debug middleware for categories route
+router.use((req, res, next) => {
+  console.log(`🔍 Category Route Hit: ${req.method} ${req.originalUrl}`);
+  console.log('Headers:', req.headers.accept);
+  console.log('Query:', req.query);
+  next();
+});
 
+// @desc    Get all categories
 // @route   GET /api/categories
-// @desc    Get all categories with optional filtering
 // @access  Public
-router.get('/', getCategories);
+router.get('/', async (req, res) => {
+  console.log('📂 Categories GET route hit');
+  
+  try {
+    // Ensure we always return JSON
+    res.setHeader('Content-Type', 'application/json');
+    
+    // Call the controller
+    await getCategories(req, res);
+  } catch (error) {
+    console.error('❌ Category route error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error fetching categories',
+      error: error.message
+    });
+  }
+});
 
-// @route   GET /api/categories/type/:type
-// @desc    Get categories by type (protection_type, industry, etc.)
-// @access  Public
-router.get('/type/:type', getCategoriesByType);
-
-// @route   GET /api/categories/:id
 // @desc    Get single category by ID
+// @route   GET /api/categories/:id
 // @access  Public
 router.get('/:id', getCategory);
 
-// Admin Routes (we'll add authentication middleware later)
-
-// @route   POST /api/categories/seed
-// @desc    Seed default categories into database
-// @access  Private (Admin only)
-router.post('/seed', seedCategories);
-
+// @desc    Create new category (Admin only)
 // @route   POST /api/categories
-// @desc    Create new category
-// @access  Private (Admin only)
-router.post('/', createCategory);
+// @access  Private
+router.post('/', protect, adminOnly, createCategory);
 
+// @desc    Update category (Admin only)
 // @route   PUT /api/categories/:id
-// @desc    Update category
-// @access  Private (Admin only)
-router.put('/:id', updateCategory);
+// @access  Private
+router.put('/:id', protect, adminOnly, updateCategory);
 
+// @desc    Delete category (Admin only)
 // @route   DELETE /api/categories/:id
-// @desc    Delete category
-// @access  Private (Admin only)
-router.delete('/:id', deleteCategory);
+// @access  Private
+router.delete('/:id', protect, adminOnly, deleteCategory);
 
 export default router;

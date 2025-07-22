@@ -253,4 +253,4 @@ function App() {
   )
 }
 
-export default App
+export default App// frontend/src/App.jsx
