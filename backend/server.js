@@ -37,41 +37,63 @@ const app = express();
 // Connect to database
 connectDB();
 
-// Trust proxy for accurate IP addresses (MUST be early)
+// Trust proxy for accurate IP addresses
 app.set('trust proxy', 1);
 
 // ============================================
-// MIDDLEWARE CONFIGURATION (ORDER MATTERS!)
+// MIDDLEWARE CONFIGURATION
 // ============================================
 
-// 1. CORS - MUST come first
+// 1. CORS configuration
 const corsOptions = {
-  origin: process.env.NODE_ENV === 'production' 
-    ? process.env.CLIENT_URL || 'http://localhost:3000'
-    : ['http://localhost:3000', 'http://localhost:5173', 'http://127.0.0.1:5173'],
+  origin: function (origin, callback) {
+    if (!origin) return callback(null, true);
+    
+    const allowedOrigins = [
+      'http://localhost:3000',
+      'http://localhost:5173',
+      'http://127.0.0.1:5173',
+      'http://127.0.0.1:3000',
+      process.env.CLIENT_URL
+    ].filter(Boolean);
+    
+    if (process.env.NODE_ENV === 'development') {
+      return callback(null, true);
+    }
+    
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
   optionsSuccessStatus: 200,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'x-csrf-token'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS', 'HEAD'],
+  allowedHeaders: [
+    'Content-Type', 
+    'Authorization', 
+    'x-csrf-token', 
+    'Origin',
+    'X-Requested-With',
+    'Accept'
+  ]
 };
+
 app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 
-// 2. Security middleware
-app.use(helmet({
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      styleSrc: ["'self'", "'unsafe-inline'", "https:"],
-      scriptSrc: ["'self'", "https:"],
-      imgSrc: ["'self'", "data:", "https:"],
-    },
-  },
-}));
-
-// 3. Body parsing middleware - BEFORE routes
+// 2. Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(cookieParser());
+
+// 3. Security middleware
+if (process.env.NODE_ENV === 'production') {
+  app.use(helmet());
+} else {
+  app.use(helmet({ contentSecurityPolicy: false }));
+}
 
 // 4. Data sanitization
 app.use(mongoSanitize());
@@ -87,95 +109,175 @@ if (process.env.NODE_ENV === 'development') {
   app.use(morgan('dev'));
 }
 
-// 7. Request logging for debugging
+// 7. 🔍 DEBUG LOGGING - This will help us trace requests
 app.use((req, res, next) => {
-  console.log(`📝 ${new Date().toISOString()} - ${req.method} ${req.originalUrl}`);
+  console.log(`🌐 INCOMING: ${req.method} ${req.originalUrl}`);
+  console.log(`🌐 Origin: ${req.headers.origin || 'no-origin'}`);
+  
+  // Intercept res.json to confirm JSON responses
+  const originalJson = res.json;
+  res.json = function(data) {
+    console.log(`✅ SENDING JSON for ${req.originalUrl} - Status: ${res.statusCode}`);
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    return originalJson.call(this, data);
+  };
+  
   next();
 });
 
 // ============================================
-// RATE LIMITING (BEFORE ROUTES)
+// RATE LIMITING
 // ============================================
 
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100,
+  windowMs: 15 * 60 * 1000,
+  max: process.env.NODE_ENV === 'development' ? 1000 : 100,
   message: {
     success: false,
     error: 'Too many requests from this IP, please try again later.',
-  },
-  standardHeaders: true,
-  legacyHeaders: false,
+  }
 });
 
 app.use('/api/', limiter);
 
 // ============================================
-// HEALTH CHECK ROUTES (FIRST - BEFORE OTHER ROUTES)
-// ============================================
-
-app.get('/api/health', (req, res) => {
-  console.log('🏥 Health check called');
-  res.json({
-    success: true,
-    message: 'BONDEX Safety API is running!',
-    timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV || 'development',
-    currency: 'KES'
-  });
-});
-
-app.get('/api/test', (req, res) => {
-  console.log('🧪 Test endpoint called');
-  res.json({
-    success: true,
-    message: 'API test endpoint working',
-    server: 'Bondex Safety Backend',
-    timestamp: new Date().toISOString()
-  });
-});
-
-// ============================================
-// API ROUTES REGISTRATION (EXACT ORDER!)
+// ✅ API ROUTES FIRST - BEFORE STATIC FILES
 // ============================================
 
 console.log('🚀 Registering API routes...');
 
-// Public routes
-app.use('/api/categories', categoryRoutes);
-app.use('/api/products', productRoutes);
-app.use('/api/upload', uploadRoutes);
+// Health check endpoint - PRIORITY #1
+app.get('/api/health', (req, res) => {
+  console.log('🏥 Health endpoint hit directly');
+  res.status(200).json({
+    success: true,
+    message: 'BONDEX Safety API is running!',
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development',
+    currency: 'KES',
+    server: 'main-server'
+  });
+});
 
-// Admin routes  
-app.use('/api/admin', adminRoutes);
-app.use('/api/admin/products', adminProductRoutes);
+// Test endpoint
+app.get('/api/test', (req, res) => {
+  console.log('🧪 Test endpoint hit directly');
+  res.status(200).json({
+    success: true,
+    message: 'API test endpoint working perfectly',
+    server: 'Bondex Safety Backend',
+    timestamp: new Date().toISOString(),
+    currency: 'KES'
+  });
+});
+
+// Register all API routes
+try {
+  app.use('/api/categories', categoryRoutes);
+  console.log('✅ Categories routes registered at /api/categories');
+} catch (error) {
+  console.error('❌ Error registering category routes:', error.message);
+}
+
+try {
+  app.use('/api/products', productRoutes);
+  console.log('✅ Product routes registered at /api/products');
+} catch (error) {
+  console.error('❌ Error registering product routes:', error.message);
+}
+
+try {
+  app.use('/api/upload', uploadRoutes);
+  console.log('✅ Upload routes registered at /api/upload');
+} catch (error) {
+  console.error('❌ Error registering upload routes:', error.message);
+}
+
+try {
+  app.use('/api/admin', adminRoutes);
+  console.log('✅ Admin routes registered at /api/admin');
+} catch (error) {
+  console.error('❌ Error registering admin routes:', error.message);
+}
+
+try {
+  app.use('/api/admin/products', adminProductRoutes);
+  console.log('✅ Admin product routes registered at /api/admin/products');
+} catch (error) {
+  console.error('❌ Error registering admin product routes:', error.message);
+}
 
 console.log('✅ All API routes registered successfully');
 
 // ============================================
-// STATIC FILES (PRODUCTION ONLY)
+// API 404 HANDLER - BEFORE STATIC FILES
+// ============================================
+
+app.use('/api/*', (req, res) => {
+  console.log(`❌ API route not found: ${req.method} ${req.originalUrl}`);
+  res.status(404).json({
+    success: false,
+    message: `API endpoint not found: ${req.method} ${req.originalUrl}`,
+    availableEndpoints: [
+      'GET /api/health',
+      'GET /api/test',
+      'GET /api/categories',
+      'GET /api/products',
+      'POST /api/admin/login'
+    ],
+    timestamp: new Date().toISOString(),
+    server: 'main-server'
+  });
+});
+
+// ============================================
+// ✅ STATIC FILES AND REACT CATCH-ALL - AFTER API ROUTES
 // ============================================
 
 if (process.env.NODE_ENV === 'production') {
   const frontendPath = path.join(__dirname, '../frontend/dist');
+  
+  // Serve static files
   app.use(express.static(frontendPath));
   
-  // Handle React routing - serve index.html for non-API routes
+  // React catch-all - ONLY for non-API routes
   app.get('*', (req, res) => {
-    if (!req.path.startsWith('/api')) {
-      res.sendFile(path.join(frontendPath, 'index.html'));
+    // Double-check this isn't an API route
+    if (req.path.startsWith('/api')) {
+      return res.status(404).json({
+        success: false,
+        message: `API endpoint not found: ${req.path}`,
+        timestamp: new Date().toISOString()
+      });
     }
+    
+    console.log(`📱 Serving React app for: ${req.originalUrl}`);
+    res.sendFile(path.join(frontendPath, 'index.html'));
+  });
+} else {
+  // Development mode - no React serving
+  app.get('*', (req, res) => {
+    if (req.path.startsWith('/api')) {
+      return res.status(404).json({
+        success: false,
+        message: `API endpoint not found: ${req.path}`,
+        timestamp: new Date().toISOString()
+      });
+    }
+    
+    res.status(404).json({
+      success: false,
+      message: 'This is the API server. Frontend should be running on a different port.',
+      frontendPort: 'http://localhost:3000 or http://localhost:5173',
+      timestamp: new Date().toISOString()
+    });
   });
 }
 
 // ============================================
-// ERROR HANDLING (MUST BE LAST!)
+// ERROR HANDLING - LAST
 // ============================================
 
-// 404 handler for unknown routes
-app.use(notFound);
-
-// Global error handler
 app.use(errorHandler);
 
 // ============================================
@@ -184,41 +286,35 @@ app.use(errorHandler);
 
 const PORT = process.env.PORT || 5000;
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`
-🚀 BONDEX Safety Server Running Successfully!
-📍 Server: http://localhost:${PORT}
-🏥 Health: http://localhost:${PORT}/api/health
-📂 Categories: http://localhost:${PORT}/api/categories
-💰 Currency: KES (Kenya Shillings)
+🔥🔥🔥 BONDEX SAFETY API SERVER FIXED 🔥🔥🔥
+📍 Port: ${PORT}
 🌍 Environment: ${process.env.NODE_ENV || 'development'}
-⏰ Started: ${new Date().toLocaleString()}
+💰 Currency: KES
+🕒 Started: ${new Date().toISOString()}
 
-📋 Available API Endpoints:
-   GET  /api/health
-   GET  /api/test  
-   GET  /api/categories
-   GET  /api/products
-   POST /api/admin/login
+🎯 ROUTE ORDER FIXED:
+   1️⃣ API routes handle /api/* requests
+   2️⃣ Static files serve React app (production only)
+   3️⃣ React catch-all serves index.html for non-API routes
+
+📋 Test these API endpoints:
+   ✅ http://localhost:${PORT}/api/health
+   ✅ http://localhost:${PORT}/api/test
+   ✅ http://localhost:${PORT}/api/categories
+
+🚫 NO MORE HTML RESPONSES FOR API ROUTES!
   `);
 });
 
-// ============================================
-// PROCESS HANDLERS
-// ============================================
-
-// Handle unhandled promise rejections
-process.on('unhandledRejection', (err) => {
-  console.log('💥 UNHANDLED REJECTION! Shutting down...');
-  console.log(err.name, err.message);
-  process.exit(1);
-});
-
-// Handle uncaught exceptions
-process.on('uncaughtException', (err) => {
-  console.log('💥 UNCAUGHT EXCEPTION! Shutting down...');
-  console.log(err.name, err.message);
-  process.exit(1);
+// Graceful shutdown
+process.on('SIGTERM', () => {
+  console.log('👋 SIGTERM received, shutting down gracefully');
+  server.close(() => {
+    console.log('✅ Process terminated');
+    process.exit(0);
+  });
 });
 
 export default app;

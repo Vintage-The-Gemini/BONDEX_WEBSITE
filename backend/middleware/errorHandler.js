@@ -1,89 +1,86 @@
 // backend/middleware/errorHandler.js
 
-// 404 Not Found Handler
-export const notFound = (req, res, next) => {
-  console.log(`🔍 Route not found: ${req.method} ${req.originalUrl}`);
+// Handle 404 - Not Found
+const notFound = (req, res, next) => {
+  console.log(`❌ 404 Not Found: ${req.method} ${req.originalUrl}`);
   
-  // For API routes, return JSON
-  if (req.originalUrl.startsWith('/api')) {
-    return res.status(404).json({
-      success: false,
-      message: `API route not found: ${req.method} ${req.originalUrl}`,
-      timestamp: new Date().toISOString(),
-      availableRoutes: [
-        'GET /api/health',
-        'GET /api/categories',
-        'GET /api/products',
-        'POST /api/admin/login'
-      ]
-    });
+  // Only handle non-API routes here
+  if (!req.originalUrl.startsWith('/api')) {
+    const error = new Error(`Not Found - ${req.originalUrl}`);
+    res.status(404);
+    next(error);
+  } else {
+    // Let API routes handle their own 404s
+    next();
   }
-  
-  // For non-API routes, create error and pass to error handler
-  const error = new Error(`Not found - ${req.originalUrl}`);
-  res.status(404);
-  next(error);
 };
 
-// Global Error Handler
-export const errorHandler = (err, req, res, next) => {
-  console.error('🚨 Global Error Handler triggered:', {
-    message: err.message,
-    stack: process.env.NODE_ENV === 'development' ? err.stack : undefined,
-    url: req.originalUrl,
-    method: req.method,
-    timestamp: new Date().toISOString(),
-    headers: req.headers
-  });
+// Global error handler
+const errorHandler = (err, req, res, next) => {
+  console.error('🔥 Error Handler Triggered:');
+  console.error('🔥 Error:', err.message);
+  console.error('🔥 Stack:', err.stack);
+  console.error('🔥 Request:', req.method, req.originalUrl);
 
-  let statusCode = res.statusCode === 200 ? 500 : res.statusCode;
-  let message = err.message;
+  let error = { ...err };
+  error.message = err.message;
 
   // Mongoose bad ObjectId
   if (err.name === 'CastError') {
-    message = 'Resource not found - Invalid ID format';
-    statusCode = 404;
+    const message = 'Invalid resource ID format';
+    error = { message, statusCode: 400 };
   }
 
-  // Mongoose duplicate key error
+  // Mongoose duplicate key
   if (err.code === 11000) {
-    const field = Object.keys(err.keyValue || {})[0];
-    message = `Duplicate field value${field ? ` for ${field}` : ''}. Please use another value.`;
-    statusCode = 400;
+    const message = 'Duplicate field value entered';
+    error = { message, statusCode: 400 };
   }
 
   // Mongoose validation error
   if (err.name === 'ValidationError') {
-    const errors = Object.values(err.errors).map(val => val.message);
-    message = 'Validation Error';
-    statusCode = 400;
+    const message = Object.values(err.errors).map(val => val.message).join(', ');
+    error = { message, statusCode: 400 };
   }
 
   // JWT errors
   if (err.name === 'JsonWebTokenError') {
-    message = 'Invalid authentication token';
-    statusCode = 401;
+    const message = 'Invalid token';
+    error = { message, statusCode: 401 };
   }
 
   if (err.name === 'TokenExpiredError') {
-    message = 'Authentication token expired';
-    statusCode = 401;
+    const message = 'Token expired';
+    error = { message, statusCode: 401 };
   }
 
-  // CRITICAL: Always return JSON for API routes, never HTML
+  // CORS errors
+  if (err.message && err.message.includes('CORS')) {
+    error = { message: 'CORS policy violation', statusCode: 403 };
+  }
+
+  // Ensure we always send JSON for API routes
   if (req.originalUrl.startsWith('/api')) {
-    return res.status(statusCode).json({
+    res.status(error.statusCode || 500).json({
       success: false,
-      message,
-      error: process.env.NODE_ENV === 'development' ? err.stack : 'Something went wrong',
+      error: error.message || 'Server Error',
+      timestamp: new Date().toISOString(),
+      path: req.originalUrl,
+      method: req.method,
+      ...(process.env.NODE_ENV === 'development' && {
+        stack: err.stack,
+        originalError: err.message
+      })
+    });
+  } else {
+    // For non-API routes, send a simple error page
+    res.status(error.statusCode || 500);
+    res.json({
+      success: false,
+      error: error.message || 'Server Error',
       timestamp: new Date().toISOString()
     });
   }
-
-  // For non-API routes
-  res.status(statusCode).json({
-    success: false,
-    message,
-    timestamp: new Date().toISOString()
-  });
 };
+
+export { notFound, errorHandler };
