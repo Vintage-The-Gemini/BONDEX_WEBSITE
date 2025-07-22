@@ -4,105 +4,133 @@ import Product from '../models/Product.js';
 import Category from '../models/Category.js';
 import { 
   uploadProductImage, 
-  handleUploadError, 
   validateProductImages,
   logUploadActivity,
+  handleUploadError,
   deleteCloudinaryImage 
 } from '../middleware/upload.js';
+import { protect, adminOnly } from '../middleware/adminAuth.js';
 
 const router = express.Router();
 
+// Apply authentication middleware to all routes
+router.use(protect);
+router.use(adminOnly);
+
+// Helper function to generate slug
+const generateSlug = (name) => {
+  return name
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\s-]/g, '') // Remove special characters
+    .replace(/\s+/g, '-') // Replace spaces with hyphens
+    .replace(/-+/g, '-') // Replace multiple hyphens with single
+    .replace(/(^-|-$)/g, ''); // Remove leading/trailing hyphens
+};
+
 // @route   GET /api/admin/products
-// @desc    Get all products for admin (with drafts, inactive, etc.)
+// @desc    Get all products for admin with pagination and filters
 // @access  Private (Admin only)
 router.get('/', async (req, res) => {
   try {
+    console.log('🔍 Admin fetching products with query:', req.query);
+    console.log('👤 Admin user:', req.user?.email);
+    
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
     const skip = (page - 1) * limit;
     
     // Build filter object
-    const filter = {};
+    let filter = {};
     
-    // Status filter (admin can see all statuses)
-    if (req.query.status) {
+    if (req.query.status && req.query.status !== '') {
       filter.status = req.query.status;
+      console.log('📊 Filtering by status:', req.query.status);
     }
     
-    // Category filter
-    if (req.query.category) {
+    if (req.query.category && req.query.category !== '') {
       filter.category = req.query.category;
+      console.log('📂 Filtering by category:', req.query.category);
     }
     
-    // Search filter
-    if (req.query.search) {
+    if (req.query.search && req.query.search.trim()) {
+      const searchRegex = new RegExp(req.query.search.trim(), 'i');
       filter.$or = [
-        { product_name: { $regex: req.query.search, $options: 'i' } },
-        { product_description: { $regex: req.query.search, $options: 'i' } },
-        { product_brand: { $regex: req.query.search, $options: 'i' } }
+        { product_name: searchRegex },
+        { product_description: searchRegex },
+        { product_brand: searchRegex },
+        { tags: { $in: [searchRegex] } }
       ];
+      console.log('🔍 Searching for:', req.query.search);
     }
     
-    // Low stock filter
-    if (req.query.lowStock === 'true') {
-      filter.$expr = { $lte: ['$stock', '$lowStockThreshold'] };
+    // Build sort option
+    let sortOption = { createdAt: -1 }; // Default: newest first
+    
+    if (req.query.sort) {
+      switch (req.query.sort) {
+        case 'name':
+          sortOption = { product_name: 1 };
+          break;
+        case 'price_low':
+          sortOption = { product_price: 1 };
+          break;
+        case 'price_high':
+          sortOption = { product_price: -1 };
+          break;
+        case 'stock_low':
+          sortOption = { stock: 1 };
+          break;
+        case 'stock_high':
+          sortOption = { stock: -1 };
+          break;
+        case 'oldest':
+          sortOption = { createdAt: 1 };
+          break;
+        case 'newest':
+        default:
+          sortOption = { createdAt: -1 };
+      }
+      console.log('📈 Sorting by:', req.query.sort, '➡️', sortOption);
     }
     
-    // Out of stock filter
-    if (req.query.outOfStock === 'true') {
-      filter.stock = 0;
-    }
+    console.log('🎯 Final filter:', JSON.stringify(filter, null, 2));
+    console.log('📊 Sort option:', sortOption);
+    console.log('📄 Page:', page, 'Limit:', limit, 'Skip:', skip);
     
-    // Sort options
-    let sortOption = {};
-    switch (req.query.sort) {
-      case 'name_asc':
-        sortOption = { product_name: 1 };
-        break;
-      case 'name_desc':
-        sortOption = { product_name: -1 };
-        break;
-      case 'price_asc':
-        sortOption = { product_price: 1 };
-        break;
-      case 'price_desc':
-        sortOption = { product_price: -1 };
-        break;
-      case 'stock_asc':
-        sortOption = { stock: 1 };
-        break;
-      case 'stock_desc':
-        sortOption = { stock: -1 };
-        break;
-      case 'newest':
-        sortOption = { createdAt: -1 };
-        break;
-      case 'oldest':
-        sortOption = { createdAt: 1 };
-        break;
-      default:
-        sortOption = { createdAt: -1 };
-    }
-    
-    // Execute query with population
+    // Execute query
     const products = await Product.find(filter)
       .populate('category', 'name slug type')
       .sort(sortOption)
       .limit(limit)
       .skip(skip)
+      .lean() // Use lean for better performance
       .exec();
     
     // Get total count for pagination
     const total = await Product.countDocuments(filter);
     
+    console.log(`✅ Found ${products.length} products out of ${total} total`);
+    
+    // Format products for frontend
+    const formattedProducts = products.map(product => ({
+      ...product,
+      formattedPrice: `KES ${(product.product_price || 0).toLocaleString()}`,
+      formattedSalePrice: product.salePrice ? `KES ${product.salePrice.toLocaleString()}` : null,
+      stockStatus: product.stock === 0 ? 'out_of_stock' : 
+                   product.stock <= (product.lowStockThreshold || 10) ? 'low_stock' : 'in_stock'
+    }));
+    
     res.json({
       success: true,
-      data: products,
+      data: formattedProducts,
       pagination: {
         current: page,
         total: Math.ceil(total / limit),
         count: products.length,
-        totalProducts: total
+        totalProducts: total,
+        hasNext: page < Math.ceil(total / limit),
+        hasPrev: page > 1
       },
       filters: {
         status: req.query.status,
@@ -113,7 +141,7 @@ router.get('/', async (req, res) => {
     });
     
   } catch (error) {
-    console.error('Error fetching admin products:', error);
+    console.error('❌ Error fetching admin products:', error);
     res.status(500).json({
       success: false,
       message: 'Error fetching products',
@@ -127,6 +155,8 @@ router.get('/', async (req, res) => {
 // @access  Private (Admin only)
 router.get('/:id', async (req, res) => {
   try {
+    console.log(`🔍 Admin fetching single product: ${req.params.id}`);
+    
     const product = await Product.findById(req.params.id)
       .populate('category', 'name slug type description');
     
@@ -137,13 +167,23 @@ router.get('/:id', async (req, res) => {
       });
     }
     
+    console.log(`✅ Found product: ${product.product_name}`);
+    
     res.json({
       success: true,
       data: product
     });
     
   } catch (error) {
-    console.error('Error fetching product:', error);
+    console.error('❌ Error fetching product:', error);
+    
+    if (error.name === 'CastError') {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid product ID format'
+      });
+    }
+    
     res.status(500).json({
       success: false,
       message: 'Error fetching product',
@@ -161,73 +201,116 @@ router.post('/',
   logUploadActivity,
   async (req, res) => {
     try {
-      console.log('Creating product with data:', req.body);
-      console.log('Uploaded files:', req.files?.length || 0);
+      console.log('📦 Creating product with data:', JSON.stringify(req.body, null, 2));
+      console.log('🖼️ Uploaded files:', req.files?.length || 0);
+      console.log('👤 Admin user:', req.user?.email);
       
-      const {
-        product_name,
-        product_description,
-        product_brand,
-        category,
-        product_price,
-        stock,
-        status,
-        isOnSale,
-        isFeatured,
-        salePrice,
-        saleEndDate,
-        metaTitle,
-        metaDescription,
-        tags,
-        lowStockThreshold,
-        specifications
-      } = req.body;
-      
-      // Validation
-      if (!product_name || !product_description || !product_price || !category) {
+      // Check if at least one image was uploaded
+      if (!req.files || req.files.length === 0) {
         return res.status(400).json({
           success: false,
-          message: 'Please provide all required fields: product_name, product_description, product_price, category'
+          message: 'At least one product image is required'
         });
       }
       
-      // Validate price
-      const price = parseFloat(product_price);
-      if (isNaN(price) || price <= 0) {
+      // Parse form data
+      let productData = { ...req.body };
+      
+      // Parse JSON fields if they're strings
+      if (typeof productData.tags === 'string') {
+        try {
+          productData.tags = JSON.parse(productData.tags);
+        } catch (e) {
+          console.log('⚠️ Invalid tags JSON, setting to empty array');
+          productData.tags = [];
+        }
+      }
+      
+      if (typeof productData.specifications === 'string') {
+        try {
+          productData.specifications = JSON.parse(productData.specifications);
+        } catch (e) {
+          console.log('⚠️ Invalid specifications JSON, setting to empty object');
+          productData.specifications = {};
+        }
+      }
+      
+      // Convert string values to proper types
+      productData.product_price = parseFloat(productData.product_price);
+      productData.stock = parseInt(productData.stock) || 0;
+      productData.lowStockThreshold = parseInt(productData.lowStockThreshold) || 10;
+      
+      if (productData.salePrice) {
+        productData.salePrice = parseFloat(productData.salePrice);
+      }
+      
+      // Convert boolean strings
+      productData.isOnSale = productData.isOnSale === 'true';
+      productData.isFeatured = productData.isFeatured === 'true';
+      
+      // Generate slug
+      productData.slug = generateSlug(productData.product_name);
+      
+      // Add admin tracking
+      productData.createdBy = req.user._id;
+      
+      console.log('🔧 Processed product data:', JSON.stringify(productData, null, 2));
+      
+      // Check for existing product with similar name or slug
+      const existingProduct = await Product.findOne({
+        $or: [
+          { slug: productData.slug },
+          { product_name: { $regex: new RegExp(`^${productData.product_name}$`, 'i') } }
+        ]
+      });
+      
+      if (existingProduct) {
+        console.log('⚠️ Product with similar name already exists:', existingProduct.product_name);
+        
+        // Delete uploaded images from Cloudinary since we're rejecting the product
+        for (const file of req.files) {
+          try {
+            await deleteCloudinaryImage(file.filename);
+            console.log('🗑️ Cleaned up uploaded image:', file.filename);
+          } catch (deleteError) {
+            console.error('❌ Error deleting uploaded image:', deleteError);
+          }
+        }
+        
         return res.status(400).json({
           success: false,
-          message: 'Product price must be a valid positive number'
+          message: 'Product with similar name already exists'
         });
       }
       
-      // Validate stock
-      const stockQuantity = parseInt(stock) || 0;
-      if (stockQuantity < 0) {
-        return res.status(400).json({
-          success: false,
-          message: 'Stock quantity cannot be negative'
-        });
-      }
+      // Process uploaded images
+      const images = req.files.map(file => ({
+        url: file.path,
+        public_id: file.filename,
+        alt: `${productData.product_name} - Product Image`
+      }));
       
-      // Validate category exists
-      const categoryExists = await Category.findById(category);
-      if (!categoryExists) {
-        return res.status(400).json({
-          success: false,
-          message: 'Invalid category selected'
-        });
-      }
+      console.log('🖼️ Processed images:', images.length, 'images');
+      
+      // Set main image (first uploaded image)
+      productData.mainImage = images[0].url;
+      productData.product_image = images[0].url; // For backward compatibility
+      productData.images = images;
       
       // Validate sale price if on sale
-      if (isOnSale === 'true' || isOnSale === true) {
-        const salePriceNum = parseFloat(salePrice);
-        if (isNaN(salePriceNum) || salePriceNum <= 0) {
-          return res.status(400).json({
-            success: false,
-            message: 'Valid sale price is required when product is on sale'
-          });
-        }
-        if (salePriceNum >= price) {
+      if (productData.isOnSale && productData.salePrice) {
+        if (productData.salePrice >= productData.product_price) {
+          console.log('⚠️ Sale price validation failed');
+          
+          // Delete uploaded images
+          for (const file of req.files) {
+            try {
+              await deleteCloudinaryImage(file.filename);
+            } catch (deleteError) {
+              console.error('❌ Error deleting uploaded image:', deleteError);
+            }
+          }
+          
           return res.status(400).json({
             success: false,
             message: 'Sale price must be less than regular price'
@@ -235,81 +318,18 @@ router.post('/',
         }
       }
       
-      // Process uploaded images from Cloudinary
-      let imageArray = [];
-      if (req.files && req.files.length > 0) {
-        imageArray = req.files.map(file => ({
-          url: file.path, // Cloudinary URL
-          public_id: file.filename, // Cloudinary public_id
-          alt: `${product_name} - Product Image`
-        }));
-      }
-      
-      // Parse tags if they're sent as a string
-      let parsedTags = [];
-      if (tags) {
-        if (typeof tags === 'string') {
-          try {
-            parsedTags = JSON.parse(tags);
-          } catch (e) {
-            parsedTags = tags.split(',').map(tag => tag.trim()).filter(tag => tag);
-          }
-        } else if (Array.isArray(tags)) {
-          parsedTags = tags;
-        }
-      }
-      
-      // Parse specifications if provided
-      let parsedSpecifications = {};
-      if (specifications) {
-        if (typeof specifications === 'string') {
-          try {
-            parsedSpecifications = JSON.parse(specifications);
-          } catch (e) {
-            console.log('Could not parse specifications, using empty object');
-          }
-        } else if (typeof specifications === 'object') {
-          parsedSpecifications = specifications;
-        }
-      }
-      
-      // Create product data object
-      const productData = {
-        product_name: product_name.trim(),
-        product_description: product_description.trim(),
-        product_brand: product_brand?.trim() || '',
-        category,
-        product_price: price,
-        stock: stockQuantity,
-        status: status || 'active',
-        isOnSale: isOnSale === 'true' || isOnSale === true,
-        isFeatured: isFeatured === 'true' || isFeatured === true,
-        salePrice: (isOnSale === 'true' || isOnSale === true) ? parseFloat(salePrice) : null,
-        saleEndDate: saleEndDate ? new Date(saleEndDate) : null,
-        images: imageArray,
-        mainImage: imageArray.length > 0 ? imageArray[0].url : '',
-        product_image: imageArray.length > 0 ? imageArray[0].url : '', // For backward compatibility
-        metaTitle: metaTitle || product_name.trim(),
-        metaDescription: metaDescription || product_description.trim().substring(0, 160),
-        tags: parsedTags,
-        lowStockThreshold: parseInt(lowStockThreshold) || 10,
-        specifications: parsedSpecifications
-      };
-      
-      console.log('Creating product with processed data:', {
-        ...productData,
-        images: `${productData.images.length} images`
-      });
+      console.log('💾 Creating product in database...');
       
       // Create the product
-      const product = new Product(productData);
-      const savedProduct = await product.save();
+      const product = await Product.create(productData);
       
-      // Populate the response
-      const populatedProduct = await Product.findById(savedProduct._id)
+      console.log('✅ Product created with ID:', product._id);
+      
+      // Populate category information
+      const populatedProduct = await Product.findById(product._id)
         .populate('category', 'name slug type');
       
-      console.log('✅ Product created successfully:', populatedProduct._id);
+      console.log('✅ Product created successfully:', populatedProduct.product_name);
       
       res.status(201).json({
         success: true,
@@ -318,18 +338,18 @@ router.post('/',
       });
       
     } catch (error) {
-      console.error('❌ Error creating product:', error);
+      console.error('❌ Create Product Error:', error);
       
-      // Clean up uploaded images on error if they exist
-      if (req.files && req.files.length > 0) {
-        console.log('Cleaning up uploaded images due to error...');
-        req.files.forEach(async (file) => {
+      // Clean up uploaded images on error
+      if (req.files) {
+        for (const file of req.files) {
           try {
             await deleteCloudinaryImage(file.filename);
-          } catch (cleanupError) {
-            console.error('Error cleaning up image:', cleanupError);
+            console.log('🗑️ Cleaned up uploaded image on error:', file.filename);
+          } catch (deleteError) {
+            console.error('❌ Error deleting uploaded image:', deleteError);
           }
-        });
+        }
       }
       
       // Handle validation errors
@@ -342,11 +362,11 @@ router.post('/',
         });
       }
       
-      // Handle duplicate errors
+      // Handle duplicate key error
       if (error.code === 11000) {
         return res.status(400).json({
           success: false,
-          message: 'Product with similar name already exists'
+          message: 'Product with this slug already exists'
         });
       }
       
@@ -360,212 +380,93 @@ router.post('/',
 );
 
 // @route   PUT /api/admin/products/:id
-// @desc    Update product with optional new images
+// @desc    Update product
 // @access  Private (Admin only)
-router.put('/:id', 
-  uploadProductImage.array('images', 5),
-  logUploadActivity,
-  async (req, res) => {
-    try {
-      const product = await Product.findById(req.params.id);
-      
-      if (!product) {
-        return res.status(404).json({
-          success: false,
-          message: 'Product not found'
-        });
+router.put('/:id', async (req, res) => {
+  try {
+    console.log('📝 Updating product:', req.params.id);
+    console.log('👤 Admin user:', req.user?.email);
+    
+    const updateData = {
+      ...req.body,
+      updatedAt: new Date(),
+      updatedBy: req.user._id
+    };
+
+    // Convert string numbers to proper types
+    if (updateData.product_price) {
+      updateData.product_price = parseFloat(updateData.product_price);
+    }
+    if (updateData.stock !== undefined) {
+      updateData.stock = parseInt(updateData.stock);
+    }
+    if (updateData.salePrice) {
+      updateData.salePrice = parseFloat(updateData.salePrice);
+    }
+
+    const product = await Product.findByIdAndUpdate(
+      req.params.id,
+      updateData,
+      {
+        new: true, // Return updated document
+        runValidators: true // Run schema validation
       }
-      
-      console.log('Updating product:', req.params.id);
-      console.log('New files uploaded:', req.files?.length || 0);
-      
-      const {
-        product_name,
-        product_description,
-        product_brand,
-        category,
-        product_price,
-        stock,
-        status,
-        isOnSale,
-        isFeatured,
-        salePrice,
-        saleEndDate,
-        metaTitle,
-        metaDescription,
-        tags,
-        lowStockThreshold,
-        specifications,
-        existingImages
-      } = req.body;
-      
-      // Handle existing images
-      let currentImages = [];
-      if (existingImages) {
-        try {
-          currentImages = typeof existingImages === 'string' 
-            ? JSON.parse(existingImages) 
-            : existingImages;
-        } catch (e) {
-          currentImages = product.images || [];
-        }
-      } else {
-        currentImages = product.images || [];
-      }
-      
-      // Handle new uploaded images
-      if (req.files && req.files.length > 0) {
-        const newImages = req.files.map(file => ({
-          url: file.path,
-          public_id: file.filename,
-          alt: `${product_name || product.product_name} - Product Image`
-        }));
-        
-        // Combine existing and new images
-        currentImages = [...currentImages, ...newImages];
-        
-        // Limit to maximum 5 images
-        if (currentImages.length > 5) {
-          currentImages = currentImages.slice(0, 5);
-        }
-      }
-      
-      // Parse tags
-      let parsedTags = product.tags || [];
-      if (tags) {
-        if (typeof tags === 'string') {
-          try {
-            parsedTags = JSON.parse(tags);
-          } catch (e) {
-            parsedTags = tags.split(',').map(tag => tag.trim()).filter(tag => tag);
-          }
-        } else if (Array.isArray(tags)) {
-          parsedTags = tags;
-        }
-      }
-      
-      // Parse specifications
-      let parsedSpecifications = product.specifications || {};
-      if (specifications) {
-        if (typeof specifications === 'string') {
-          try {
-            parsedSpecifications = JSON.parse(specifications);
-          } catch (e) {
-            console.log('Could not parse specifications, keeping existing');
-          }
-        } else if (typeof specifications === 'object') {
-          parsedSpecifications = specifications;
-        }
-      }
-      
-      // Update fields (only update if provided)
-      const updateData = {};
-      
-      if (product_name) updateData.product_name = product_name.trim();
-      if (product_description) updateData.product_description = product_description.trim();
-      if (product_brand !== undefined) updateData.product_brand = product_brand.trim();
-      if (category) updateData.category = category;
-      if (product_price !== undefined) {
-        const price = parseFloat(product_price);
-        if (isNaN(price) || price <= 0) {
-          return res.status(400).json({
-            success: false,
-            message: 'Product price must be a valid positive number'
-          });
-        }
-        updateData.product_price = price;
-      }
-      if (stock !== undefined) {
-        const stockQuantity = parseInt(stock);
-        if (stockQuantity < 0) {
-          return res.status(400).json({
-            success: false,
-            message: 'Stock quantity cannot be negative'
-          });
-        }
-        updateData.stock = stockQuantity;
-      }
-      if (status) updateData.status = status;
-      if (isOnSale !== undefined) updateData.isOnSale = isOnSale === 'true' || isOnSale === true;
-      if (isFeatured !== undefined) updateData.isFeatured = isFeatured === 'true' || isFeatured === true;
-      if (salePrice !== undefined) updateData.salePrice = parseFloat(salePrice) || null;
-      if (saleEndDate) updateData.saleEndDate = new Date(saleEndDate);
-      if (metaTitle) updateData.metaTitle = metaTitle.trim();
-      if (metaDescription) updateData.metaDescription = metaDescription.trim();
-      if (lowStockThreshold !== undefined) updateData.lowStockThreshold = parseInt(lowStockThreshold) || 10;
-      
-      // Always update these
-      updateData.images = currentImages;
-      updateData.mainImage = currentImages.length > 0 ? currentImages[0].url : '';
-      updateData.product_image = currentImages.length > 0 ? currentImages[0].url : '';
-      updateData.tags = parsedTags;
-      updateData.specifications = parsedSpecifications;
-      updateData.updatedAt = new Date();
-      
-      // Validate sale price if on sale
-      if (updateData.isOnSale && updateData.salePrice) {
-        const currentPrice = updateData.product_price || product.product_price;
-        if (updateData.salePrice >= currentPrice) {
-          return res.status(400).json({
-            success: false,
-            message: 'Sale price must be less than regular price'
-          });
-        }
-      }
-      
-      const updatedProduct = await Product.findByIdAndUpdate(
-        req.params.id,
-        updateData,
-        { new: true, runValidators: true }
-      ).populate('category', 'name slug type');
-      
-      console.log('✅ Product updated successfully:', updatedProduct._id);
-      
-      res.json({
-        success: true,
-        message: 'Product updated successfully',
-        data: updatedProduct
-      });
-      
-    } catch (error) {
-      console.error('❌ Error updating product:', error);
-      
-      // Clean up newly uploaded images on error
-      if (req.files && req.files.length > 0) {
-        console.log('Cleaning up uploaded images due to error...');
-        req.files.forEach(async (file) => {
-          try {
-            await deleteCloudinaryImage(file.filename);
-          } catch (cleanupError) {
-            console.error('Error cleaning up image:', cleanupError);
-          }
-        });
-      }
-      
-      if (error.name === 'ValidationError') {
-        const messages = Object.values(error.errors).map(err => err.message);
-        return res.status(400).json({
-          success: false,
-          message: 'Validation Error',
-          errors: messages
-        });
-      }
-      
-      res.status(500).json({
+    ).populate('category', 'name slug type');
+
+    if (!product) {
+      return res.status(404).json({
         success: false,
-        message: 'Error updating product',
-        error: error.message
+        message: 'Product not found'
       });
     }
+
+    console.log('✅ Product updated successfully:', product.product_name);
+
+    res.status(200).json({
+      success: true,
+      message: 'Product updated successfully',
+      data: product
+    });
+
+  } catch (error) {
+    console.error('❌ Update Product Error:', error);
+    
+    // Handle validation errors
+    if (error.name === 'ValidationError') {
+      const messages = Object.values(error.errors).map(err => err.message);
+      return res.status(400).json({
+        success: false,
+        message: 'Validation Error',
+        errors: messages
+      });
+    }
+
+    if (error.name === 'CastError') {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid product ID format'
+      });
+    }
+
+    res.status(500).json({
+      success: false,
+      message: 'Error updating product',
+      error: error.message
+    });
   }
-);
+});
 
 // @route   DELETE /api/admin/products/:id/images/:imageIndex
-// @desc    Delete specific product image
+// @desc    Delete specific image from product
 // @access  Private (Admin only)
 router.delete('/:id/images/:imageIndex', async (req, res) => {
   try {
-    const product = await Product.findById(req.params.id);
+    const { id, imageIndex } = req.params;
+    const index = parseInt(imageIndex);
+    
+    console.log(`🗑️ Deleting image ${index} from product ${id}`);
+    
+    const product = await Product.findById(id);
     
     if (!product) {
       return res.status(404).json({
@@ -574,23 +475,22 @@ router.delete('/:id/images/:imageIndex', async (req, res) => {
       });
     }
     
-    const imageIndex = parseInt(req.params.imageIndex);
-    
-    if (imageIndex < 0 || imageIndex >= product.images.length) {
+    if (index < 0 || index >= product.images.length) {
       return res.status(400).json({
         success: false,
         message: 'Invalid image index'
       });
     }
     
-    if (product.images.length <= 1) {
+    // Don't allow deleting the last image
+    if (product.images.length === 1) {
       return res.status(400).json({
         success: false,
-        message: 'Cannot delete the last image. Products must have at least one image.'
+        message: 'Products must have at least one image.'
       });
     }
     
-    const imageToDelete = product.images[imageIndex];
+    const imageToDelete = product.images[index];
     
     // Delete from Cloudinary
     if (imageToDelete.public_id) {
@@ -598,21 +498,24 @@ router.delete('/:id/images/:imageIndex', async (req, res) => {
         await deleteCloudinaryImage(imageToDelete.public_id);
         console.log('✅ Image deleted from Cloudinary:', imageToDelete.public_id);
       } catch (cloudinaryError) {
-        console.error('Error deleting from Cloudinary:', cloudinaryError);
+        console.error('❌ Error deleting from Cloudinary:', cloudinaryError);
         // Continue anyway - don't fail the entire operation
       }
     }
     
     // Remove from product
-    product.images.splice(imageIndex, 1);
+    product.images.splice(index, 1);
     
     // Update main image if we deleted the first image
-    if (imageIndex === 0 && product.images.length > 0) {
+    if (index === 0 && product.images.length > 0) {
       product.mainImage = product.images[0].url;
       product.product_image = product.images[0].url;
     }
     
+    product.updatedBy = req.user._id;
     await product.save();
+    
+    console.log('✅ Image deleted successfully from product');
     
     res.json({
       success: true,
@@ -621,7 +524,15 @@ router.delete('/:id/images/:imageIndex', async (req, res) => {
     });
     
   } catch (error) {
-    console.error('Error deleting image:', error);
+    console.error('❌ Error deleting image:', error);
+    
+    if (error.name === 'CastError') {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid product ID format'
+      });
+    }
+    
     res.status(500).json({
       success: false,
       message: 'Error deleting image',
@@ -635,6 +546,9 @@ router.delete('/:id/images/:imageIndex', async (req, res) => {
 // @access  Private (Admin only)
 router.delete('/:id', async (req, res) => {
   try {
+    console.log(`🗑️ Deleting product: ${req.params.id}`);
+    console.log('👤 Admin user:', req.user?.email);
+    
     const product = await Product.findById(req.params.id);
     
     if (!product) {
@@ -644,16 +558,18 @@ router.delete('/:id', async (req, res) => {
       });
     }
     
+    console.log(`📦 Deleting product: ${product.product_name}`);
+    
     // Delete all images from Cloudinary
     if (product.images && product.images.length > 0) {
-      console.log('Deleting product images from Cloudinary...');
+      console.log('🖼️ Deleting product images from Cloudinary...');
       for (const image of product.images) {
         if (image.public_id) {
           try {
             await deleteCloudinaryImage(image.public_id);
             console.log('✅ Deleted image:', image.public_id);
           } catch (cloudinaryError) {
-            console.error('Error deleting image from Cloudinary:', cloudinaryError);
+            console.error('❌ Error deleting image from Cloudinary:', cloudinaryError);
           }
         }
       }
@@ -669,7 +585,15 @@ router.delete('/:id', async (req, res) => {
     });
     
   } catch (error) {
-    console.error('Error deleting product:', error);
+    console.error('❌ Error deleting product:', error);
+    
+    if (error.name === 'CastError') {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid product ID format'
+      });
+    }
+    
     res.status(500).json({
       success: false,
       message: 'Error deleting product',

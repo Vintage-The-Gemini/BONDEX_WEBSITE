@@ -6,13 +6,14 @@ import { useAdmin } from '../context/AdminContext';
 // Admin Layout
 import AdminLayout from '../layouts/AdminLayout';
 
-// Admin Authentication - use the one in pages/admin
+// Admin Authentication
 import AdminLogin from '../pages/admin/AdminLogin';
 
 // Admin Dashboard
 import AdminDashboard from '../pages/admin/AdminDashboard';
 
-// Product Management - your existing components
+// Product Management - Import the actual ProductList component
+import ProductList from '../pages/admin/ProductList';
 import CreateProduct from '../pages/admin/CreateProduct';
 import EditProduct from '../pages/admin/EditProduct';
 
@@ -51,33 +52,39 @@ const AdminRouter = () => {
         <Route index element={<Navigate to="dashboard" replace />} />
         <Route path="dashboard" element={<AdminDashboard />} />
 
-        {/* Product Management - only existing components */}
+        {/* Product Management - NOW USING THE ACTUAL COMPONENTS */}
+        <Route path="products" element={<ProductList />} />
         <Route path="products/create" element={<CreateProduct />} />
         <Route path="products/:id/edit" element={<EditProduct />} />
-
-        {/* Placeholder routes for future components */}
-        <Route path="products" element={
+        <Route path="products/:id" element={
           <div className="p-6">
-            <h1 className="text-2xl font-bold">Product List</h1>
-            <p className="text-gray-600 mt-2">Product list component coming soon...</p>
+            <h1 className="text-2xl font-bold">Product Details</h1>
+            <p className="text-gray-600 mt-2">Product detail component coming soon...</p>
             <div className="mt-4">
               <a 
-                href="/admin/products/create" 
-                className="bg-yellow-500 text-gray-900 px-4 py-2 rounded-lg hover:bg-yellow-600 transition-colors"
+                href="/admin/products" 
+                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
               >
-                Create Product
+                Back to Products
               </a>
             </div>
           </div>
         } />
 
+        {/* Category Management */}
         <Route path="categories" element={
           <div className="p-6">
             <h1 className="text-2xl font-bold">Categories</h1>
             <p className="text-gray-600 mt-2">Category management coming soon...</p>
+            <div className="mt-4">
+              <button className="bg-yellow-500 text-gray-900 px-4 py-2 rounded-lg hover:bg-yellow-600 transition-colors">
+                Create Category
+              </button>
+            </div>
           </div>
         } />
 
+        {/* Analytics */}
         <Route path="analytics" element={
           <div className="p-6">
             <h1 className="text-2xl font-bold">Analytics</h1>
@@ -85,6 +92,7 @@ const AdminRouter = () => {
           </div>
         } />
 
+        {/* Reports */}
         <Route path="reports" element={
           <div className="p-6">
             <h1 className="text-2xl font-bold">Reports</h1>
@@ -92,6 +100,7 @@ const AdminRouter = () => {
           </div>
         } />
 
+        {/* Profile */}
         <Route path="profile" element={
           <div className="p-6">
             <h1 className="text-2xl font-bold">Admin Profile</h1>
@@ -99,6 +108,7 @@ const AdminRouter = () => {
           </div>
         } />
 
+        {/* Settings */}
         <Route path="settings" element={
           <div className="p-6">
             <h1 className="text-2xl font-bold">Settings</h1>
@@ -113,7 +123,7 @@ const AdminRouter = () => {
             <p className="text-gray-600 mt-2">This admin page doesn't exist.</p>
             <a 
               href="/admin/dashboard" 
-              className="mt-4 inline-block bg-yellow-500 text-gray-900 px-4 py-2 rounded-lg hover:bg-yellow-600 transition-colors"
+              className="mt-4 inline-block bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
             >
               Back to Dashboard
             </a>
