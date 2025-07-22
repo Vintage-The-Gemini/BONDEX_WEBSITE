@@ -6,7 +6,10 @@ import {
   createProduct,
   updateProduct,
   deleteProduct,
-  getProductsByCategory
+  getProductsByCategory,
+  getFeaturedProducts,
+  getProductsOnSale,
+  searchProducts
 } from '../controllers/productController.js';
 
 const router = express.Router();
@@ -17,6 +20,21 @@ const router = express.Router();
 // @desc    Get all products with filtering, sorting, pagination
 // @access  Public
 router.get('/', getProducts);
+
+// @route   GET /api/products/search
+// @desc    Search products
+// @access  Public
+router.get('/search', searchProducts);
+
+// @route   GET /api/products/featured
+// @desc    Get featured products
+// @access  Public
+router.get('/featured', getFeaturedProducts);
+
+// @route   GET /api/products/sale
+// @desc    Get products on sale
+// @access  Public
+router.get('/sale', getProductsOnSale);
 
 // @route   GET /api/products/category/:category
 // @desc    Get products by category

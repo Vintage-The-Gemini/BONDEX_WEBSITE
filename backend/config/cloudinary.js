@@ -2,95 +2,74 @@
 import { v2 as cloudinary } from 'cloudinary';
 import { CloudinaryStorage } from 'multer-storage-cloudinary';
 import multer from 'multer';
+import dotenv from 'dotenv';
+
+// Load environment variables
+dotenv.config();
 
 // Configure Cloudinary
-const cloudinaryConfig = {
+cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
   api_key: process.env.CLOUDINARY_API_KEY,
   api_secret: process.env.CLOUDINARY_API_SECRET,
-};
-
-console.log('Cloudinary configuration:', {
-  cloud_name: cloudinaryConfig.cloud_name,
-  api_key: cloudinaryConfig.api_key,
-  api_secret: cloudinaryConfig.api_secret ? 'Present' : 'Missing'
+  secure: true // Always use HTTPS
 });
 
-cloudinary.config(cloudinaryConfig);
-
-// Cloudinary storage configuration for product images
+// Storage configurations for different upload types
 const productStorage = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: {
-    folder: 'bondex-safety/products', // Folder in Cloudinary
+    folder: 'bondex-safety/products',
     allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
     transformation: [
-      {
-        width: 800,
-        height: 600,
-        crop: 'fill',
-        quality: 'auto:good',
-        fetch_format: 'auto'
-      }
+      { width: 1200, height: 900, crop: 'limit', quality: 'auto:good' },
+      { format: 'webp' }
     ],
     public_id: (req, file) => {
-      // Generate unique filename: product-timestamp-random
       const timestamp = Date.now();
-      const random = Math.round(Math.random() * 1000);
-      return `product-${timestamp}-${random}`;
-    },
+      const originalName = file.originalname.split('.')[0];
+      return `product_${timestamp}_${originalName}`.replace(/[^a-zA-Z0-9_]/g, '_');
+    }
   },
 });
 
-// Cloudinary storage configuration for category images  
 const categoryStorage = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: {
     folder: 'bondex-safety/categories',
-    allowed_formats: ['jpg', 'jpeg', 'png', 'webp', 'svg'],
+    allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
     transformation: [
-      {
-        width: 400,
-        height: 300,
-        crop: 'fill',
-        quality: 'auto:good',
-        fetch_format: 'auto'
-      }
+      { width: 800, height: 600, crop: 'fit', quality: 'auto:good' },
+      { format: 'webp' }
     ],
     public_id: (req, file) => {
       const timestamp = Date.now();
-      const random = Math.round(Math.random() * 1000);
-      return `category-${timestamp}-${random}`;
-    },
+      const originalName = file.originalname.split('.')[0];
+      return `category_${timestamp}_${originalName}`.replace(/[^a-zA-Z0-9_]/g, '_');
+    }
   },
 });
 
-// Cloudinary storage for general uploads (admin avatars, banners, etc.)
 const generalStorage = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: {
     folder: 'bondex-safety/general',
     allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
     transformation: [
-      {
-        width: 1200,
-        height: 800,
-        crop: 'limit',
-        quality: 'auto:good',
-        fetch_format: 'auto'
-      }
+      { width: 1200, height: 900, crop: 'limit', quality: 'auto:good' },
+      { format: 'webp' }
     ],
     public_id: (req, file) => {
       const timestamp = Date.now();
-      const random = Math.round(Math.random() * 1000);
-      return `upload-${timestamp}-${random}`;
-    },
+      const originalName = file.originalname.split('.')[0];
+      return `general_${timestamp}_${originalName}`.replace(/[^a-zA-Z0-9_]/g, '_');
+    }
   },
 });
 
 // File filter function
 const fileFilter = (req, file, cb) => {
-  // Check file type
+  // Check if file is an image
   if (file.mimetype.startsWith('image/')) {
     cb(null, true);
   } else {
@@ -128,17 +107,20 @@ export const uploadGeneral = multer({
   }
 });
 
-// Helper function to delete image from Cloudinary
+// Helper function to delete image from Cloudinary (matching your existing code)
 export const deleteFromCloudinary = async (publicId) => {
   try {
     const result = await cloudinary.uploader.destroy(publicId);
-    console.log('Image deleted from Cloudinary:', result);
+    console.log('🗑️ Image deleted from Cloudinary:', publicId, result.result);
     return result;
   } catch (error) {
     console.error('Error deleting image from Cloudinary:', error);
     throw error;
   }
 };
+
+// Alternative export name for consistency
+export const deleteImage = deleteFromCloudinary;
 
 // Helper function to upload base64 image (for data migration)
 export const uploadBase64Image = async (base64String, folder = 'bondex-safety/products') => {
@@ -187,7 +169,7 @@ export const getOptimizedImageUrl = (publicId, options = {}) => {
 // Test Cloudinary connection
 export const testCloudinaryConnection = async () => {
   try {
-    console.log('Testing Cloudinary connection...');
+    console.log('🔧 Testing Cloudinary connection...');
     
     // Re-configure cloudinary to ensure settings are applied
     cloudinary.config({
@@ -196,20 +178,80 @@ export const testCloudinaryConnection = async () => {
       api_secret: process.env.CLOUDINARY_API_SECRET,
     });
     
-    console.log('Cloud Name:', process.env.CLOUDINARY_CLOUD_NAME);
-    console.log('API Key:', process.env.CLOUDINARY_API_KEY);
-    console.log('API Secret exists:', !!process.env.CLOUDINARY_API_SECRET);
+    console.log('📝 Configuration check:');
+    console.log('  Cloud Name:', process.env.CLOUDINARY_CLOUD_NAME || 'NOT_SET');
+    console.log('  API Key:', process.env.CLOUDINARY_API_KEY ? 'SET' : 'NOT_SET');
+    console.log('  API Secret:', process.env.CLOUDINARY_API_SECRET ? 'SET' : 'NOT_SET');
     
     const result = await cloudinary.api.ping();
-    console.log('✅ Cloudinary connection successful:', result);
+    console.log('✅ Cloudinary connection successful!', result);
     return true;
   } catch (error) {
-    console.error('❌ Cloudinary connection failed:');
-    console.error('Error message:', error.message);
-    console.error('Error code:', error.http_code);
-    console.error('Full error:', error);
+    console.error('❌ Cloudinary connection failed:', error.message);
     return false;
   }
 };
+
+// Helper function to upload image buffer
+export const uploadImage = async (buffer, options = {}) => {
+  try {
+    const defaultOptions = {
+      resource_type: 'image',
+      folder: 'bondex-safety/products',
+      transformation: [
+        { width: 1200, height: 900, crop: 'limit', quality: 'auto:good' },
+        { format: 'webp' }
+      ],
+      ...options
+    };
+
+    return new Promise((resolve, reject) => {
+      cloudinary.uploader.upload_stream(
+        defaultOptions,
+        (error, result) => {
+          if (error) {
+            console.error('Cloudinary upload error:', error);
+            reject(error);
+          } else {
+            console.log('✅ Image uploaded successfully:', result.public_id);
+            resolve({
+              url: result.secure_url,
+              public_id: result.public_id,
+              width: result.width,
+              height: result.height,
+              format: result.format,
+              bytes: result.bytes
+            });
+          }
+        }
+      ).end(buffer);
+    });
+  } catch (error) {
+    console.error('Error in uploadImage function:', error);
+    throw error;
+  }
+};
+
+// Helper function to get image details
+export const getImageDetails = async (publicId) => {
+  try {
+    const result = await cloudinary.api.resource(publicId);
+    return {
+      public_id: result.public_id,
+      url: result.secure_url,
+      width: result.width,
+      height: result.height,
+      format: result.format,
+      bytes: result.bytes,
+      created_at: result.created_at
+    };
+  } catch (error) {
+    console.error('Error getting image details:', error);
+    throw error;
+  }
+};
+
+// Test connection on module load
+testCloudinaryConnection();
 
 export default cloudinary;

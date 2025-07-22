@@ -169,8 +169,6 @@ app.get('/api/test', (req, res) => {
           'POST /api/admin/login',
           'GET /api/admin/dashboard',
           'GET /api/admin/profile'
-          // 'GET /api/admin/products', // Temporarily disabled
-          // 'POST /api/admin/products'  // Temporarily disabled
         ]
       }
     }
@@ -205,18 +203,6 @@ app.use('/api/upload', uploadRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/admin/products', adminProductRoutes);
 
-// Future routes (commented for now - ready to uncomment when built)
-// app.use('/api/auth', authRoutes);           // Customer authentication
-// app.use('/api/orders', orderRoutes);        // Order management  
-// app.use('/api/users', userRoutes);          // Customer management
-// app.use('/api/cart', cartRoutes);           // Shopping cart
-// app.use('/api/reviews', reviewRoutes);      // Product reviews
-// app.use('/api/analytics', analyticsRoutes); // Business analytics
-// app.use('/api/admin/orders', adminOrderRoutes);     // Admin order management
-// app.use('/api/admin/users', adminUserRoutes);       // Admin user management
-// app.use('/api/admin/categories', adminCategoryRoutes); // Admin category management
-// app.use('/api/admin/analytics', adminAnalyticsRoutes); // Admin analytics
-
 // ============================================
 // ERROR HANDLING
 // ============================================
@@ -241,11 +227,11 @@ app.all('*', (req, res) => {
         'POST /api/admin/setup - First admin setup (one-time)',
         'POST /api/admin/login - Admin login',
         'GET /api/admin/dashboard - Admin dashboard (requires auth)',
-        'GET /api/admin/profile - Admin profile (requires auth)'
-        // 'GET /api/admin/products - Manage products (requires auth)', // Temporarily disabled
-        // 'POST /api/admin/products - Create product (requires auth)',  // Temporarily disabled
-        // 'PUT /api/admin/products/:id - Update product (requires auth)', // Temporarily disabled
-        // 'DELETE /api/admin/products/:id - Delete product (requires auth)' // Temporarily disabled
+        'GET /api/admin/profile - Admin profile (requires auth)',
+        'GET /api/admin/products - Manage products (requires auth)',
+        'POST /api/admin/products - Create product (requires auth)',
+        'PUT /api/admin/products/:id - Update product (requires auth)',
+        'DELETE /api/admin/products/:id - Delete product (requires auth)'
       ]
     }
   });

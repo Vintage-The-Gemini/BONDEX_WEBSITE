@@ -1,21 +1,101 @@
 // backend/controllers/categoryController.js
-import Category, { defaultCategories } from '../models/Category.js';
+import Category from '../models/Category.js';
+
+// Default categories data
+const defaultCategories = [
+  {
+    name: 'Head Protection',
+    description: 'Hard hats, helmets, and head protection equipment',
+    type: 'protection_type',
+    icon: '⛑️',
+    colors: { primary: '#FFD700', secondary: '#FFFACD' },
+    status: 'active',
+    sortOrder: 1,
+    isFeatured: true
+  },
+  {
+    name: 'Eye Protection',
+    description: 'Safety glasses, goggles, and eye protection equipment',
+    type: 'protection_type',
+    icon: '👁️',
+    colors: { primary: '#4169E1', secondary: '#B0C4DE' },
+    status: 'active',
+    sortOrder: 2,
+    isFeatured: true
+  },
+  {
+    name: 'Hand Protection',
+    description: 'Gloves and hand protection equipment',
+    type: 'protection_type',
+    icon: '🧤',
+    colors: { primary: '#32CD32', secondary: '#98FB98' },
+    status: 'active',
+    sortOrder: 3,
+    isFeatured: true
+  },
+  {
+    name: 'Foot Protection',
+    description: 'Safety boots, shoes, and foot protection equipment',
+    type: 'protection_type',
+    icon: '🦶',
+    colors: { primary: '#8B4513', secondary: '#DEB887' },
+    status: 'active',
+    sortOrder: 4,
+    isFeatured: true
+  },
+  {
+    name: 'Respiratory Protection',
+    description: 'Masks, respirators, and breathing protection equipment',
+    type: 'protection_type',
+    icon: '😷',
+    colors: { primary: '#FF69B4', secondary: '#FFB6C1' },
+    status: 'active',
+    sortOrder: 5,
+    isFeatured: true
+  },
+  {
+    name: 'Body Protection',
+    description: 'Safety vests, suits, and body protection equipment',
+    type: 'protection_type',
+    icon: '🦺',
+    colors: { primary: '#FF6347', secondary: '#FFE4E1' },
+    status: 'active',
+    sortOrder: 6,
+    isFeatured: true
+  }
+];
 
 // @desc    Get all categories
 // @route   GET /api/categories
 // @access  Public
 export const getCategories = async (req, res) => {
   try {
+    console.log('📂 Fetching categories...');
+    
     const { type, status } = req.query;
     
     // Build query
     let query = {};
     if (type) query.type = type;
     if (status) query.status = status;
+    else query.status = 'active'; // Only show active by default
     
-    const categories = await Category.find(query)
-      .populate('subcategories')
-      .sort({ sortOrder: 1, name: 1 });
+    let categories = await Category.find(query).sort({ sortOrder: 1, name: 1 });
+    
+    // If no categories exist, create default ones
+    if (categories.length === 0) {
+      console.log('🌱 No categories found, creating defaults...');
+      try {
+        categories = await Category.insertMany(defaultCategories);
+        console.log(`✅ Created ${categories.length} default categories`);
+      } catch (insertError) {
+        console.error('Error creating default categories:', insertError);
+        // If insert fails, return empty array rather than crash
+        categories = [];
+      }
+    }
+
+    console.log(`✅ Returning ${categories.length} categories`);
 
     res.status(200).json({
       success: true,
@@ -24,7 +104,7 @@ export const getCategories = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Get Categories Error:', error);
+    console.error('❌ Get Categories Error:', error);
     res.status(500).json({
       success: false,
       message: 'Error fetching categories',
@@ -38,8 +118,7 @@ export const getCategories = async (req, res) => {
 // @access  Public
 export const getCategory = async (req, res) => {
   try {
-    const category = await Category.findById(req.params.id)
-      .populate('subcategories');
+    const category = await Category.findById(req.params.id);
 
     if (!category) {
       return res.status(404).json({
@@ -174,13 +253,15 @@ export const deleteCategory = async (req, res) => {
 // @access  Private (Admin only)
 export const seedCategories = async (req, res) => {
   try {
+    console.log('🌱 Seeding categories...');
+    
     // Check if categories already exist
     const existingCategories = await Category.countDocuments();
     
-    if (existingCategories > 0) {
+    if (existingCategories > 0 && req.query.force !== 'true') {
       return res.status(400).json({
         success: false,
-        message: `Database already has ${existingCategories} categories. Use force=true to override.`,
+        message: `Database already has ${existingCategories} categories. Use ?force=true to override.`,
         existingCount: existingCategories
       });
     }
@@ -194,6 +275,8 @@ export const seedCategories = async (req, res) => {
     // Insert default categories
     const categories = await Category.insertMany(defaultCategories);
 
+    console.log(`✅ Successfully seeded ${categories.length} categories`);
+
     res.status(201).json({
       success: true,
       message: `Successfully seeded ${categories.length} categories`,
@@ -202,7 +285,7 @@ export const seedCategories = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Seed Categories Error:', error);
+    console.error('❌ Seed Categories Error:', error);
     res.status(500).json({
       success: false,
       message: 'Error seeding categories',
