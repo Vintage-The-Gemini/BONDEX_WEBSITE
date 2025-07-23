@@ -1,31 +1,21 @@
 // frontend/src/pages/admin/EditProduct.jsx
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
+import { useAdmin } from '../../context/AdminContext';
 import { 
   ArrowLeft, 
-  Upload, 
-  X, 
-  Plus, 
   Save, 
   Eye, 
   AlertCircle,
-  Image as ImageIcon,
-  DollarSign,
   Package,
-  Tag,
-  FileText,
-  Star,
-  ToggleLeft,
-  ToggleRight,
-  Trash2,
   RefreshCw
 } from 'lucide-react';
 
 const EditProduct = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { updateProduct, loadProduct, formatCurrency } = useAdmin();
   
-  const [originalProduct, setOriginalProduct] = useState(null);
   const [formData, setFormData] = useState({
     product_name: '',
     product_description: '',
@@ -44,17 +34,12 @@ const EditProduct = () => {
     lowStockThreshold: '10'
   });
   
-  const [images, setImages] = useState([]);
-  const [newImages, setNewImages] = useState([]);
-  const [newImagePreviews, setNewImagePreviews] = useState([]);
-  const [existingImages, setExistingImages] = useState([]);
+  const [originalProduct, setOriginalProduct] = useState(null);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [dragActive, setDragActive] = useState(false);
-  const [currentTag, setCurrentTag] = useState('');
   const [hasChanges, setHasChanges] = useState(false);
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
 
@@ -62,41 +47,23 @@ const EditProduct = () => {
   const fetchProduct = async () => {
     try {
       setLoading(true);
-      const token = localStorage.getItem('adminToken');
+      setError('');
       
-      if (!token) {
-        navigate('/admin/login');
-        return;
-      }
-
-      const response = await fetch(`/api/admin/products/${id}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (!response.ok) {
-        if (response.status === 404) {
-          setError('Product not found');
-          setTimeout(() => navigate('/admin/products'), 2000);
-          return;
-        }
-        throw new Error('Failed to fetch product');
-      }
-
-      const data = await response.json();
+      console.log('🔄 Fetching product:', id);
+      const result = await loadProduct(id);
       
-      if (data.success) {
-        const product = data.data;
+      if (result.success) {
+        const product = result.data;
+        console.log('✅ Product loaded:', product);
+        
         setOriginalProduct(product);
         
-        // Set form data
+        // Set form data with proper category handling
         setFormData({
           product_name: product.product_name || '',
           product_description: product.product_description || '',
           product_brand: product.product_brand || '',
-          category: product.category || '',
+          category: typeof product.category === 'object' ? product.category._id : product.category || '',
           product_price: product.product_price || '',
           stock: product.stock || '',
           status: product.status || 'active',
@@ -110,13 +77,13 @@ const EditProduct = () => {
           lowStockThreshold: product.lowStockThreshold || '10'
         });
         
-        // Set existing images
-        setExistingImages(product.images || []);
+        setHasChanges(false);
       } else {
-        setError(data.message || 'Failed to fetch product');
+        setError(result.error || 'Failed to load product');
+        console.error('❌ Failed to load product:', result.error);
       }
     } catch (error) {
-      console.error('Error fetching product:', error);
+      console.error('❌ Error fetching product:', error);
       setError('Failed to fetch product. Please try again.');
     } finally {
       setLoading(false);
@@ -130,7 +97,7 @@ const EditProduct = () => {
       if (response.ok) {
         const data = await response.json();
         if (data.success) {
-          setCategories(data.data);
+          setCategories(data.data || []);
         }
       }
     } catch (error) {
@@ -141,107 +108,29 @@ const EditProduct = () => {
   // Handle form input changes
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
+    const newValue = type === 'checkbox' ? checked : value;
+    
     setFormData(prev => ({
       ...prev,
-      [name]: type === 'checkbox' ? checked : value
+      [name]: newValue
     }));
-    setHasChanges(true);
-  };
-
-  // Handle new image upload
-  const handleImageUpload = (files) => {
-    const fileArray = Array.from(files);
-    
-    // Validate file types
-    const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
-    const invalidFiles = fileArray.filter(file => !validTypes.includes(file.type));
-    
-    if (invalidFiles.length > 0) {
-      setError('Please upload only JPEG, PNG, or WebP images');
-      return;
-    }
-    
-    // Validate file sizes (max 5MB each)
-    const oversizedFiles = fileArray.filter(file => file.size > 5 * 1024 * 1024);
-    if (oversizedFiles.length > 0) {
-      setError('Each image must be less than 5MB');
-      return;
-    }
-    
-    // Check total images (max 5)
-    const totalImages = existingImages.length + newImages.length + fileArray.length;
-    if (totalImages > 5) {
-      setError('Maximum 5 images allowed');
-      return;
-    }
-    
-    // Create previews
-    const newPreviews = [];
-    const newImageFiles = [];
-    
-    fileArray.forEach(file => {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        newPreviews.push(e.target.result);
-        if (newPreviews.length === fileArray.length) {
-          setNewImagePreviews(prev => [...prev, ...newPreviews]);
-        }
-      };
-      reader.readAsDataURL(file);
-      newImageFiles.push(file);
-    });
-    
-    setNewImages(prev => [...prev, ...newImageFiles]);
     setHasChanges(true);
     setError('');
   };
 
-  // Handle drag and drop
-  const handleDrag = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (e.type === 'dragenter' || e.type === 'dragover') {
-      setDragActive(true);
-    } else if (e.type === 'dragleave') {
-      setDragActive(false);
-    }
-  };
-
-  const handleDrop = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setDragActive(false);
-    
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      handleImageUpload(e.dataTransfer.files);
-    }
-  };
-
-  // Remove existing image
-  const removeExistingImage = (index) => {
-    setExistingImages(prev => prev.filter((_, i) => i !== index));
-    setHasChanges(true);
-  };
-
-  // Remove new image
-  const removeNewImage = (index) => {
-    setNewImages(prev => prev.filter((_, i) => i !== index));
-    setNewImagePreviews(prev => prev.filter((_, i) => i !== index));
-    setHasChanges(true);
-  };
-
-  // Handle tag input
-  const handleTagInput = (e) => {
-    if (e.key === 'Enter' && currentTag.trim()) {
+  // Handle tag addition
+  const handleTagAdd = (e) => {
+    if (e.key === 'Enter' && e.target.value.trim()) {
       e.preventDefault();
-      if (!formData.tags.includes(currentTag.trim())) {
+      const newTag = e.target.value.trim();
+      if (!formData.tags.includes(newTag)) {
         setFormData(prev => ({
           ...prev,
-          tags: [...prev.tags, currentTag.trim()]
+          tags: [...prev.tags, newTag]
         }));
         setHasChanges(true);
       }
-      setCurrentTag('');
+      e.target.value = '';
     }
   };
 
@@ -261,7 +150,7 @@ const EditProduct = () => {
         product_name: originalProduct.product_name || '',
         product_description: originalProduct.product_description || '',
         product_brand: originalProduct.product_brand || '',
-        category: originalProduct.category || '',
+        category: typeof originalProduct.category === 'object' ? originalProduct.category._id : originalProduct.category || '',
         product_price: originalProduct.product_price || '',
         stock: originalProduct.stock || '',
         status: originalProduct.status || 'active',
@@ -274,9 +163,6 @@ const EditProduct = () => {
         tags: originalProduct.tags || [],
         lowStockThreshold: originalProduct.lowStockThreshold || '10'
       });
-      setExistingImages(originalProduct.images || []);
-      setNewImages([]);
-      setNewImagePreviews([]);
       setHasChanges(false);
     }
   };
@@ -289,20 +175,19 @@ const EditProduct = () => {
     if (!formData.product_description.trim()) errors.push('Product description is required');
     if (!formData.category) errors.push('Category is required');
     if (!formData.product_price || formData.product_price <= 0) errors.push('Valid price is required');
-    if (!formData.stock || formData.stock < 0) errors.push('Valid stock quantity is required');
-    
-    const totalImages = existingImages.length + newImages.length;
-    if (totalImages === 0) errors.push('At least one product image is required');
+    if (formData.stock === '' || formData.stock < 0) errors.push('Valid stock quantity is required');
     
     if (formData.isOnSale) {
       if (!formData.salePrice || formData.salePrice <= 0) errors.push('Sale price is required when product is on sale');
-      if (formData.salePrice >= formData.product_price) errors.push('Sale price must be less than regular price');
+      if (parseFloat(formData.salePrice) >= parseFloat(formData.product_price)) {
+        errors.push('Sale price must be less than regular price');
+      }
     }
     
     return errors;
   };
 
-  // Submit form
+  // Submit form - FIXED TO USE ADMINCONTEXT
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -314,58 +199,31 @@ const EditProduct = () => {
     
     setSaving(true);
     setError('');
+    setSuccess('');
     
     try {
-      const token = localStorage.getItem('adminToken');
+      console.log('🔄 Submitting product update:', formData);
       
-      if (!token) {
-        navigate('/admin/login');
-        return;
-      }
+      // Use AdminContext updateProduct method instead of direct API call
+      const result = await updateProduct(id, formData);
       
-      // Create FormData for file upload
-      const formDataToSend = new FormData();
-      
-      // Append form fields
-      Object.keys(formData).forEach(key => {
-        if (key === 'tags') {
-          formDataToSend.append(key, JSON.stringify(formData[key]));
-        } else {
-          formDataToSend.append(key, formData[key]);
-        }
-      });
-      
-      // Append existing images info (for backend to know which to keep)
-      formDataToSend.append('existingImages', JSON.stringify(existingImages));
-      
-      // Append new images
-      newImages.forEach((image, index) => {
-        formDataToSend.append('images', image);
-      });
-      
-      const response = await fetch(`/api/admin/products/${id}`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        },
-        body: formDataToSend
-      });
-      
-      const data = await response.json();
-      
-      if (response.ok && data.success) {
+      if (result.success) {
         setSuccess('Product updated successfully!');
         setHasChanges(false);
-        // Refresh product data
+        
+        // Refresh product data to show updated values
         setTimeout(() => {
           fetchProduct();
           setSuccess('');
         }, 1500);
+        
+        console.log('✅ Product updated successfully');
       } else {
-        setError(data.message || 'Failed to update product');
+        setError(result.error || 'Failed to update product');
+        console.error('❌ Product update failed:', result.error);
       }
     } catch (error) {
-      console.error('Error updating product:', error);
+      console.error('❌ Error updating product:', error);
       setError('Failed to update product. Please try again.');
     } finally {
       setSaving(false);
@@ -379,14 +237,6 @@ const EditProduct = () => {
     } else {
       navigate(path);
     }
-  };
-
-  // Format currency
-  const formatPrice = (price) => {
-    return new Intl.NumberFormat('en-KE', {
-      style: 'currency',
-      currency: 'KES'
-    }).format(price);
   };
 
   useEffect(() => {
@@ -483,12 +333,12 @@ const EditProduct = () => {
                 name="product_name"
                 value={formData.product_name}
                 onChange={handleInputChange}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 placeholder="Enter product name"
                 required
               />
             </div>
-            
+
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Brand
@@ -498,85 +348,220 @@ const EditProduct = () => {
                 name="product_brand"
                 value={formData.product_brand}
                 onChange={handleInputChange}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 placeholder="Enter brand name"
               />
             </div>
-            
+
             <div className="lg:col-span-2">
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Product Description *
+                Description *
               </label>
               <textarea
                 name="product_description"
                 value={formData.product_description}
                 onChange={handleInputChange}
                 rows={4}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Describe the product features, benefits, and specifications"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="Enter product description"
                 required
               />
             </div>
-          </div>
-        </div>
 
-        {/* Category and Pricing */}
-        <div className="bg-white rounded-lg shadow p-6">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
-            <DollarSign size={20} />
-            Category & Pricing
-          </h2>
-          
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Category *
               </label>
               <select
+                name="category"
+                value={formData.category}
+                onChange={handleInputChange}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                required
+              >
+                <option value="">Select category</option>
+                {categories.map(category => (
+                  <option key={category._id} value={category._id}>
+                    {category.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Status
+              </label>
+              <select
                 name="status"
                 value={formData.status}
                 onChange={handleInputChange}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
                 <option value="active">Active</option>
                 <option value="inactive">Inactive</option>
                 <option value="draft">Draft</option>
               </select>
             </div>
-            
-            <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-              <div>
-                <label className="text-sm font-medium text-gray-700">
-                  Featured Product
-                </label>
-                <p className="text-xs text-gray-500">
-                  Show on homepage
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setFormData(prev => ({ ...prev, isFeatured: !prev.isFeatured }));
-                  setHasChanges(true);
-                }}
-                className="flex items-center"
-              >
-                {formData.isFeatured ? (
-                  <ToggleRight size={24} className="text-blue-600" />
-                ) : (
-                  <ToggleLeft size={24} className="text-gray-400" />
-                )}
-              </button>
-            </div>
           </div>
         </div>
 
-        {/* SEO Settings */}
+        {/* Pricing & Inventory */}
         <div className="bg-white rounded-lg shadow p-6">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
-            <FileText size={20} />
-            SEO Settings
+          <h2 className="text-xl font-semibold text-gray-900 mb-4">
+            Pricing & Inventory
           </h2>
+          
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Price (KES) *
+              </label>
+              <input
+                type="number"
+                name="product_price"
+                value={formData.product_price}
+                onChange={handleInputChange}
+                min="0"
+                step="0.01"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="0.00"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Stock Quantity *
+              </label>
+              <input
+                type="number"
+                name="stock"
+                value={formData.stock}
+                onChange={handleInputChange}
+                min="0"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="0"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Low Stock Threshold
+              </label>
+              <input
+                type="number"
+                name="lowStockThreshold"
+                value={formData.lowStockThreshold}
+                onChange={handleInputChange}
+                min="0"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="10"
+              />
+            </div>
+          </div>
+
+          {/* Sale Settings */}
+          <div className="mt-6 pt-6 border-t border-gray-200">
+            <div className="flex items-center gap-4 mb-4">
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  name="isOnSale"
+                  checked={formData.isOnSale}
+                  onChange={handleInputChange}
+                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                />
+                <span className="text-sm font-medium text-gray-700">Product is on sale</span>
+              </label>
+              
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  name="isFeatured"
+                  checked={formData.isFeatured}
+                  onChange={handleInputChange}
+                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                />
+                <span className="text-sm font-medium text-gray-700">Featured product</span>
+              </label>
+            </div>
+
+            {formData.isOnSale && (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Sale Price (KES) *
+                  </label>
+                  <input
+                    type="number"
+                    name="salePrice"
+                    value={formData.salePrice}
+                    onChange={handleInputChange}
+                    min="0"
+                    step="0.01"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="0.00"
+                    required={formData.isOnSale}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Sale End Date
+                  </label>
+                  <input
+                    type="date"
+                    name="saleEndDate"
+                    value={formData.saleEndDate}
+                    onChange={handleInputChange}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Tags */}
+        <div className="bg-white rounded-lg shadow p-6">
+          <h2 className="text-xl font-semibold text-gray-900 mb-4">Tags</h2>
+          
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Add Tags (Press Enter to add)
+            </label>
+            <input
+              type="text"
+              onKeyDown={handleTagAdd}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              placeholder="Type a tag and press Enter"
+            />
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            {formData.tags.map((tag, index) => (
+              <span
+                key={index}
+                className="inline-flex items-center gap-1 px-3 py-1 bg-blue-100 text-blue-800 text-sm rounded-full"
+              >
+                {tag}
+                <button
+                  type="button"
+                  onClick={() => removeTag(tag)}
+                  className="ml-1 text-blue-600 hover:text-blue-800"
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
+        </div>
+
+        {/* SEO */}
+        <div className="bg-white rounded-lg shadow p-6">
+          <h2 className="text-xl font-semibold text-gray-900 mb-4">SEO Settings</h2>
           
           <div className="space-y-4">
             <div>
@@ -588,15 +573,11 @@ const EditProduct = () => {
                 name="metaTitle"
                 value={formData.metaTitle}
                 onChange={handleInputChange}
-                maxLength="60"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Auto-generated from product name"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="SEO title for search engines"
               />
-              <p className="text-xs text-gray-500 mt-1">
-                {formData.metaTitle.length}/60 characters
-              </p>
             </div>
-            
+
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Meta Description
@@ -605,20 +586,16 @@ const EditProduct = () => {
                 name="metaDescription"
                 value={formData.metaDescription}
                 onChange={handleInputChange}
-                maxLength="155"
                 rows={3}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Auto-generated from product description"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="SEO description for search engines"
               />
-              <p className="text-xs text-gray-500 mt-1">
-                {formData.metaDescription.length}/155 characters
-              </p>
             </div>
           </div>
         </div>
 
         {/* Form Actions */}
-        <div className="flex flex-col sm:flex-row gap-4 justify-end">
+        <div className="flex items-center justify-between pt-6 border-t border-gray-200">
           <button
             type="button"
             onClick={() => handleNavigation('/admin/products')}
@@ -626,10 +603,11 @@ const EditProduct = () => {
           >
             Cancel
           </button>
+          
           <button
             type="submit"
             disabled={saving || !hasChanges}
-            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
+            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
           >
             {saving ? (
               <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
@@ -692,4 +670,3 @@ const EditProduct = () => {
 };
 
 export default EditProduct;
-                

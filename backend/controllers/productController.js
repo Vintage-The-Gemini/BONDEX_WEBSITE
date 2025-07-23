@@ -1,128 +1,108 @@
 // backend/controllers/productController.js
 import Product from '../models/Product.js';
+import Category from '../models/Category.js';
+import mongoose from 'mongoose';
 
-// @desc    Get all products with filtering, sorting, and pagination
+// Helper function to generate slug
+const generateSlug = (name) => {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9 -]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .trim('-');
+};
+
+// @desc    Get all products
 // @route   GET /api/products
 // @access  Public
 export const getProducts = async (req, res) => {
   try {
-    // Build query object for filtering
-    let query = {};
+    const {
+      page = 1,
+      limit = 12,
+      category,
+      search,
+      minPrice,
+      maxPrice,
+      sortBy = 'createdAt',
+      sortOrder = 'desc',
+      status = 'active'
+    } = req.query;
 
-    // Filter by category
-    if (req.query.category) {
-      query.category = req.query.category;
-    }
+    // Build query
+    const query = { status };
 
-    // Filter by brand
-    if (req.query.product_brand) {
-      query.product_brand = req.query.product_brand;
-    }
-
-    // Price range filter
-    if (req.query.minPrice || req.query.maxPrice) {
-      query.product_price = {};
-      if (req.query.minPrice) {
-        query.product_price.$gte = Number(req.query.minPrice);
+    // Category filter
+    if (category) {
+      if (mongoose.Types.ObjectId.isValid(category)) {
+        query.category = category;
+      } else {
+        const categoryDoc = await Category.findOne({ 
+          $or: [{ slug: category }, { name: { $regex: category, $options: 'i' } }] 
+        });
+        if (categoryDoc) {
+          query.category = categoryDoc._id;
+        }
       }
-      if (req.query.maxPrice) {
-        query.product_price.$lte = Number(req.query.maxPrice);
-      }
     }
 
-    // Search in product name and description
-    if (req.query.search) {
+    // Search filter
+    if (search) {
       query.$or = [
-        { product_name: { $regex: req.query.search, $options: 'i' } },
-        { product_description: { $regex: req.query.search, $options: 'i' } },
-        { product_brand: { $regex: req.query.search, $options: 'i' } },
-        { tags: { $in: [new RegExp(req.query.search, 'i')] } }
+        { product_name: { $regex: search, $options: 'i' } },
+        { product_description: { $regex: search, $options: 'i' } },
+        { product_brand: { $regex: search, $options: 'i' } },
+        { keywords: { $in: [new RegExp(search, 'i')] } }
       ];
     }
 
-    // Featured products filter
-    if (req.query.featured === 'true') {
-      query.isFeatured = true;
+    // Price filter
+    if (minPrice || maxPrice) {
+      query.product_price = {};
+      if (minPrice) query.product_price.$gte = parseFloat(minPrice);
+      if (maxPrice) query.product_price.$lte = parseFloat(maxPrice);
     }
 
-    // On sale filter
-    if (req.query.onSale === 'true') {
-      query.isOnSale = true;
-    }
+    // Sort options
+    const sortOptions = {};
+    sortOptions[sortBy] = sortOrder === 'desc' ? -1 : 1;
 
-    // Only show active products by default for public API
-    if (!req.query.includeInactive) {
-      query.status = 'active';
-    }
+    // Execute query with pagination
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    
+    const [products, total] = await Promise.all([
+      Product.find(query)
+        .populate('category', 'name slug')
+        .sort(sortOptions)
+        .skip(skip)
+        .limit(parseInt(limit))
+        .lean(),
+      Product.countDocuments(query)
+    ]);
 
-    // Sorting options
-    let sortBy = {};
-    if (req.query.sortBy) {
-      switch (req.query.sortBy) {
-        case 'price_low':
-          sortBy.product_price = 1;
-          break;
-        case 'price_high':
-          sortBy.product_price = -1;
-          break;
-        case 'name_asc':
-          sortBy.product_name = 1;
-          break;
-        case 'name_desc':
-          sortBy.product_name = -1;
-          break;
-        case 'newest':
-          sortBy.createdAt = -1;
-          break;
-        case 'oldest':
-          sortBy.createdAt = 1;
-          break;
-        case 'rating':
-          sortBy['rating.average'] = -1;
-          break;
-        default:
-          sortBy.createdAt = -1; // Default: newest first
-      }
-    } else {
-      sortBy.createdAt = -1; // Default sorting
-    }
-
-    // Pagination
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 12;
-    const skip = (page - 1) * limit;
-
-    // Execute query with population
-    const products = await Product.find(query)
-      .populate('category', 'name slug type')
-      .sort(sortBy)
-      .skip(skip)
-      .limit(limit);
-
-    // Get total count for pagination
-    const totalProducts = await Product.countDocuments(query);
-    const totalPages = Math.ceil(totalProducts / limit);
-
-    // Add final price calculation for each product
-    const productsWithFinalPrice = products.map(product => ({
-      ...product._doc,
-      finalPrice: product.isOnSale && product.salePrice ? product.salePrice : product.product_price,
-      formattedPrice: `KES ${product.product_price.toLocaleString()}`,
-      formattedFinalPrice: `KES ${(product.isOnSale && product.salePrice ? product.salePrice : product.product_price).toLocaleString()}`
+    // Format prices for KES currency
+    const formattedProducts = products.map(product => ({
+      ...product,
+      formattedPrice: new Intl.NumberFormat('en-KE', {
+        style: 'currency',
+        currency: 'KES'
+      }).format(product.product_price),
+      formattedSalePrice: product.salePrice ? new Intl.NumberFormat('en-KE', {
+        style: 'currency',
+        currency: 'KES'
+      }).format(product.salePrice) : null
     }));
 
     res.status(200).json({
       success: true,
-      count: products.length,
-      totalProducts,
-      totalPages,
-      currentPage: page,
-      data: productsWithFinalPrice,
+      data: formattedProducts,
       pagination: {
-        current: page,
-        total: totalPages,
-        hasNext: page < totalPages,
-        hasPrev: page > 1
+        currentPage: parseInt(page),
+        totalPages: Math.ceil(total / parseInt(limit)),
+        totalProducts: total,
+        hasNextPage: page < Math.ceil(total / parseInt(limit)),
+        hasPrevPage: page > 1
       }
     });
 
@@ -136,13 +116,21 @@ export const getProducts = async (req, res) => {
   }
 };
 
-// @desc    Get single product by ID
+// @desc    Get single product
 // @route   GET /api/products/:id
 // @access  Public
 export const getProduct = async (req, res) => {
   try {
-    const product = await Product.findById(req.params.id)
-      .populate('category', 'name slug type description');
+    const { id } = req.params;
+    
+    // Find by ID or slug
+    const query = mongoose.Types.ObjectId.isValid(id) 
+      ? { _id: id } 
+      : { slug: id };
+    
+    const product = await Product.findOne(query)
+      .populate('category', 'name slug description')
+      .lean();
 
     if (!product) {
       return res.status(404).json({
@@ -151,21 +139,22 @@ export const getProduct = async (req, res) => {
       });
     }
 
-    // Increment view count
-    product.views = (product.views || 0) + 1;
-    await product.save();
-
-    // Add final price calculation
-    const productWithFinalPrice = {
-      ...product._doc,
-      finalPrice: product.isOnSale && product.salePrice ? product.salePrice : product.product_price,
-      formattedPrice: `KES ${product.product_price.toLocaleString()}`,
-      formattedFinalPrice: `KES ${(product.isOnSale && product.salePrice ? product.salePrice : product.product_price).toLocaleString()}`
+    // Format prices for KES currency
+    const formattedProduct = {
+      ...product,
+      formattedPrice: new Intl.NumberFormat('en-KE', {
+        style: 'currency',
+        currency: 'KES'
+      }).format(product.product_price),
+      formattedSalePrice: product.salePrice ? new Intl.NumberFormat('en-KE', {
+        style: 'currency',
+        currency: 'KES'
+      }).format(product.salePrice) : null
     };
 
     res.status(200).json({
       success: true,
-      data: productWithFinalPrice
+      data: formattedProduct
     });
 
   } catch (error) {
@@ -178,25 +167,116 @@ export const getProduct = async (req, res) => {
   }
 };
 
-// @desc    Create new product
+// @desc    Create product (Admin only)
 // @route   POST /api/products
-// @access  Private (Admin only - basic version)
+// @access  Private (Admin only)
 export const createProduct = async (req, res) => {
   try {
     console.log('Creating product with data:', req.body);
-    
+
+    const {
+      product_name,
+      product_description,
+      product_brand,
+      category,
+      product_price,
+      stock,
+      features,
+      specifications,
+      status = 'active',
+      isOnSale = false,
+      isFeatured = false,
+      salePrice,
+      saleEndDate,
+      metaTitle,
+      metaDescription,
+      keywords,
+      tags
+    } = req.body;
+
+    // Validate required fields
+    if (!product_name || !product_description || !category || !product_price || stock === undefined) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide all required fields: product_name, product_description, category, product_price, stock'
+      });
+    }
+
+    // Validate category exists
+    const categoryExists = await Category.findById(category);
+    if (!categoryExists) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid category selected'
+      });
+    }
+
+    // Generate slug from product name
+    const slug = generateSlug(product_name);
+
+    // Check if slug already exists
+    const existingProduct = await Product.findOne({ slug });
+    if (existingProduct) {
+      return res.status(400).json({
+        success: false,
+        message: 'Product with similar name already exists'
+      });
+    }
+
+    // Prepare product data
     const productData = {
-      ...req.body,
-      product_price: parseFloat(req.body.product_price),
-      stock: parseInt(req.body.stock) || 0
+      product_name: product_name.trim(),
+      product_description: product_description.trim(),
+      product_brand: product_brand?.trim() || '',
+      category,
+      product_price: parseFloat(product_price),
+      stock: parseInt(stock),
+      slug,
+      status,
+      isOnSale: Boolean(isOnSale),
+      isFeatured: Boolean(isFeatured),
+      metaTitle: metaTitle || product_name,
+      metaDescription: metaDescription || product_description.substring(0, 160),
+      keywords: keywords ? (Array.isArray(keywords) ? keywords : keywords.split(',').map(k => k.trim())) : [],
+      tags: tags ? (Array.isArray(tags) ? tags : tags.split(',').map(t => t.trim())) : []
     };
 
-    // Create new product
-    const product = await Product.create(productData);
+    // Handle sale pricing
+    if (isOnSale && salePrice) {
+      productData.salePrice = parseFloat(salePrice);
+      if (saleEndDate) {
+        productData.saleEndDate = new Date(saleEndDate);
+      }
+    }
 
-    // Populate category information
+    // Handle features
+    if (features) {
+      productData.features = Array.isArray(features) ? features : features.split(',').map(f => f.trim());
+    }
+
+    // Handle specifications
+    if (specifications) {
+      productData.specifications = typeof specifications === 'object' ? specifications : {};
+    }
+
+    // Handle images (assuming they're handled by middleware like multer/cloudinary)
+    if (req.files && req.files.length > 0) {
+      const images = req.files.map(file => ({
+        url: file.path || file.secure_url,
+        public_id: file.filename || file.public_id,
+        alt: product_name
+      }));
+      
+      productData.images = images;
+      productData.mainImage = images[0].url;
+      productData.product_image = images[0].url;
+    }
+
+    const product = await Product.create(productData);
+    
+    // Populate category data in response
     const populatedProduct = await Product.findById(product._id)
-      .populate('category', 'name slug type');
+      .populate('category', 'name slug');
 
     res.status(201).json({
       success: true,
@@ -206,7 +286,7 @@ export const createProduct = async (req, res) => {
 
   } catch (error) {
     console.error('Create Product Error:', error);
-    
+
     // Handle validation errors
     if (error.name === 'ValidationError') {
       const messages = Object.values(error.errors).map(err => err.message);
@@ -233,53 +313,195 @@ export const createProduct = async (req, res) => {
   }
 };
 
-// @desc    Update product
+// @desc    Update product (FIXED VERSION)
 // @route   PUT /api/products/:id
 // @access  Private (Admin only)
 export const updateProduct = async (req, res) => {
   try {
-    console.log('Updating product:', req.params.id);
+    console.log('🔄 Updating product:', req.params.id);
+    console.log('📝 Update data received:', req.body);
     
-    const updateData = {
-      ...req.body,
-      updatedAt: new Date()
-    };
-
-    // Convert string numbers to proper types
-    if (updateData.product_price) {
-      updateData.product_price = parseFloat(updateData.product_price);
-    }
-    if (updateData.stock !== undefined) {
-      updateData.stock = parseInt(updateData.stock);
-    }
-    if (updateData.salePrice) {
-      updateData.salePrice = parseFloat(updateData.salePrice);
-    }
-
-    const product = await Product.findByIdAndUpdate(
-      req.params.id,
-      updateData,
-      {
-        new: true, // Return updated document
-        runValidators: true // Run schema validation
-      }
-    ).populate('category', 'name slug type');
+    const product = await Product.findById(req.params.id);
 
     if (!product) {
+      console.log('❌ Product not found:', req.params.id);
       return res.status(404).json({
         success: false,
         message: 'Product not found'
       });
     }
 
+    const {
+      product_name,
+      product_description,
+      product_brand,
+      category,
+      product_price,
+      stock,
+      features,
+      specifications,
+      status,
+      isOnSale,
+      isFeatured,
+      salePrice,
+      saleEndDate,
+      metaTitle,
+      metaDescription,
+      keywords,
+      tags
+    } = req.body;
+
+    // Validate category if provided
+    if (category && category !== product.category.toString()) {
+      const categoryExists = await Category.findById(category);
+      if (!categoryExists) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid category selected'
+        });
+      }
+    }
+
+    // Prepare update data
+    const updateData = {};
+
+    // Update basic fields
+    if (product_name !== undefined) {
+      updateData.product_name = product_name.trim();
+      // Update slug if name changed
+      if (product_name.trim() !== product.product_name) {
+        const newSlug = generateSlug(product_name);
+        const existingProduct = await Product.findOne({ 
+          slug: newSlug, 
+          _id: { $ne: req.params.id } 
+        });
+        if (existingProduct) {
+          return res.status(400).json({
+            success: false,
+            message: 'Product with similar name already exists'
+          });
+        }
+        updateData.slug = newSlug;
+      }
+    }
+
+    if (product_description !== undefined) {
+      updateData.product_description = product_description.trim();
+    }
+
+    if (product_brand !== undefined) {
+      updateData.product_brand = product_brand.trim();
+    }
+
+    if (category !== undefined) {
+      updateData.category = category;
+    }
+
+    if (product_price !== undefined) {
+      updateData.product_price = parseFloat(product_price);
+    }
+
+    if (stock !== undefined) {
+      updateData.stock = parseInt(stock);
+    }
+
+    if (status !== undefined) {
+      updateData.status = status;
+    }
+
+    if (isOnSale !== undefined) {
+      updateData.isOnSale = Boolean(isOnSale);
+    }
+
+    if (isFeatured !== undefined) {
+      updateData.isFeatured = Boolean(isFeatured);
+    }
+
+    // Handle sale pricing
+    if (salePrice !== undefined) {
+      updateData.salePrice = salePrice ? parseFloat(salePrice) : null;
+    }
+
+    if (saleEndDate !== undefined) {
+      updateData.saleEndDate = saleEndDate ? new Date(saleEndDate) : null;
+    }
+
+    // Handle arrays and objects
+    if (features !== undefined) {
+      updateData.features = Array.isArray(features) ? features : 
+        (features ? features.split(',').map(f => f.trim()) : []);
+    }
+
+    if (specifications !== undefined) {
+      updateData.specifications = typeof specifications === 'object' ? specifications : {};
+    }
+
+    if (keywords !== undefined) {
+      updateData.keywords = Array.isArray(keywords) ? keywords :
+        (keywords ? keywords.split(',').map(k => k.trim()) : []);
+    }
+
+    if (tags !== undefined) {
+      updateData.tags = Array.isArray(tags) ? tags :
+        (tags ? tags.split(',').map(t => t.trim()) : []);
+    }
+
+    // Handle meta fields
+    if (metaTitle !== undefined) {
+      updateData.metaTitle = metaTitle || updateData.product_name || product.product_name;
+    }
+
+    if (metaDescription !== undefined) {
+      updateData.metaDescription = metaDescription || 
+        (updateData.product_description || product.product_description).substring(0, 160);
+    }
+
+    // Handle new images if uploaded
+    if (req.files && req.files.length > 0) {
+      const images = req.files.map(file => ({
+        url: file.path || file.secure_url,
+        public_id: file.filename || file.public_id,
+        alt: updateData.product_name || product.product_name
+      }));
+      
+      updateData.images = images;
+      updateData.mainImage = images[0].url;
+      updateData.product_image = images[0].url;
+    }
+
+    // Set updated timestamp
+    updateData.updatedAt = new Date();
+
+    console.log('💾 Final update data:', updateData);
+
+    // Perform the update with validation
+    const updatedProduct = await Product.findByIdAndUpdate(
+      req.params.id,
+      updateData,
+      {
+        new: true, // Return the updated document
+        runValidators: true, // Run schema validation
+        context: 'query' // Needed for some validators
+      }
+    ).populate('category', 'name slug type');
+
+    if (!updatedProduct) {
+      return res.status(404).json({
+        success: false,
+        message: 'Product not found after update'
+      });
+    }
+
+    console.log('✅ Product updated successfully:', updatedProduct._id);
+
     res.status(200).json({
       success: true,
       message: 'Product updated successfully',
-      data: product
+      data: updatedProduct
     });
 
   } catch (error) {
-    console.error('Update Product Error:', error);
+    console.error('❌ Update Product Error:', error);
     
     // Handle validation errors
     if (error.name === 'ValidationError') {
@@ -288,6 +510,14 @@ export const updateProduct = async (req, res) => {
         success: false,
         message: 'Validation Error',
         errors: messages
+      });
+    }
+
+    // Handle duplicate key error
+    if (error.code === 11000) {
+      return res.status(400).json({
+        success: false,
+        message: 'Product with this name already exists'
       });
     }
 
@@ -304,7 +534,7 @@ export const updateProduct = async (req, res) => {
 // @access  Private (Admin only)
 export const deleteProduct = async (req, res) => {
   try {
-    const product = await Product.findByIdAndDelete(req.params.id);
+    const product = await Product.findById(req.params.id);
 
     if (!product) {
       return res.status(404).json({
@@ -313,10 +543,11 @@ export const deleteProduct = async (req, res) => {
       });
     }
 
+    await Product.findByIdAndDelete(req.params.id);
+
     res.status(200).json({
       success: true,
-      message: 'Product deleted successfully',
-      data: product
+      message: 'Product deleted successfully'
     });
 
   } catch (error) {
@@ -329,229 +560,10 @@ export const deleteProduct = async (req, res) => {
   }
 };
 
-// @desc    Get products by category
-// @route   GET /api/products/category/:category
-// @access  Public
-export const getProductsByCategory = async (req, res) => {
-  try {
-    const { category } = req.params;
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 12;
-    const skip = (page - 1) * limit;
-
-    // Build query - category can be ID or name
-    let query = { status: 'active' };
-    
-    // Check if category is ObjectId or name
-    if (category.match(/^[0-9a-fA-F]{24}$/)) {
-      // It's an ObjectId
-      query.category = category;
-    } else {
-      // It's a category name, need to find by name first
-      const categoryDoc = await Product.findOne({}).populate('category');
-      if (categoryDoc && categoryDoc.category && categoryDoc.category.name.toLowerCase() === category.toLowerCase()) {
-        query.category = categoryDoc.category._id;
-      } else {
-        // Fallback: search by category name in populated field
-        const products = await Product.find({ status: 'active' })
-          .populate('category', 'name slug type')
-          .sort({ createdAt: -1 })
-          .skip(skip)
-          .limit(limit);
-        
-        const filteredProducts = products.filter(product => 
-          product.category && 
-          product.category.name.toLowerCase() === category.toLowerCase()
-        );
-
-        return res.status(200).json({
-          success: true,
-          count: filteredProducts.length,
-          category,
-          data: filteredProducts
-        });
-      }
-    }
-
-    const products = await Product.find(query)
-      .populate('category', 'name slug type')
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit);
-
-    const totalProducts = await Product.countDocuments(query);
-
-    // Add final price calculation
-    const productsWithFinalPrice = products.map(product => ({
-      ...product._doc,
-      finalPrice: product.isOnSale && product.salePrice ? product.salePrice : product.product_price,
-      formattedPrice: `KES ${product.product_price.toLocaleString()}`,
-      formattedFinalPrice: `KES ${(product.isOnSale && product.salePrice ? product.salePrice : product.product_price).toLocaleString()}`
-    }));
-
-    res.status(200).json({
-      success: true,
-      count: products.length,
-      totalProducts,
-      category,
-      data: productsWithFinalPrice
-    });
-
-  } catch (error) {
-    console.error('Get Products by Category Error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Error fetching products by category',
-      error: error.message
-    });
-  }
-};
-
-// @desc    Get featured products
-// @route   GET /api/products/featured
-// @access  Public
-export const getFeaturedProducts = async (req, res) => {
-  try {
-    const limit = parseInt(req.query.limit) || 8;
-    
-    const products = await Product.find({ 
-      isFeatured: true, 
-      status: 'active',
-      stock: { $gt: 0 }
-    })
-    .populate('category', 'name slug type')
-    .sort({ createdAt: -1 })
-    .limit(limit);
-
-    // Add final price calculation
-    const productsWithFinalPrice = products.map(product => ({
-      ...product._doc,
-      finalPrice: product.isOnSale && product.salePrice ? product.salePrice : product.product_price,
-      formattedPrice: `KES ${product.product_price.toLocaleString()}`,
-      formattedFinalPrice: `KES ${(product.isOnSale && product.salePrice ? product.salePrice : product.product_price).toLocaleString()}`
-    }));
-
-    res.status(200).json({
-      success: true,
-      count: products.length,
-      data: productsWithFinalPrice
-    });
-
-  } catch (error) {
-    console.error('Get Featured Products Error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Error fetching featured products',
-      error: error.message
-    });
-  }
-};
-
-// @desc    Get products on sale
-// @route   GET /api/products/sale
-// @access  Public
-export const getProductsOnSale = async (req, res) => {
-  try {
-    const limit = parseInt(req.query.limit) || 12;
-    
-    const products = await Product.find({ 
-      isOnSale: true, 
-      status: 'active',
-      stock: { $gt: 0 },
-      $or: [
-        { saleEndDate: { $gt: new Date() } },
-        { saleEndDate: null }
-      ]
-    })
-    .populate('category', 'name slug type')
-    .sort({ createdAt: -1 })
-    .limit(limit);
-
-    // Add final price calculation
-    const productsWithFinalPrice = products.map(product => ({
-      ...product._doc,
-      finalPrice: product.salePrice || product.product_price,
-      formattedPrice: `KES ${product.product_price.toLocaleString()}`,
-      formattedFinalPrice: `KES ${(product.salePrice || product.product_price).toLocaleString()}`,
-      savings: product.salePrice ? product.product_price - product.salePrice : 0,
-      discountPercentage: product.salePrice ? Math.round(((product.product_price - product.salePrice) / product.product_price) * 100) : 0
-    }));
-
-    res.status(200).json({
-      success: true,
-      count: products.length,
-      data: productsWithFinalPrice
-    });
-
-  } catch (error) {
-    console.error('Get Products on Sale Error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Error fetching products on sale',
-      error: error.message
-    });
-  }
-};
-
-// @desc    Search products
-// @route   GET /api/products/search
-// @access  Public
-export const searchProducts = async (req, res) => {
-  try {
-    const { q } = req.query;
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 12;
-    const skip = (page - 1) * limit;
-
-    if (!q || q.trim().length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'Search query is required'
-      });
-    }
-
-    const searchRegex = new RegExp(q.trim(), 'i');
-    
-    const query = {
-      status: 'active',
-      $or: [
-        { product_name: searchRegex },
-        { product_description: searchRegex },
-        { product_brand: searchRegex },
-        { tags: { $in: [searchRegex] } }
-      ]
-    };
-
-    const products = await Product.find(query)
-      .populate('category', 'name slug type')
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit);
-
-    const totalProducts = await Product.countDocuments(query);
-
-    // Add final price calculation
-    const productsWithFinalPrice = products.map(product => ({
-      ...product._doc,
-      finalPrice: product.isOnSale && product.salePrice ? product.salePrice : product.product_price,
-      formattedPrice: `KES ${product.product_price.toLocaleString()}`,
-      formattedFinalPrice: `KES ${(product.isOnSale && product.salePrice ? product.salePrice : product.product_price).toLocaleString()}`
-    }));
-
-    res.status(200).json({
-      success: true,
-      query: q,
-      count: products.length,
-      totalProducts,
-      data: productsWithFinalPrice
-    });
-
-  } catch (error) {
-    console.error('Search Products Error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Error searching products',
-      error: error.message
-    });
-  }
+export default {
+  getProducts,
+  getProduct,
+  createProduct,
+  updateProduct,
+  deleteProduct
 };

@@ -8,7 +8,8 @@ const initialState = {
   isAuthenticated: false,
   admin: null,
   token: null,
-  loading: true,
+  loading: false, // CHANGED: Start with false to prevent infinite loading
+  authChecked: false, // NEW: Track if auth has been checked
   
   // Dashboard data
   dashboardStats: null,
@@ -35,6 +36,9 @@ const initialState = {
 // Action types
 const ADMIN_ACTION_TYPES = {
   // Auth actions
+  AUTH_CHECK_START: 'AUTH_CHECK_START',
+  AUTH_CHECK_SUCCESS: 'AUTH_CHECK_SUCCESS',
+  AUTH_CHECK_FAILURE: 'AUTH_CHECK_FAILURE',
   LOGIN_START: 'LOGIN_START',
   LOGIN_SUCCESS: 'LOGIN_SUCCESS',
   LOGIN_FAILURE: 'LOGIN_FAILURE',
@@ -74,6 +78,34 @@ const ADMIN_ACTION_TYPES = {
 const adminReducer = (state, action) => {
   switch (action.type) {
     // Auth cases
+    case ADMIN_ACTION_TYPES.AUTH_CHECK_START:
+      return {
+        ...state,
+        loading: true,
+        error: null,
+      };
+      
+    case ADMIN_ACTION_TYPES.AUTH_CHECK_SUCCESS:
+      return {
+        ...state,
+        isAuthenticated: true,
+        admin: action.payload,
+        loading: false,
+        authChecked: true,
+        error: null,
+      };
+      
+    case ADMIN_ACTION_TYPES.AUTH_CHECK_FAILURE:
+      return {
+        ...state,
+        isAuthenticated: false,
+        admin: null,
+        token: null,
+        loading: false,
+        authChecked: true,
+        error: action.payload,
+      };
+    
     case ADMIN_ACTION_TYPES.LOGIN_START:
       return {
         ...state,
@@ -88,6 +120,7 @@ const adminReducer = (state, action) => {
         admin: action.payload.admin,
         token: action.payload.token,
         loading: false,
+        authChecked: true,
         error: null,
       };
       
@@ -98,6 +131,7 @@ const adminReducer = (state, action) => {
         admin: null,
         token: null,
         loading: false,
+        authChecked: true,
         error: action.payload,
       };
       
@@ -105,6 +139,7 @@ const adminReducer = (state, action) => {
       return {
         ...initialState,
         loading: false,
+        authChecked: true,
       };
       
     case ADMIN_ACTION_TYPES.LOAD_ADMIN:
@@ -113,6 +148,7 @@ const adminReducer = (state, action) => {
         isAuthenticated: true,
         admin: action.payload,
         loading: false,
+        authChecked: true,
       };
       
     // Dashboard cases
@@ -132,8 +168,8 @@ const adminReducer = (state, action) => {
     case ADMIN_ACTION_TYPES.SET_PRODUCTS:
       return {
         ...state,
-        products: action.payload.products,
-        productsTotalCount: action.payload.totalCount,
+        products: action.payload.products || [],
+        productsTotalCount: action.payload.totalCount || 0,
         productsLoading: false,
       };
       
@@ -181,7 +217,7 @@ const adminReducer = (state, action) => {
     case ADMIN_ACTION_TYPES.SET_CATEGORIES:
       return {
         ...state,
-        categories: action.payload,
+        categories: action.payload || [],
         categoriesLoading: false,
       };
       
@@ -263,33 +299,94 @@ const AdminContext = createContext();
 export const AdminProvider = ({ children }) => {
   const [state, dispatch] = useReducer(adminReducer, initialState);
 
-  // Initialize admin on app load
+  // Initialize admin on app load - WITH TIMEOUT
   useEffect(() => {
     const initializeAdmin = async () => {
+      console.log('🔄 Initializing admin authentication...');
+      
       try {
+        dispatch({ type: ADMIN_ACTION_TYPES.AUTH_CHECK_START });
+        
+        // Set a timeout to prevent infinite loading
+        const timeoutId = setTimeout(() => {
+          console.log('⏰ Auth check timeout, proceeding without auth');
+          dispatch({ 
+            type: ADMIN_ACTION_TYPES.AUTH_CHECK_FAILURE, 
+            payload: 'Authentication check timed out' 
+          });
+        }, 3000); // 3 second timeout
+        
         if (adminApi.isAuthenticated()) {
-          const response = await adminApi.getAdminProfile();
-          if (response.success) {
-            dispatch({
-              type: ADMIN_ACTION_TYPES.LOAD_ADMIN,
-              payload: response.data,
-            });
-          } else {
+          console.log('🔐 Found stored authentication, verifying...');
+          
+          try {
+            const response = await adminApi.getProfile();
+            clearTimeout(timeoutId);
+            
+            if (response.success) {
+              console.log('✅ Authentication verified');
+              dispatch({
+                type: ADMIN_ACTION_TYPES.AUTH_CHECK_SUCCESS,
+                payload: response.data,
+              });
+            } else {
+              throw new Error('Invalid response from server');
+            }
+          } catch (error) {
+            clearTimeout(timeoutId);
+            console.log('⚠️ Auth verification failed, clearing tokens:', error.message);
             adminApi.removeToken();
-            dispatch({ type: ADMIN_ACTION_TYPES.LOGOUT });
+            dispatch({ 
+              type: ADMIN_ACTION_TYPES.AUTH_CHECK_FAILURE, 
+              payload: 'Authentication verification failed' 
+            });
           }
         } else {
-          dispatch({ type: ADMIN_ACTION_TYPES.LOGOUT });
+          clearTimeout(timeoutId);
+          console.log('🔓 No stored authentication found');
+          dispatch({ 
+            type: ADMIN_ACTION_TYPES.AUTH_CHECK_FAILURE, 
+            payload: null 
+          });
         }
       } catch (error) {
-        console.error('Admin initialization error:', error);
-        adminApi.removeToken();
-        dispatch({ type: ADMIN_ACTION_TYPES.LOGOUT });
+        console.error('❌ Admin initialization error:', error);
+        dispatch({ 
+          type: ADMIN_ACTION_TYPES.AUTH_CHECK_FAILURE, 
+          payload: error.message 
+        });
       }
     };
 
     initializeAdmin();
   }, []);
+
+  // =============================================
+  // NOTIFICATION SYSTEM
+  // =============================================
+
+  const addNotification = (notification) => {
+    const id = Date.now().toString();
+    dispatch({
+      type: ADMIN_ACTION_TYPES.ADD_NOTIFICATION,
+      payload: { ...notification, id }
+    });
+
+    // Auto-remove after 5 seconds
+    setTimeout(() => {
+      dispatch({
+        type: ADMIN_ACTION_TYPES.REMOVE_NOTIFICATION,
+        payload: id
+      });
+    }, 5000);
+  };
+
+  const removeNotification = (id) => {
+    dispatch({
+      type: ADMIN_ACTION_TYPES.REMOVE_NOTIFICATION,
+      payload: id
+    });
+  };
 
   // =============================================
   // AUTH ACTIONS
@@ -299,14 +396,22 @@ export const AdminProvider = ({ children }) => {
     try {
       dispatch({ type: ADMIN_ACTION_TYPES.LOGIN_START });
       
-      const response = await adminApi.adminLogin(credentials);
+      const response = await adminApi.login(credentials);
+      console.log('🔑 Login response received:', response);
       
       if (response.success) {
+        // Extract the correct data structure from your backend response
+        const adminData = response.data.user; // Backend sends { success: true, data: { user: {...}, token: "..." } }
+        const token = response.data.token;
+        
+        console.log('✅ Login successful, admin data:', adminData);
+        console.log('🔑 Token:', token);
+        
         dispatch({
           type: ADMIN_ACTION_TYPES.LOGIN_SUCCESS,
           payload: {
-            admin: response.data.user,
-            token: response.data.token,
+            admin: adminData,
+            token: token,
           },
         });
         
@@ -315,11 +420,12 @@ export const AdminProvider = ({ children }) => {
           message: 'Login successful! Welcome back.',
         });
         
-        return { success: true };
+        return { success: true, data: response };
       } else {
-        throw new Error(response.message);
+        throw new Error(response.message || 'Login failed');
       }
     } catch (error) {
+      console.error('❌ Login error:', error);
       dispatch({
         type: ADMIN_ACTION_TYPES.LOGIN_FAILURE,
         payload: error.message,
@@ -336,7 +442,7 @@ export const AdminProvider = ({ children }) => {
 
   const logout = async () => {
     try {
-      await adminApi.adminLogout();
+      await adminApi.logout();
       dispatch({ type: ADMIN_ACTION_TYPES.LOGOUT });
       
       addNotification({
@@ -345,6 +451,7 @@ export const AdminProvider = ({ children }) => {
       });
     } catch (error) {
       console.error('Logout error:', error);
+      // Still dispatch logout even if API call fails
       dispatch({ type: ADMIN_ACTION_TYPES.LOGOUT });
     }
   };
@@ -364,15 +471,12 @@ export const AdminProvider = ({ children }) => {
       }
     } catch (error) {
       console.error('Dashboard stats error:', error);
-      addNotification({
-        type: 'error',
-        message: 'Failed to load dashboard statistics',
-      });
+      // Don't show error notification for dashboard stats
     }
   };
 
   // =============================================
-  // PRODUCT ACTIONS
+  // PRODUCT ACTIONS - WITH FALLBACKS
   // =============================================
 
   const loadProducts = async (params = {}) => {
@@ -385,50 +489,40 @@ export const AdminProvider = ({ children }) => {
         dispatch({
           type: ADMIN_ACTION_TYPES.SET_PRODUCTS,
           payload: {
-            products: response.data,
-            totalCount: response.totalCount || response.data.length,
+            products: response.data || [],
+            totalCount: response.pagination?.totalProducts || response.data?.length || 0,
           },
         });
       }
     } catch (error) {
       console.error('Load products error:', error);
-      addNotification({
-        type: 'error',
-        message: 'Failed to load products',
+      // Set empty products instead of leaving in loading state
+      dispatch({
+        type: ADMIN_ACTION_TYPES.SET_PRODUCTS,
+        payload: { products: [], totalCount: 0 },
       });
     }
   };
 
-  const createProduct = async (productData) => {
+  const loadProduct = async (id) => {
     try {
-      const response = await adminApi.createProduct(productData);
-      
+      const response = await adminApi.getAdminProduct(id);
       if (response.success) {
         dispatch({
-          type: ADMIN_ACTION_TYPES.ADD_PRODUCT,
+          type: ADMIN_ACTION_TYPES.SET_CURRENT_PRODUCT,
           payload: response.data,
         });
-        
-        addNotification({
-          type: 'success',
-          message: 'Product created successfully!',
-        });
-        
         return { success: true, data: response.data };
       }
     } catch (error) {
-      console.error('Create product error:', error);
-      addNotification({
-        type: 'error',
-        message: error.message || 'Failed to create product',
-      });
-      
+      console.error('Load product error:', error);
       return { success: false, error: error.message };
     }
   };
 
   const updateProduct = async (id, productData) => {
     try {
+      console.log('🔄 AdminContext: Updating product', id);
       const response = await adminApi.updateProduct(id, productData);
       
       if (response.success) {
@@ -455,55 +549,28 @@ export const AdminProvider = ({ children }) => {
     }
   };
 
-  const deleteProduct = async (id) => {
-    try {
-      const response = await adminApi.deleteProduct(id);
-      
-      if (response.success) {
-        dispatch({
-          type: ADMIN_ACTION_TYPES.DELETE_PRODUCT,
-          payload: id,
-        });
-        
-        addNotification({
-          type: 'success',
-          message: 'Product deleted successfully!',
-        });
-        
-        return { success: true };
-      }
-    } catch (error) {
-      console.error('Delete product error:', error);
-      addNotification({
-        type: 'error',
-        message: error.message || 'Failed to delete product',
-      });
-      
-      return { success: false, error: error.message };
-    }
-  };
-
   // =============================================
-  // CATEGORY ACTIONS
+  // CATEGORY ACTIONS - WITH FALLBACKS
   // =============================================
 
-  const loadCategories = async (params = {}) => {
+  const loadCategories = async () => {
     try {
       dispatch({ type: ADMIN_ACTION_TYPES.SET_CATEGORIES_LOADING, payload: true });
       
-      const response = await adminApi.getAdminCategories(params);
+      const response = await adminApi.getAdminCategories();
       
       if (response.success) {
         dispatch({
           type: ADMIN_ACTION_TYPES.SET_CATEGORIES,
-          payload: response.data,
+          payload: response.data || [],
         });
       }
     } catch (error) {
       console.error('Load categories error:', error);
-      addNotification({
-        type: 'error',
-        message: 'Failed to load categories',
+      // Set empty categories instead of leaving in loading state
+      dispatch({
+        type: ADMIN_ACTION_TYPES.SET_CATEGORIES,
+        payload: [],
       });
     }
   };
@@ -516,36 +583,8 @@ export const AdminProvider = ({ children }) => {
     dispatch({ type: ADMIN_ACTION_TYPES.TOGGLE_SIDEBAR });
   };
 
-  const addNotification = (notification) => {
-    const id = Date.now() + Math.random();
-    dispatch({
-      type: ADMIN_ACTION_TYPES.ADD_NOTIFICATION,
-      payload: {
-        id,
-        ...notification,
-        timestamp: new Date(),
-      },
-    });
-
-    // Auto-remove notification after 5 seconds
-    setTimeout(() => {
-      removeNotification(id);
-    }, 5000);
-  };
-
-  const removeNotification = (id) => {
-    dispatch({
-      type: ADMIN_ACTION_TYPES.REMOVE_NOTIFICATION,
-      payload: id,
-    });
-  };
-
-  const clearError = () => {
-    dispatch({ type: ADMIN_ACTION_TYPES.CLEAR_ERROR });
-  };
-
   // Context value
-  const value = {
+  const contextValue = {
     // State
     ...state,
     
@@ -558,26 +597,26 @@ export const AdminProvider = ({ children }) => {
     
     // Product actions
     loadProducts,
-    createProduct,
+    loadProduct,
     updateProduct,
-    deleteProduct,
     
     // Category actions
     loadCategories,
     
     // UI actions
     toggleSidebar,
+    
+    // Notification actions
     addNotification,
     removeNotification,
-    clearError,
     
-    // Utility
+    // Utility functions
     formatCurrency: adminApi.formatCurrency,
     formatDate: adminApi.formatDate,
   };
 
   return (
-    <AdminContext.Provider value={value}>
+    <AdminContext.Provider value={contextValue}>
       {children}
     </AdminContext.Provider>
   );
