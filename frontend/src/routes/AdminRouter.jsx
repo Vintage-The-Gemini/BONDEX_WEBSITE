@@ -12,14 +12,21 @@ import AdminLogin from '../pages/admin/AdminLogin';
 // Admin Dashboard
 import AdminDashboard from '../pages/admin/AdminDashboard';
 
-// Product Management - Import the actual ProductList component
+// Product Management
 import ProductList from '../pages/admin/ProductList';
 import CreateProduct from '../pages/admin/CreateProduct';
 import EditProduct from '../pages/admin/EditProduct';
 
+// Category Management
+import CategoryList from '../pages/admin/CategoryList';
+import CreateCategory from '../pages/admin/CreateCategory';
+import EditCategory from '../pages/admin/EditCategory';
+
+// Order Management
+import OrderList from '../pages/admin/OrderList';
+
 // Components
-import ProtectedRoute from '../components/admin/ProtectedRoute';
-import LoadingSpinner from '../components/common/LoadingSpinner';
+import ProtectedRoute from '../components/ProtectedRoute';
 
 const AdminRouter = () => {
   const { isAuthenticated, loading } = useAdmin();
@@ -28,7 +35,7 @@ const AdminRouter = () => {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <LoadingSpinner size="large" />
+        <div className="animate-spin rounded-full h-8 w-8 border-2 border-blue-600 border-t-transparent"></div>
       </div>
     );
   }
@@ -52,7 +59,7 @@ const AdminRouter = () => {
         <Route index element={<Navigate to="dashboard" replace />} />
         <Route path="dashboard" element={<AdminDashboard />} />
 
-        {/* Product Management - NOW USING THE ACTUAL COMPONENTS */}
+        {/* Product Management */}
         <Route path="products" element={<ProductList />} />
         <Route path="products/create" element={<CreateProduct />} />
         <Route path="products/:id/edit" element={<EditProduct />} />
@@ -72,15 +79,60 @@ const AdminRouter = () => {
         } />
 
         {/* Category Management */}
-        <Route path="categories" element={
+        <Route path="categories" element={<CategoryList />} />
+        <Route path="categories/create" element={<CreateCategory />} />
+        <Route path="categories/:id/edit" element={<EditCategory />} />
+        <Route path="categories/:id" element={
           <div className="p-6">
-            <h1 className="text-2xl font-bold">Categories</h1>
-            <p className="text-gray-600 mt-2">Category management coming soon...</p>
+            <h1 className="text-2xl font-bold">Category Details</h1>
+            <p className="text-gray-600 mt-2">Category detail component coming soon...</p>
             <div className="mt-4">
-              <button className="bg-yellow-500 text-gray-900 px-4 py-2 rounded-lg hover:bg-yellow-600 transition-colors">
-                Create Category
-              </button>
+              <a 
+                href="/admin/categories" 
+                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                Back to Categories
+              </a>
             </div>
+          </div>
+        } />
+
+        {/* Orders Management */}
+        <Route path="orders" element={<OrderList />} />
+        <Route path="orders/:id" element={
+          <div className="p-6">
+            <h1 className="text-2xl font-bold">Order Details</h1>
+            <p className="text-gray-600 mt-2">Order detail component coming soon...</p>
+            <div className="mt-4">
+              <a 
+                href="/admin/orders" 
+                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                Back to Orders
+              </a>
+            </div>
+          </div>
+        } />
+        <Route path="orders/:id/edit" element={
+          <div className="p-6">
+            <h1 className="text-2xl font-bold">Edit Order</h1>
+            <p className="text-gray-600 mt-2">Edit order component coming soon...</p>
+            <div className="mt-4">
+              <a 
+                href="/admin/orders" 
+                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                Back to Orders
+              </a>
+            </div>
+          </div>
+        } />
+
+        {/* Customer Management */}
+        <Route path="customers" element={
+          <div className="p-6">
+            <h1 className="text-2xl font-bold">Customers</h1>
+            <p className="text-gray-600 mt-2">Customer management coming soon...</p>
           </div>
         } />
 

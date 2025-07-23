@@ -299,58 +299,38 @@ const AdminContext = createContext();
 export const AdminProvider = ({ children }) => {
   const [state, dispatch] = useReducer(adminReducer, initialState);
 
-  // Initialize admin on app load - WITH TIMEOUT
+  // Initialize admin on app load - WITH TIMEOUT AND BETTER HANDLING
   useEffect(() => {
     const initializeAdmin = async () => {
-      console.log('🔄 Initializing admin authentication...');
+      console.log('🔄 AdminContext: Starting authentication check...');
       
       try {
         dispatch({ type: ADMIN_ACTION_TYPES.AUTH_CHECK_START });
         
-        // Set a timeout to prevent infinite loading
-        const timeoutId = setTimeout(() => {
-          console.log('⏰ Auth check timeout, proceeding without auth');
-          dispatch({ 
-            type: ADMIN_ACTION_TYPES.AUTH_CHECK_FAILURE, 
-            payload: 'Authentication check timed out' 
-          });
-        }, 3000); // 3 second timeout
-        
+        // Check for stored authentication first
         if (adminApi.isAuthenticated()) {
-          console.log('🔐 Found stored authentication, verifying...');
+          const storedAdmin = adminApi.getStoredAdmin();
+          console.log('🔐 Found stored authentication:', storedAdmin);
           
-          try {
-            const response = await adminApi.getProfile();
-            clearTimeout(timeoutId);
-            
-            if (response.success) {
-              console.log('✅ Authentication verified');
-              dispatch({
-                type: ADMIN_ACTION_TYPES.AUTH_CHECK_SUCCESS,
-                payload: response.data,
-              });
-            } else {
-              throw new Error('Invalid response from server');
-            }
-          } catch (error) {
-            clearTimeout(timeoutId);
-            console.log('⚠️ Auth verification failed, clearing tokens:', error.message);
-            adminApi.removeToken();
-            dispatch({ 
-              type: ADMIN_ACTION_TYPES.AUTH_CHECK_FAILURE, 
-              payload: 'Authentication verification failed' 
-            });
-          }
-        } else {
-          clearTimeout(timeoutId);
-          console.log('🔓 No stored authentication found');
-          dispatch({ 
-            type: ADMIN_ACTION_TYPES.AUTH_CHECK_FAILURE, 
-            payload: null 
+          // Set authentication immediately for faster UX
+          dispatch({
+            type: ADMIN_ACTION_TYPES.AUTH_CHECK_SUCCESS,
+            payload: storedAdmin,
           });
+          
+          console.log('✅ AdminContext: Authentication successful (stored)');
+          return;
         }
+        
+        // No stored auth found
+        console.log('🔓 AdminContext: No stored authentication found');
+        dispatch({ 
+          type: ADMIN_ACTION_TYPES.AUTH_CHECK_FAILURE, 
+          payload: null 
+        });
+        
       } catch (error) {
-        console.error('❌ Admin initialization error:', error);
+        console.error('❌ AdminContext: Authentication initialization error:', error);
         dispatch({ 
           type: ADMIN_ACTION_TYPES.AUTH_CHECK_FAILURE, 
           payload: error.message 
@@ -550,7 +530,7 @@ export const AdminProvider = ({ children }) => {
   };
 
   // =============================================
-  // CATEGORY ACTIONS - WITH FALLBACKS
+  // CATEGORY ACTIONS - ENHANCED
   // =============================================
 
   const loadCategories = async () => {
@@ -572,6 +552,106 @@ export const AdminProvider = ({ children }) => {
         type: ADMIN_ACTION_TYPES.SET_CATEGORIES,
         payload: [],
       });
+    }
+  };
+
+  const loadCategory = async (id) => {
+    try {
+      const response = await adminApi.getAdminCategory(id);
+      if (response.success) {
+        dispatch({
+          type: ADMIN_ACTION_TYPES.SET_CURRENT_CATEGORY,
+          payload: response.data,
+        });
+        return { success: true, data: response.data };
+      }
+    } catch (error) {
+      console.error('Load category error:', error);
+      return { success: false, error: error.message };
+    }
+  };
+
+  const createCategory = async (categoryData) => {
+    try {
+      const response = await adminApi.createCategory(categoryData);
+      
+      if (response.success) {
+        dispatch({
+          type: ADMIN_ACTION_TYPES.ADD_CATEGORY,
+          payload: response.data,
+        });
+        
+        addNotification({
+          type: 'success',
+          message: 'Category created successfully!',
+        });
+        
+        return { success: true, data: response.data };
+      }
+    } catch (error) {
+      console.error('Create category error:', error);
+      addNotification({
+        type: 'error',
+        message: error.message || 'Failed to create category',
+      });
+      
+      return { success: false, error: error.message };
+    }
+  };
+
+  const updateCategory = async (id, categoryData) => {
+    try {
+      const response = await adminApi.updateCategory(id, categoryData);
+      
+      if (response.success) {
+        dispatch({
+          type: ADMIN_ACTION_TYPES.UPDATE_CATEGORY,
+          payload: response.data,
+        });
+        
+        addNotification({
+          type: 'success',
+          message: 'Category updated successfully!',
+        });
+        
+        return { success: true, data: response.data };
+      }
+    } catch (error) {
+      console.error('Update category error:', error);
+      addNotification({
+        type: 'error',
+        message: error.message || 'Failed to update category',
+      });
+      
+      return { success: false, error: error.message };
+    }
+  };
+
+  const deleteCategory = async (id) => {
+    try {
+      const response = await adminApi.deleteCategory(id);
+      
+      if (response.success) {
+        dispatch({
+          type: ADMIN_ACTION_TYPES.DELETE_CATEGORY,
+          payload: id,
+        });
+        
+        addNotification({
+          type: 'success',
+          message: 'Category deleted successfully!',
+        });
+        
+        return { success: true };
+      }
+    } catch (error) {
+      console.error('Delete category error:', error);
+      addNotification({
+        type: 'error',
+        message: error.message || 'Failed to delete category',
+      });
+      
+      return { success: false, error: error.message };
     }
   };
 
@@ -602,6 +682,10 @@ export const AdminProvider = ({ children }) => {
     
     // Category actions
     loadCategories,
+    loadCategory,
+    createCategory,
+    updateCategory,
+    deleteCategory,
     
     // UI actions
     toggleSidebar,
