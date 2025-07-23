@@ -16,7 +16,12 @@ import {
   Filter,
   Grid3X3,
   List,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Shield,
+  Copy,
+  Archive,
+  Zap,
+  Clock
 } from 'lucide-react';
 
 const ProductList = () => {
@@ -37,10 +42,16 @@ const ProductList = () => {
   const [categories, setCategories] = useState([]);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [productToDelete, setProductToDelete] = useState(null);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const [viewMode, setViewMode] = useState('grid');
+  
+  // Bulk action states
+  const [bulkAction, setBulkAction] = useState('');
+  const [bulkActionLoading, setBulkActionLoading] = useState(false);
+  const [showBulkConfirm, setShowBulkConfirm] = useState(false);
+  
   const navigate = useNavigate();
-
   const limit = 12;
 
   // Utility functions
@@ -55,6 +66,7 @@ const ProductList = () => {
       active: { color: 'bg-emerald-100 text-emerald-700 border-emerald-200', text: 'Active', dot: 'bg-emerald-500' },
       inactive: { color: 'bg-red-100 text-red-700 border-red-200', text: 'Inactive', dot: 'bg-red-500' },
       draft: { color: 'bg-amber-100 text-amber-700 border-amber-200', text: 'Draft', dot: 'bg-amber-500' },
+      archived: { color: 'bg-gray-100 text-gray-700 border-gray-200', text: 'Archived', dot: 'bg-gray-500' },
       out_of_stock: { color: 'bg-gray-100 text-gray-700 border-gray-200', text: 'Out of Stock', dot: 'bg-gray-500' }
     };
     return configs[status?.toLowerCase()] || configs.draft;
@@ -141,7 +153,12 @@ const ProductList = () => {
     }
   };
 
+  // Enhanced delete with typed confirmation
   const handleDeleteProduct = async (productId) => {
+    if (deleteConfirmText.toLowerCase() !== 'delete permanently') {
+      return;
+    }
+
     try {
       const token = localStorage.getItem('adminToken');
       const response = await fetch(`/api/admin/products/${productId}`, {
@@ -155,13 +172,91 @@ const ProductList = () => {
         setSelectedProducts(selectedProducts.filter(id => id !== productId));
         setShowDeleteConfirm(false);
         setProductToDelete(null);
-        setSuccess('Product deleted successfully!');
+        setDeleteConfirmText('');
+        setSuccess('Product deleted permanently!');
         setTimeout(() => setSuccess(''), 4000);
       } else {
         setError(data.message || 'Failed to delete product');
       }
     } catch (error) {
       setError('Failed to delete product. Please try again.');
+    }
+  };
+
+  // Enhanced bulk actions
+  const handleBulkAction = async () => {
+    if (!bulkAction || selectedProducts.length === 0) return;
+
+    setBulkActionLoading(true);
+    try {
+      const token = localStorage.getItem('adminToken');
+      let updateData = {};
+
+      switch (bulkAction) {
+        case 'activate':
+          updateData = { status: 'active' };
+          break;
+        case 'deactivate':
+          updateData = { status: 'inactive' };
+          break;
+        case 'archive':
+          updateData = { status: 'archived' };
+          break;
+        case 'feature':
+          updateData = { isFeatured: true };
+          break;
+        case 'unfeature':
+          updateData = { isFeatured: false };
+          break;
+        case 'delete':
+          // Handle bulk delete
+          for (const productId of selectedProducts) {
+            await fetch(`/api/admin/products/${productId}`, {
+              method: 'DELETE',
+              headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
+            });
+          }
+          setProducts(products.filter(p => !selectedProducts.includes(p._id)));
+          setSelectedProducts([]);
+          setSuccess(`${selectedProducts.length} products deleted successfully!`);
+          setTimeout(() => setSuccess(''), 4000);
+          return;
+        default:
+          return;
+      }
+
+      // For non-delete bulk actions
+      const response = await fetch('/api/admin/products/bulk-update', {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          productIds: selectedProducts,
+          updateData
+        })
+      });
+
+      if (response.ok) {
+        // Update local state
+        setProducts(products.map(product => 
+          selectedProducts.includes(product._id) 
+            ? { ...product, ...updateData }
+            : product
+        ));
+        setSelectedProducts([]);
+        setBulkAction('');
+        setSuccess(`Bulk action applied to ${selectedProducts.length} products!`);
+        setTimeout(() => setSuccess(''), 4000);
+      } else {
+        throw new Error('Bulk update failed');
+      }
+    } catch (error) {
+      setError('Bulk action failed. Please try again.');
+    } finally {
+      setBulkActionLoading(false);
+      setShowBulkConfirm(false);
     }
   };
 
@@ -330,7 +425,7 @@ const ProductList = () => {
               <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
               <input
                 type="text"
-                placeholder="Search products..."
+                placeholder="Search products by name, brand, or description..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full pl-12 pr-4 py-4 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
@@ -356,6 +451,7 @@ const ProductList = () => {
                 <option value="active">Active</option>
                 <option value="inactive">Inactive</option>
                 <option value="draft">Draft</option>
+                <option value="archived">Archived</option>
               </select>
               <div className="flex bg-gray-50 rounded-xl border border-gray-200">
                 <button
@@ -384,10 +480,10 @@ const ProductList = () => {
           </div>
         </div>
 
-        {/* Bulk Actions */}
+        {/* Enhanced Bulk Actions */}
         {selectedProducts.length > 0 && (
           <div className="bg-gradient-to-r from-blue-50 to-blue-100 border border-blue-200 rounded-2xl p-6 mb-8 shadow-lg">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div className="flex items-center gap-4">
                 <CheckCircle className="w-8 h-8 text-blue-600" />
                 <div>
@@ -398,17 +494,33 @@ const ProductList = () => {
                 </div>
               </div>
               <div className="flex items-center gap-3">
-                <button
-                  onClick={() => {
-                    if (window.confirm(`Delete ${selectedProducts.length} selected products?`)) {
-                      selectedProducts.forEach(id => handleDeleteProduct(id));
-                    }
-                  }}
-                  className="flex items-center gap-2 px-6 py-3 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-all duration-200 font-medium"
+                <select
+                  value={bulkAction}
+                  onChange={(e) => setBulkAction(e.target.value)}
+                  className="py-2 px-3 border border-blue-200 rounded-lg bg-white text-sm min-w-[150px]"
                 >
-                  <Trash2 size={16} />
-                  Delete Selected
+                  <option value="">Choose action...</option>
+                  <option value="activate">✅ Activate</option>
+                  <option value="deactivate">❌ Deactivate</option>
+                  <option value="archive">📦 Archive</option>
+                  <option value="feature">⭐ Mark Featured</option>
+                  <option value="unfeature">Remove Featured</option>
+                  <option value="delete">🗑️ Delete</option>
+                </select>
+                
+                <button
+                  onClick={() => setShowBulkConfirm(true)}
+                  disabled={!bulkAction || bulkActionLoading}
+                  className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 font-medium"
+                >
+                  {bulkActionLoading ? (
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Zap className="w-4 h-4" />
+                  )}
+                  Apply Action
                 </button>
+                
                 <button
                   onClick={() => setSelectedProducts([])}
                   className="px-6 py-3 text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-all duration-200 font-medium"
@@ -442,7 +554,11 @@ const ProductList = () => {
                 const stockStatus = getStockStatus(product.stock, product.lowStockThreshold);
                 
                 return (
-                  <div key={product._id} className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden hover:shadow-xl transition-all duration-300">
+                  <div key={product._id} className={`bg-white rounded-2xl shadow-lg border overflow-hidden hover:shadow-xl transition-all duration-300 ${
+                    selectedProducts.includes(product._id) 
+                      ? 'border-blue-500 bg-blue-50 shadow-lg transform scale-105' 
+                      : 'border-gray-100 hover:border-gray-200 hover:-translate-y-1'
+                  }`}>
                     <div className="relative h-56 bg-gray-50">
                       {product.mainImage || product.product_image ? (
                         <img
@@ -456,10 +572,25 @@ const ProductList = () => {
                         </div>
                       )}
                       
-                      <div className="absolute top-4 left-4 flex flex-col gap-2">
+                      {/* Selection checkbox */}
+                      <div className="absolute top-4 left-4">
+                        <div className={`
+                          w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all duration-200 cursor-pointer
+                          ${selectedProducts.includes(product._id)
+                            ? 'bg-blue-600 border-blue-600' 
+                            : 'bg-white border-gray-300 hover:border-gray-400'
+                          }
+                        `} onClick={() => handleProductSelect(product._id)}>
+                          {selectedProducts.includes(product._id) && (
+                            <CheckCircle className="w-4 h-4 text-white" />
+                          )}
+                        </div>
+                      </div>
+                      
+                      <div className="absolute top-4 right-4 flex flex-col gap-2">
                         {product.isFeatured && (
-                          <span className="px-3 py-1 bg-yellow-500 text-white text-xs font-semibold rounded-full">
-                            <Star size={12} className="inline mr-1" />
+                          <span className="px-3 py-1 bg-yellow-500 text-white text-xs font-semibold rounded-full flex items-center gap-1">
+                            <Star size={12} className="fill-current" />
                             Featured
                           </span>
                         )}
@@ -470,18 +601,22 @@ const ProductList = () => {
                         )}
                       </div>
 
-                      <div className="absolute top-4 right-4">
-                        <input
-                          type="checkbox"
-                          checked={selectedProducts.includes(product._id)}
-                          onChange={() => handleProductSelect(product._id)}
-                          className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                        />
+                      {/* Stock status badge */}
+                      <div className="absolute bottom-4 right-4">
+                        <span className={`
+                          px-2 py-1 rounded-full text-xs font-medium
+                          ${stockStatus.level === 'good' ? 'bg-emerald-100 text-emerald-700' :
+                            stockStatus.level === 'warning' ? 'bg-amber-100 text-amber-700' :
+                            'bg-red-100 text-red-700'
+                          }
+                        `}>
+                          {stockStatus.text}
+                        </span>
                       </div>
                     </div>
 
                     <div className="p-6">
-                      <h3 className="text-lg font-bold text-gray-900 mb-2">{product.product_name}</h3>
+                      <h3 className="text-lg font-bold text-gray-900 mb-2 line-clamp-2">{product.product_name}</h3>
                       <p className="text-sm text-gray-500 mb-4">{product.category?.name || 'No category'}</p>
                       
                       <div className="mb-4">
@@ -517,6 +652,22 @@ const ProductList = () => {
                             style={{ width: `${Math.min((product.stock / (product.lowStockThreshold || 10)) * 100, 100)}%` }}
                           ></div>
                         </div>
+                      </div>
+
+                      <div className="mb-4">
+                        <span className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium ${statusConfig.color}`}>
+                          <div className={`w-2 h-2 rounded-full ${statusConfig.dot}`}></div>
+                          {statusConfig.text}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-2 text-xs text-gray-500 mb-4">
+                        <Clock className="w-3 h-3" />
+                        Created {new Date(product.createdAt).toLocaleDateString('en-KE', {
+                          year: 'numeric',
+                          month: 'short',
+                          day: 'numeric'
+                        })}
                       </div>
 
                       <div className="flex gap-2">
@@ -566,16 +717,17 @@ const ProductList = () => {
                       />
                     </th>
                     <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase">Product</th>
-                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase">Price</th>
+                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase">Price (KES)</th>
                     <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase">Stock</th>
                     <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase">Status</th>
+                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase">Created</th>
                     <th className="px-6 py-4 text-right text-xs font-bold text-gray-700 uppercase">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {products.length === 0 ? (
                     <tr>
-                      <td colSpan="6" className="px-6 py-20 text-center">
+                      <td colSpan="7" className="px-6 py-20 text-center">
                         <Package className="w-16 h-16 text-gray-400 mx-auto mb-4" />
                         <h3 className="text-lg font-bold text-gray-900 mb-2">No products found</h3>
                         <Link
@@ -593,7 +745,9 @@ const ProductList = () => {
                       const stockStatus = getStockStatus(product.stock, product.lowStockThreshold);
                       
                       return (
-                        <tr key={product._id} className="hover:bg-gray-50 transition-colors">
+                        <tr key={product._id} className={`hover:bg-gray-50 transition-colors ${
+                          selectedProducts.includes(product._id) ? 'bg-blue-50' : ''
+                        }`}>
                           <td className="px-6 py-4">
                             <input
                               type="checkbox"
@@ -617,34 +771,44 @@ const ProductList = () => {
                                   </div>
                                 )}
                               </div>
-                              <div>
-                                <h3 className="font-bold text-gray-900">{product.product_name}</h3>
-                                <p className="text-sm text-gray-600">{product.category?.name || 'No category'}</p>
+                              <div className="min-w-0 flex-1">
+                                <h3 className="font-bold text-gray-900 truncate">{product.product_name}</h3>
+                                <p className="text-sm text-gray-600 truncate">{product.product_brand} • {product.category?.name || 'No category'}</p>
+                                <div className="flex items-center gap-2 mt-1">
+                                  {product.isFeatured && (
+                                    <Star className="w-4 h-4 text-yellow-500 fill-current" />
+                                  )}
+                                  {product.isOnSale && (
+                                    <span className="px-2 py-0.5 bg-red-100 text-red-700 text-xs font-medium rounded-full">
+                                      Sale
+                                    </span>
+                                  )}
+                                </div>
                               </div>
                             </div>
                           </td>
                           <td className="px-6 py-4">
-                            {product.isOnSale && product.salePrice ? (
-                              <div>
-                                <span className="text-sm text-gray-500 line-through">
+                            <div className="text-sm">
+                              {product.isOnSale && product.salePrice ? (
+                                <>
+                                  <div className="font-semibold text-emerald-600">
+                                    {formatPrice(product.salePrice)}
+                                  </div>
+                                  <div className="text-gray-500 line-through">
+                                    {formatPrice(product.product_price)}
+                                  </div>
+                                </>
+                              ) : (
+                                <div className="font-semibold text-gray-900">
                                   {formatPrice(product.product_price)}
-                                </span>
-                              </div>
-                            ) : (
-                              <span className="text-lg font-bold text-gray-900">
-                                {formatPrice(product.product_price)}
-                              </span>
-                            )}
+                                </div>
+                              )}
+                            </div>
                           </td>
                           <td className="px-6 py-4">
-                            <div>
-                              <span className={`font-bold ${stockStatus.color}`}>
-                                {product.stock || 0}
-                              </span>
-                              <br />
-                              <span className={`text-xs ${stockStatus.color}`}>
-                                {stockStatus.text}
-                              </span>
+                            <div className="text-sm">
+                              <div className="font-semibold text-gray-900">{product.stock || 0}</div>
+                              <div className={`text-xs ${stockStatus.color}`}>{stockStatus.text}</div>
                             </div>
                           </td>
                           <td className="px-6 py-4">
@@ -653,17 +817,29 @@ const ProductList = () => {
                               {statusConfig.text}
                             </span>
                           </td>
+                          <td className="px-6 py-4 text-sm text-gray-600">
+                            <div className="flex items-center gap-1">
+                              <Clock className="w-4 h-4" />
+                              {new Date(product.createdAt).toLocaleDateString('en-KE', {
+                                year: 'numeric',
+                                month: 'short',
+                                day: 'numeric'
+                              })}
+                            </div>
+                          </td>
                           <td className="px-6 py-4 text-right">
                             <div className="flex items-center justify-end gap-2">
                               <Link
                                 to={`/admin/products/${product._id}`}
                                 className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                title="View details"
                               >
                                 <Eye size={16} />
                               </Link>
                               <Link
                                 to={`/admin/products/${product._id}/edit`}
                                 className="p-2 text-gray-600 hover:bg-gray-50 rounded-lg transition-colors"
+                                title="Edit product"
                               >
                                 <Edit size={16} />
                               </Link>
@@ -673,6 +849,7 @@ const ProductList = () => {
                                   setShowDeleteConfirm(true);
                                 }}
                                 className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                title="Delete product"
                               >
                                 <Trash2 size={16} />
                               </button>
@@ -742,43 +919,58 @@ const ProductList = () => {
         )}
       </div>
 
-      {/* Delete Confirmation Modal */}
+      {/* Enhanced Delete Confirmation Modal */}
       {showDeleteConfirm && productToDelete && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl">
             <div className="flex items-center gap-4 mb-6">
-              <div className="w-14 h-14 bg-red-100 rounded-2xl flex items-center justify-center">
-                <AlertTriangle className="w-7 h-7 text-red-600" />
+              <div className="w-16 h-16 bg-red-100 rounded-2xl flex items-center justify-center">
+                <Shield className="w-8 h-8 text-red-600" />
               </div>
               <div>
-                <h3 className="text-xl font-bold text-gray-900">Delete Product</h3>
-                <p className="text-gray-600 mt-1">This action cannot be undone</p>
+                <h3 className="text-xl font-bold text-gray-900">Permanent Deletion</h3>
+                <p className="text-red-600 font-medium mt-1">This action cannot be undone</p>
               </div>
             </div>
             
-            <div className="mb-8">
+            <div className="mb-6">
               <p className="text-gray-700 mb-4">
-                Are you sure you want to delete <strong>"{productToDelete.product_name}"</strong>?
+                You are about to permanently delete:
               </p>
-              <div className="bg-gray-50 rounded-2xl p-4">
+              <div className="bg-gray-50 rounded-2xl p-4 border-l-4 border-red-500">
                 <div className="flex items-center gap-3">
-                  {productToDelete.mainImage || productToDelete.product_image ? (
+                  {(productToDelete.mainImage || productToDelete.product_image) ? (
                     <img
                       src={productToDelete.mainImage || productToDelete.product_image}
                       alt={productToDelete.product_name}
-                      className="w-14 h-14 rounded-xl object-cover"
+                      className="w-12 h-12 object-cover rounded-lg"
                     />
                   ) : (
-                    <div className="w-14 h-14 rounded-xl bg-gray-200 flex items-center justify-center">
+                    <div className="w-12 h-12 bg-gray-200 rounded-lg flex items-center justify-center">
                       <Package size={20} className="text-gray-400" />
                     </div>
                   )}
                   <div>
                     <p className="font-semibold text-gray-900">{productToDelete.product_name}</p>
+                    <p className="text-sm text-gray-600">Stock: {productToDelete.stock || 0} units</p>
                     <p className="text-sm text-gray-600">{formatPrice(productToDelete.product_price)}</p>
                   </div>
                 </div>
               </div>
+            </div>
+
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Type <span className="bg-gray-100 px-2 py-1 rounded font-mono text-red-600">delete permanently</span> to confirm:
+              </label>
+              <input
+                type="text"
+                value={deleteConfirmText}
+                onChange={(e) => setDeleteConfirmText(e.target.value)}
+                placeholder="Type here..."
+                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                autoFocus
+              />
             </div>
             
             <div className="flex gap-3">
@@ -786,17 +978,76 @@ const ProductList = () => {
                 onClick={() => {
                   setShowDeleteConfirm(false);
                   setProductToDelete(null);
+                  setDeleteConfirmText('');
                 }}
-                className="flex-1 px-6 py-3 text-gray-700 border border-gray-300 rounded-xl hover:bg-gray-50 transition-all duration-200 font-medium"
+                className="flex-1 px-6 py-3 text-gray-700 border border-gray-300 rounded-xl hover:bg-gray-50 font-medium"
               >
                 Cancel
               </button>
               <button
                 onClick={() => handleDeleteProduct(productToDelete._id)}
-                className="flex-1 px-6 py-3 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-all duration-200 font-medium flex items-center justify-center gap-2"
+                disabled={deleteConfirmText.toLowerCase() !== 'delete permanently'}
+                className="flex-1 px-6 py-3 bg-red-600 text-white rounded-xl hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium flex items-center justify-center gap-2"
               >
                 <Trash2 size={16} />
-                Delete
+                Delete Forever
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Action Confirmation Modal */}
+      {showBulkConfirm && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl">
+            <div className="flex items-center gap-4 mb-6">
+              <div className="w-16 h-16 bg-blue-100 rounded-2xl flex items-center justify-center">
+                <Zap className="w-8 h-8 text-blue-600" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-gray-900">Bulk Action Confirmation</h3>
+                <p className="text-gray-600 mt-1">Apply action to selected products</p>
+              </div>
+            </div>
+            
+            <div className="mb-6">
+              <p className="text-gray-700 mb-4">
+                Are you sure you want to <strong>{bulkAction}</strong> {selectedProducts.length} selected product{selectedProducts.length > 1 ? 's' : ''}?
+              </p>
+              
+              {bulkAction === 'delete' && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                  <div className="flex items-center gap-2 text-red-700">
+                    <AlertTriangle className="w-5 h-5" />
+                    <span className="font-semibold">Warning: This action cannot be undone!</span>
+                  </div>
+                </div>
+              )}
+            </div>
+            
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowBulkConfirm(false)}
+                className="flex-1 px-6 py-3 text-gray-700 border border-gray-300 rounded-xl hover:bg-gray-50 font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleBulkAction}
+                disabled={bulkActionLoading}
+                className={`flex-1 px-6 py-3 text-white rounded-xl font-medium flex items-center justify-center gap-2 ${
+                  bulkAction === 'delete' 
+                    ? 'bg-red-600 hover:bg-red-700' 
+                    : 'bg-blue-600 hover:bg-blue-700'
+                } disabled:opacity-50`}
+              >
+                {bulkActionLoading ? (
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                ) : (
+                  <CheckCircle className="w-4 h-4" />
+                )}
+                Confirm Action
               </button>
             </div>
           </div>
@@ -835,4 +1086,4 @@ const ProductList = () => {
   );
 };
 
-export default ProductList
+export default ProductList;
