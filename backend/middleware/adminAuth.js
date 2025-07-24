@@ -1,4 +1,4 @@
-// backend/middleware/adminAuth.js
+// backend/middleware/adminAuth.js - COMPLETE DEBUG VERSION
 import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
 
@@ -11,26 +11,44 @@ export const protect = async (req, res, next) => {
     if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
       // Bearer token in Authorization header
       token = req.headers.authorization.split(' ')[1];
+      console.log('🔑 Token found in Authorization header');
     } else if (req.cookies && req.cookies.adminToken) {
       // Token in cookies
       token = req.cookies.adminToken;
+      console.log('🔑 Token found in cookies');
     }
 
     if (!token) {
+      console.log('❌ No token found');
       return res.status(401).json({
         success: false,
         message: 'Access denied. No token provided.'
       });
     }
 
+    console.log('🔑 Token preview:', token.substring(0, 20) + '...');
+    console.log('🔑 JWT_SECRET exists:', !!process.env.JWT_SECRET);
+
     try {
       // Verify token
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      console.log('✅ Token decoded successfully. User ID:', decoded.id);
 
       // Get user from database
       const user = await User.findById(decoded.id).select('-password');
+      console.log('👤 User found:', !!user);
+      
+      if (user) {
+        console.log('👤 User details:', {
+          id: user._id,
+          email: user.email,
+          role: user.role,
+          status: user.status
+        });
+      }
 
       if (!user) {
+        console.log('❌ User not found in database');
         return res.status(401).json({
           success: false,
           message: 'Invalid token. User not found.'
@@ -39,17 +57,20 @@ export const protect = async (req, res, next) => {
 
       // Check if user account is active
       if (user.status !== 'active') {
+        console.log('❌ User account not active. Status:', user.status);
         return res.status(401).json({
           success: false,
           message: 'Account is not active. Please contact administrator.'
         });
       }
 
+      console.log('✅ User authenticated successfully');
       // Add user to request object
       req.user = user;
       next();
 
     } catch (tokenError) {
+      console.log('❌ Token verification failed:', tokenError.message);
       return res.status(401).json({
         success: false,
         message: 'Invalid or expired token.'
@@ -69,22 +90,29 @@ export const protect = async (req, res, next) => {
 // Admin only access
 export const adminOnly = async (req, res, next) => {
   try {
+    console.log('🔐 AdminOnly middleware - checking user');
+    
     // User should already be attached by protect middleware
     if (!req.user) {
+      console.log('❌ No user attached to request');
       return res.status(401).json({
         success: false,
         message: 'Authentication required'
       });
     }
 
+    console.log('👤 User role:', req.user.role);
+
     // Check if user is admin
     if (req.user.role !== 'admin') {
+      console.log('❌ User is not admin. Role:', req.user.role);
       return res.status(403).json({
         success: false,
         message: 'Access denied. Admin privileges required.'
       });
     }
 
+    console.log('✅ Admin access granted');
     next();
 
   } catch (error) {

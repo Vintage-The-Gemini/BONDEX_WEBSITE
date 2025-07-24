@@ -96,7 +96,7 @@ class AdminApiService {
   }
 
   // =============================================
-  // AUTHENTICATION
+  // AUTHENTICATION - FIXED
   // =============================================
 
   async login(credentials) {
@@ -106,15 +106,38 @@ class AdminApiService {
         body: JSON.stringify(credentials),
       });
 
-      if (data.success && data.token) {
-        localStorage.setItem('adminToken', data.token);
-        localStorage.setItem('adminUser', JSON.stringify(data.admin || data.data));
-        this.adminToken = data.token;
-        console.log('✅ Login successful, token stored');
+      console.log('🔑 Full login response:', data);
+
+      if (data.success) {
+        // The backend response structure is: { success: true, data: { user: {...}, token: "..." } }
+        const token = data.data?.token || data.token; // Try both locations
+        const adminData = data.data?.user || data.admin || data.data;
+
+        console.log('🔑 Extracted token:', token);
+        console.log('👤 Extracted admin data:', adminData);
+
+        if (token) {
+          localStorage.setItem('adminToken', token);
+          localStorage.setItem('adminUser', JSON.stringify(adminData));
+          this.adminToken = token;
+          console.log('✅ Login successful, token stored in localStorage');
+          console.log('🔑 Stored token:', localStorage.getItem('adminToken'));
+          
+          // Verify token was stored
+          const storedToken = localStorage.getItem('adminToken');
+          if (storedToken !== token) {
+            console.error('❌ Token storage failed!');
+            throw new Error('Failed to store authentication token');
+          }
+        } else {
+          console.error('❌ No token found in response');
+          throw new Error('No authentication token received');
+        }
       }
 
       return data;
     } catch (error) {
+      console.error('❌ Login error:', error);
       throw new Error(error.message || 'Login failed');
     }
   }
@@ -142,6 +165,24 @@ class AdminApiService {
 
   async getProfile() {
     return this.makeRequest('/admin/profile');
+  }
+
+  // Check if user is authenticated
+  isAuthenticated() {
+    const token = localStorage.getItem('adminToken');
+    const user = localStorage.getItem('adminUser');
+    return !!(token && user);
+  }
+
+  // Get stored admin data
+  getStoredAdmin() {
+    try {
+      const adminData = localStorage.getItem('adminUser');
+      return adminData ? JSON.parse(adminData) : null;
+    } catch (error) {
+      console.error('Error parsing stored admin data:', error);
+      return null;
+    }
   }
 
   // =============================================
@@ -175,109 +216,47 @@ class AdminApiService {
   async getAdminProducts(params = {}) {
     try {
       const queryString = new URLSearchParams(params).toString();
-      const endpoint = `/products${queryString ? `?${queryString}` : ''}`;
+      const endpoint = `/admin/products${queryString ? `?${queryString}` : ''}`;
       return await this.makeRequest(endpoint);
     } catch (error) {
-      console.warn('Failed to fetch products, returning empty list:', error.message);
-      // Return empty data to prevent infinite loading
-      return {
-        success: true,
-        data: [],
-        pagination: {
-          currentPage: 1,
-          totalPages: 1,
-          totalProducts: 0,
-          hasNextPage: false,
-          hasPrevPage: false
-        }
-      };
-    }
-  }
-
-  async getAdminProduct(id) {
-    try {
-      return await this.makeRequest(`/products/${id}`);
-    } catch (error) {
-      console.warn(`Failed to fetch product ${id}:`, error.message);
-      // Return mock product to prevent loading issues
-      return {
-        success: true,
-        data: {
-          _id: id,
-          product_name: 'Sample Product',
-          product_description: 'Sample product description',
-          product_brand: 'Sample Brand',
-          category: '1',
-          product_price: 1000,
-          stock: 10,
-          status: 'active',
-          isOnSale: false,
-          isFeatured: false,
-          tags: [],
-          features: [],
-          specifications: {},
-          images: [],
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        }
-      };
-    }
-  }
-
-  async createProduct(productData) {
-    console.log('🆕 Creating product with data:', productData);
-    
-    // Check if it's FormData (file upload)
-    const isFormData = productData instanceof FormData;
-    
-    return this.makeRequest('/products', {
-      method: 'POST',
-      body: isFormData ? productData : JSON.stringify(productData),
-      ...(isFormData && { isMultipart: true }),
-    });
-  }
-
-  async updateProduct(id, productData) {
-    console.log('🔄 AdminAPI: Updating product', id, 'with data:', productData);
-    
-    try {
-      // Check if it's FormData (file upload)
-      const isFormData = productData instanceof FormData;
-      
-      // Use the correct endpoint that matches backend routes
-      const response = await this.makeRequest(`/products/${id}`, {
-        method: 'PUT',
-        body: isFormData ? productData : JSON.stringify(productData),
-        ...(isFormData && { isMultipart: true }),
-      });
-
-      console.log('✅ AdminAPI: Product update response:', response);
-      return response;
-      
-    } catch (error) {
-      console.error('❌ AdminAPI: Product update failed:', error);
+      console.error('Error fetching admin products:', error);
       throw error;
     }
   }
 
-  async deleteProduct(id) {
-    return this.makeRequest(`/products/${id}`, {
-      method: 'DELETE',
-    });
+  async createProduct(productData) {
+    try {
+      return await this.makeRequest('/admin/products', {
+        method: 'POST',
+        body: JSON.stringify(productData),
+      });
+    } catch (error) {
+      console.error('Error creating product:', error);
+      throw error;
+    }
   }
 
-  async updateProductStatus(id, status) {
-    return this.makeRequest(`/products/${id}/status`, {
-      method: 'PATCH',
-      body: JSON.stringify({ status }),
-    });
+  async updateProduct(productId, productData) {
+    try {
+      return await this.makeRequest(`/admin/products/${productId}`, {
+        method: 'PUT',
+        body: JSON.stringify(productData),
+      });
+    } catch (error) {
+      console.error('Error updating product:', error);
+      throw error;
+    }
   }
 
-  async bulkUpdateProducts(productIds, updateData) {
-    return this.makeRequest('/products/bulk-update', {
-      method: 'PATCH',
-      body: JSON.stringify({ productIds, updateData }),
-    });
+  async deleteProduct(productId) {
+    try {
+      return await this.makeRequest(`/admin/products/${productId}`, {
+        method: 'DELETE',
+      });
+    } catch (error) {
+      console.error('Error deleting product:', error);
+      throw error;
+    }
   }
 
   // =============================================
@@ -287,151 +266,173 @@ class AdminApiService {
   async getAdminCategories(params = {}) {
     try {
       const queryString = new URLSearchParams(params).toString();
-      const endpoint = `/categories${queryString ? `?${queryString}` : ''}`;
+      const endpoint = `/admin/categories${queryString ? `?${queryString}` : ''}`;
       return await this.makeRequest(endpoint);
     } catch (error) {
-      console.warn('Failed to fetch categories, returning mock data:', error.message);
-      // Return mock categories to prevent loading issues
-      return {
-        success: true,
-        data: [
-          {
-            _id: '1',
-            name: 'Head Protection',
-            description: 'Safety helmets and hard hats',
-            type: 'safety',
-            icon: '⛑️',
-            status: 'active',
-            isFeatured: true
-          },
-          {
-            _id: '2',
-            name: 'Eye Protection',
-            description: 'Safety glasses and goggles',
-            type: 'safety',
-            icon: '👁️',
-            status: 'active',
-            isFeatured: true
-          }
-        ],
-        count: 2
-      };
+      console.error('Error fetching admin categories:', error);
+      throw error;
     }
-  }
-
-  async getAdminCategory(id) {
-    return this.makeRequest(`/categories/${id}`);
   }
 
   async createCategory(categoryData) {
-    const isFormData = categoryData instanceof FormData;
-    
-    return this.makeRequest('/categories', {
-      method: 'POST',
-      body: isFormData ? categoryData : JSON.stringify(categoryData),
-      ...(isFormData && { isMultipart: true }),
-    });
-  }
-
-  async updateCategory(id, categoryData) {
-    const isFormData = categoryData instanceof FormData;
-    
-    return this.makeRequest(`/categories/${id}`, {
-      method: 'PUT',
-      body: isFormData ? categoryData : JSON.stringify(categoryData),
-      ...(isFormData && { isMultipart: true }),
-    });
-  }
-
-  async deleteCategory(id) {
-    return this.makeRequest(`/categories/${id}`, {
-      method: 'DELETE',
-    });
-  }
-
-  // =============================================
-  // UTILITY METHODS
-  // =============================================
-
-  async uploadImage(file) {
-    const formData = new FormData();
-    formData.append('image', file);
-
-    return this.makeRequest('/upload/image', {
-      method: 'POST',
-      body: formData,
-      isMultipart: true,
-    });
-  }
-
-  async healthCheck() {
     try {
-      return await this.makeRequest('/health');
+      return await this.makeRequest('/admin/categories', {
+        method: 'POST',
+        body: JSON.stringify(categoryData),
+      });
     } catch (error) {
-      console.warn('Health check failed:', error.message);
-      return {
-        success: false,
-        message: 'Backend server is not responding',
-        error: error.message
-      };
+      console.error('Error creating category:', error);
+      throw error;
     }
   }
 
-  // Test connection with better error handling
-  isAuthenticated() {
-    const token = localStorage.getItem('adminToken');
-    const user = localStorage.getItem('adminUser');
-    return !!(token && user);
-  }
-
-  getStoredAdmin() {
+  async updateCategory(categoryId, categoryData) {
     try {
-      const admin = localStorage.getItem('adminUser');
-      return admin ? JSON.parse(admin) : null;
+      return await this.makeRequest(`/admin/categories/${categoryId}`, {
+        method: 'PUT',
+        body: JSON.stringify(categoryData),
+      });
     } catch (error) {
-      console.error('Error parsing stored admin data:', error);
-      localStorage.removeItem('adminUser');
-      return null;
+      console.error('Error updating category:', error);
+      throw error;
     }
   }
 
-  // Remove tokens (for cleanup)
-  removeToken() {
-    localStorage.removeItem('adminToken');
-    localStorage.removeItem('adminUser');
-    this.adminToken = null;
+  async deleteCategory(categoryId) {
+    try {
+      return await this.makeRequest(`/admin/categories/${categoryId}`, {
+        method: 'DELETE',
+      });
+    } catch (error) {
+      console.error('Error deleting category:', error);
+      throw error;
+    }
   }
 
   // =============================================
-  // UTILITY METHODS
+  // ORDER MANAGEMENT
   // =============================================
 
-  // Format currency in KES
-  formatCurrency(amount) {
-    if (!amount && amount !== 0) return 'KES 0';
-    const numAmount = parseFloat(amount);
-    return new Intl.NumberFormat('en-KE', {
-      style: 'currency',
-      currency: 'KES',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 2
-    }).format(numAmount);
+  async getOrders(params = {}) {
+    try {
+      const queryString = new URLSearchParams(params).toString();
+      const endpoint = `/orders${queryString ? `?${queryString}` : ''}`;
+      return await this.makeRequest(endpoint);
+    } catch (error) {
+      console.error('Error fetching orders:', error);
+      throw error;
+    }
   }
 
-  // Format date
-  formatDate(date) {
-    if (!date) return '';
-    return new Date(date).toLocaleDateString('en-KE', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
-    });
+  async getOrder(orderId) {
+    try {
+      return await this.makeRequest(`/orders/${orderId}`);
+    } catch (error) {
+      console.error('Error fetching order:', error);
+      throw error;
+    }
+  }
+
+  async updateOrderStatus(orderId, status, note) {
+    try {
+      return await this.makeRequest(`/orders/${orderId}/status`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status, note }),
+      });
+    } catch (error) {
+      console.error('Error updating order status:', error);
+      throw error;
+    }
+  }
+
+  async addTrackingInfo(orderId, trackingNumber, carrier) {
+    try {
+      return await this.makeRequest(`/orders/${orderId}/tracking`, {
+        method: 'PATCH',
+        body: JSON.stringify({ trackingNumber, carrier }),
+      });
+    } catch (error) {
+      console.error('Error adding tracking info:', error);
+      throw error;
+    }
+  }
+
+  async processRefund(orderId, amount, reason) {
+    try {
+      return await this.makeRequest(`/orders/${orderId}/refund`, {
+        method: 'POST',
+        body: JSON.stringify({ amount, reason }),
+      });
+    } catch (error) {
+      console.error('Error processing refund:', error);
+      throw error;
+    }
+  }
+
+  async getOrderStats(params = {}) {
+    try {
+      const queryString = new URLSearchParams(params).toString();
+      const endpoint = `/orders/stats${queryString ? `?${queryString}` : ''}`;
+      return await this.makeRequest(endpoint);
+    } catch (error) {
+      console.error('Error fetching order stats:', error);
+      throw error;
+    }
+  }
+
+  async exportOrders(params = {}) {
+    try {
+      const queryString = new URLSearchParams(params).toString();
+      const endpoint = `/orders/export${queryString ? `?${queryString}` : ''}`;
+      return await this.makeRequest(endpoint);
+    } catch (error) {
+      console.error('Error exporting orders:', error);
+      throw error;
+    }
+  }
+
+  // =============================================
+  // FILE UPLOAD
+  // =============================================
+
+  async uploadFile(file, type = 'product') {
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('type', type);
+
+      return await this.makeRequest('/upload', {
+        method: 'POST',
+        body: formData,
+        isMultipart: true,
+      });
+    } catch (error) {
+      console.error('Error uploading file:', error);
+      throw error;
+    }
+  }
+
+  async uploadMultipleFiles(files, type = 'product') {
+    try {
+      const formData = new FormData();
+      
+      for (let i = 0; i < files.length; i++) {
+        formData.append('files', files[i]);
+      }
+      formData.append('type', type);
+
+      return await this.makeRequest('/upload/multiple', {
+        method: 'POST',
+        body: formData,
+        isMultipart: true,
+      });
+    } catch (error) {
+      console.error('Error uploading files:', error);
+      throw error;
+    }
   }
 }
 
-// Create and export singleton instance
+// Create and export a singleton instance
 const adminApi = new AdminApiService();
 export default adminApi;
-
-// Also export the class for testing
-export { AdminApiService };

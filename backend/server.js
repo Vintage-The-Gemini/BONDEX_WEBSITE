@@ -29,6 +29,7 @@ import categoryRoutes from './routes/categoryRoutes.js';
 import adminRoutes from './routes/adminRoutes.js';
 import adminProductRoutes from './routes/adminProductRoutes.js';
 import debugRoutes from './routes/debugRoutes.js';
+import orderRoutes from './routes/orderRoutes.js';
 
 // Import error handlers
 import { notFound, errorHandler } from './middleware/errorHandler.js';
@@ -210,6 +211,13 @@ try {
 }
 
 try {
+  app.use('/api/orders', orderRoutes);
+  console.log('✅ Order routes registered at /api/orders');
+} catch (error) {
+  console.error('❌ Error registering order routes:', error.message);
+}
+
+try {
   app.use('/api/upload', uploadRoutes);
   console.log('✅ Upload routes registered at /api/upload');
 } catch (error) {
@@ -246,6 +254,10 @@ app.use('/api/*', (req, res) => {
       'GET /api/test',
       'GET /api/categories',
       'GET /api/products',
+      'POST /api/orders',
+      'GET /api/orders (requires admin auth)',
+      'GET /api/orders/stats (requires admin auth)',
+      'GET /api/orders/recent (requires admin auth)',
       'POST /api/admin/login',
       'GET /api/admin/products (requires auth)',
       'GET /api/admin/dashboard (requires auth)',
@@ -329,17 +341,19 @@ const server = app.listen(PORT, () => {
    ${process.env.NODE_ENV === 'development' ? '2️⃣ Debug routes (DEV ONLY)' : ''}
    3️⃣ Categories: /api/categories
    4️⃣ Products: /api/products
-   5️⃣ Upload: /api/upload
-   6️⃣ Admin: /api/admin
-   7️⃣ Admin Products: /api/admin/products
-   8️⃣ API 404 handler
-   9️⃣ Static files (production) / React catch-all
+   5️⃣ Orders: /api/orders
+   6️⃣ Upload: /api/upload
+   7️⃣ Admin: /api/admin
+   8️⃣ Admin Products: /api/admin/products
+   9️⃣ API 404 handler
+   🔟 Static files (production) / React catch-all
 
 📋 Test these API endpoints:
    ✅ http://localhost:${PORT}/api/health
    ✅ http://localhost:${PORT}/api/test
    ✅ http://localhost:${PORT}/api/categories
    ✅ http://localhost:${PORT}/api/products
+   ✅ http://localhost:${PORT}/api/orders (admin auth required)
    ${process.env.NODE_ENV === 'development' ? `✅ http://localhost:${PORT}/api/debug/database` : ''}
    ${process.env.NODE_ENV === 'development' ? `✅ http://localhost:${PORT}/api/debug/products` : ''}
 
@@ -347,6 +361,16 @@ const server = app.listen(PORT, () => {
    🛡️  POST http://localhost:${PORT}/api/admin/login
    🛡️  GET http://localhost:${PORT}/api/admin/products
    🛡️  GET http://localhost:${PORT}/api/admin/dashboard
+   🛡️  GET http://localhost:${PORT}/api/orders
+   🛡️  GET http://localhost:${PORT}/api/orders/stats
+   🛡️  GET http://localhost:${PORT}/api/orders/recent
+
+💡 Order Management Features:
+   📦 Create orders (public)
+   📋 List orders with filtering (admin)
+   📊 Order statistics (admin)
+   🚚 Track orders (admin)
+   💰 Process refunds (admin)
 
 💡 Debugging tips:
    - Check browser network tab for 401/403 errors

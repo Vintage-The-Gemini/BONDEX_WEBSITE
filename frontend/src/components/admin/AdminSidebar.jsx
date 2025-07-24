@@ -91,8 +91,8 @@ const AdminSidebar = () => {
           name: 'Orders',
           href: '/admin/orders',
           icon: ShoppingCart,
-          badge: '3', // Dynamic badge for pending orders
-          disabled: true // Will enable when orders are built
+          badge: null, // You can add dynamic badge later
+          disabled: false // CHANGED: Enable orders now that backend is ready
         },
         {
           name: 'Customers',
@@ -282,43 +282,47 @@ const AdminSidebar = () => {
         <div className="p-4 border-t border-gray-800">
           {sidebarOpen ? (
             <div className="space-y-3">
-              {/* Admin Info */}
-              <div className="flex items-center space-x-3 px-3 py-2 rounded-lg bg-gray-800">
-                <div className="w-8 h-8 bg-yellow-500 rounded-full flex items-center justify-center">
-                  <User className="h-4 w-4 text-gray-900" />
+              {/* Admin Profile Info */}
+              <div className="flex items-center space-x-3 px-2 py-1">
+                <div className="w-8 h-8 bg-gray-700 rounded-full flex items-center justify-center">
+                  <User className="h-4 w-4" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-white truncate">
                     {admin?.name || 'Admin User'}
                   </p>
                   <p className="text-xs text-gray-400 truncate">
-                    {admin?.email || 'admin@bondex.co.ke'}
+                    {admin?.email || 'admin@bondex.com'}
                   </p>
                 </div>
               </div>
-              
+
               {/* Logout Button */}
               <button
                 onClick={handleLogout}
-                className="w-full flex items-center px-3 py-2 text-sm text-red-400 hover:bg-gray-800 rounded-lg transition-colors"
+                className="w-full flex items-center px-3 py-2 text-sm text-gray-300 hover:bg-gray-800 hover:text-white rounded-lg transition-colors group"
               >
                 <LogOut className="h-4 w-4 mr-3" />
-                Logout
+                <span>Logout</span>
               </button>
             </div>
           ) : (
-            <div className="space-y-2">
-              <div className="flex justify-center">
-                <div className="w-8 h-8 bg-yellow-500 rounded-full flex items-center justify-center">
-                  <User className="h-4 w-4 text-gray-900" />
+            <div className="flex flex-col space-y-2">
+              {/* Collapsed Admin Avatar */}
+              <div className="w-8 h-8 bg-gray-700 rounded-full flex items-center justify-center mx-auto group relative">
+                <User className="h-4 w-4" />
+                <div className="absolute left-12 bg-gray-800 text-white px-2 py-1 rounded text-sm opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
+                  {admin?.name || 'Admin User'}
                 </div>
               </div>
+
+              {/* Collapsed Logout Button */}
               <button
                 onClick={handleLogout}
-                className="w-full flex justify-center p-2 text-red-400 hover:bg-gray-800 rounded-lg transition-colors group"
+                className="w-8 h-8 flex items-center justify-center hover:bg-gray-800 rounded-lg transition-colors group relative mx-auto"
               >
-                <LogOut className="h-4 w-4" />
-                <div className="absolute left-16 bg-gray-800 text-white px-2 py-1 rounded text-sm opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
+                <LogOut className="h-4 w-4 text-gray-300 group-hover:text-white" />
+                <div className="absolute left-12 bg-gray-800 text-white px-2 py-1 rounded text-sm opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
                   Logout
                 </div>
               </button>
