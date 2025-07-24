@@ -1,6 +1,7 @@
 // frontend/src/context/AdminContext.jsx
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
 import adminApi from '../services/adminApi';
+import { cleanInvalidTokens, getTokenInfo } from '../utils/tokenValidator';
 
 // Initial state
 const initialState = {
@@ -8,8 +9,8 @@ const initialState = {
   isAuthenticated: false,
   admin: null,
   token: null,
-  loading: false, // CHANGED: Start with false to prevent infinite loading
-  authChecked: false, // NEW: Track if auth has been checked
+  loading: false,
+  authChecked: false,
   
   // Dashboard data
   dashboardStats: null,
@@ -138,16 +139,6 @@ const adminReducer = (state, action) => {
     case ADMIN_ACTION_TYPES.LOGOUT:
       return {
         ...initialState,
-        loading: false,
-        authChecked: true,
-      };
-      
-    case ADMIN_ACTION_TYPES.LOAD_ADMIN:
-      return {
-        ...state,
-        isAuthenticated: true,
-        admin: action.payload,
-        loading: false,
         authChecked: true,
       };
       
@@ -168,8 +159,8 @@ const adminReducer = (state, action) => {
     case ADMIN_ACTION_TYPES.SET_PRODUCTS:
       return {
         ...state,
-        products: action.payload.products || [],
-        productsTotalCount: action.payload.totalCount || 0,
+        products: action.payload.products,
+        productsTotalCount: action.payload.totalCount,
         productsLoading: false,
       };
       
@@ -189,7 +180,7 @@ const adminReducer = (state, action) => {
     case ADMIN_ACTION_TYPES.UPDATE_PRODUCT:
       return {
         ...state,
-        products: state.products.map(product =>
+        products: state.products.map(product => 
           product._id === action.payload._id ? action.payload : product
         ),
         currentProduct: state.currentProduct?._id === action.payload._id 
@@ -201,10 +192,10 @@ const adminReducer = (state, action) => {
       return {
         ...state,
         products: state.products.filter(product => product._id !== action.payload),
-        productsTotalCount: state.productsTotalCount - 1,
         currentProduct: state.currentProduct?._id === action.payload 
           ? null 
           : state.currentProduct,
+        productsTotalCount: Math.max(0, state.productsTotalCount - 1),
       };
       
     // Category cases
@@ -217,7 +208,7 @@ const adminReducer = (state, action) => {
     case ADMIN_ACTION_TYPES.SET_CATEGORIES:
       return {
         ...state,
-        categories: action.payload || [],
+        categories: action.payload,
         categoriesLoading: false,
       };
       
@@ -236,7 +227,7 @@ const adminReducer = (state, action) => {
     case ADMIN_ACTION_TYPES.UPDATE_CATEGORY:
       return {
         ...state,
-        categories: state.categories.map(category =>
+        categories: state.categories.map(category => 
           category._id === action.payload._id ? action.payload : category
         ),
         currentCategory: state.currentCategory?._id === action.payload._id 
@@ -299,7 +290,7 @@ const AdminContext = createContext();
 export const AdminProvider = ({ children }) => {
   const [state, dispatch] = useReducer(adminReducer, initialState);
 
-  // Initialize admin on app load - WITH TIMEOUT AND BETTER HANDLING
+  // Initialize admin on app load with better token validation
   useEffect(() => {
     const initializeAdmin = async () => {
       console.log('🔄 AdminContext: Starting authentication check...');
@@ -307,23 +298,44 @@ export const AdminProvider = ({ children }) => {
       try {
         dispatch({ type: ADMIN_ACTION_TYPES.AUTH_CHECK_START });
         
-        // Check for stored authentication first
-        if (adminApi.isAuthenticated()) {
-          const storedAdmin = adminApi.getStoredAdmin();
-          console.log('🔐 Found stored authentication:', storedAdmin);
-          
-          // Set authentication immediately for faster UX
-          dispatch({
-            type: ADMIN_ACTION_TYPES.AUTH_CHECK_SUCCESS,
-            payload: storedAdmin,
-          });
-          
-          console.log('✅ AdminContext: Authentication successful (stored)');
-          return;
+        // First, check and clean any invalid tokens
+        const tokensWereCleaned = cleanInvalidTokens();
+        if (tokensWereCleaned) {
+          console.log('🧹 Expired tokens were cleaned from localStorage');
         }
         
-        // No stored auth found
-        console.log('🔓 AdminContext: No stored authentication found');
+        // Get current token info for debugging
+        const tokenInfo = getTokenInfo();
+        console.log('🔍 Current token info:', tokenInfo);
+        
+        // Check if we have valid stored authentication
+        if (adminApi.isAuthenticated() && tokenInfo.isValid) {
+          const storedAdmin = adminApi.getStoredAdmin();
+          console.log('🔐 Found valid stored authentication:', storedAdmin);
+          
+          // Verify the token is still valid with backend by making a test call
+          try {
+            console.log('🔍 Verifying token with backend...');
+            const profileResponse = await adminApi.getProfile();
+            
+            if (profileResponse.success) {
+              console.log('✅ Token verified with backend successfully');
+              dispatch({
+                type: ADMIN_ACTION_TYPES.AUTH_CHECK_SUCCESS,
+                payload: storedAdmin,
+              });
+              return;
+            }
+          } catch (verifyError) {
+            console.log('❌ Token verification failed:', verifyError.message);
+            // Token is invalid, clear it and continue to failure state
+            localStorage.removeItem('adminToken');
+            localStorage.removeItem('adminUser');
+          }
+        }
+        
+        // No valid auth found or token verification failed
+        console.log('🔓 AdminContext: No valid authentication found');
         dispatch({ 
           type: ADMIN_ACTION_TYPES.AUTH_CHECK_FAILURE, 
           payload: null 
@@ -380,8 +392,7 @@ export const AdminProvider = ({ children }) => {
       console.log('🔑 Login response received:', response);
       
       if (response.success) {
-        // Extract the correct data structure from your backend response
-        const adminData = response.data.user; // Backend sends { success: true, data: { user: {...}, token: "..." } }
+        const adminData = response.data.user;
         const token = response.data.token;
         
         console.log('✅ Login successful, admin data:', adminData);
@@ -397,7 +408,7 @@ export const AdminProvider = ({ children }) => {
         
         addNotification({
           type: 'success',
-          message: 'Login successful! Welcome back.',
+          message: 'Login successful! Welcome back.'
         });
         
         return { success: true, data: response };
@@ -436,6 +447,19 @@ export const AdminProvider = ({ children }) => {
     }
   };
 
+  // Force clear authentication (for debugging/manual reset)
+  const clearAuth = () => {
+    console.log('🧹 Manually clearing authentication...');
+    localStorage.removeItem('adminToken');
+    localStorage.removeItem('adminUser');
+    dispatch({ type: ADMIN_ACTION_TYPES.LOGOUT });
+    
+    addNotification({
+      type: 'info',
+      message: 'Authentication cleared. Please login again.',
+    });
+  };
+
   // =============================================
   // DASHBOARD ACTIONS
   // =============================================
@@ -456,7 +480,7 @@ export const AdminProvider = ({ children }) => {
   };
 
   // =============================================
-  // PRODUCT ACTIONS - WITH FALLBACKS
+  // PRODUCT ACTIONS
   // =============================================
 
   const loadProducts = async (params = {}) => {
@@ -481,6 +505,11 @@ export const AdminProvider = ({ children }) => {
         type: ADMIN_ACTION_TYPES.SET_PRODUCTS,
         payload: { products: [], totalCount: 0 },
       });
+      
+      // Handle authentication errors
+      if (error.message.includes('Invalid or expired token')) {
+        clearAuth();
+      }
     }
   };
 
@@ -496,13 +525,17 @@ export const AdminProvider = ({ children }) => {
       }
     } catch (error) {
       console.error('Load product error:', error);
+      
+      if (error.message.includes('Invalid or expired token')) {
+        clearAuth();
+      }
+      
       return { success: false, error: error.message };
     }
   };
 
   const updateProduct = async (id, productData) => {
     try {
-      console.log('🔄 AdminContext: Updating product', id);
       const response = await adminApi.updateProduct(id, productData);
       
       if (response.success) {
@@ -520,6 +553,11 @@ export const AdminProvider = ({ children }) => {
       }
     } catch (error) {
       console.error('Update product error:', error);
+      
+      if (error.message.includes('Invalid or expired token')) {
+        clearAuth();
+      }
+      
       addNotification({
         type: 'error',
         message: error.message || 'Failed to update product',
@@ -530,7 +568,7 @@ export const AdminProvider = ({ children }) => {
   };
 
   // =============================================
-  // CATEGORY ACTIONS - ENHANCED
+  // CATEGORY ACTIONS
   // =============================================
 
   const loadCategories = async () => {
@@ -552,6 +590,11 @@ export const AdminProvider = ({ children }) => {
         type: ADMIN_ACTION_TYPES.SET_CATEGORIES,
         payload: [],
       });
+      
+      // Handle authentication errors
+      if (error.message.includes('Invalid or expired token')) {
+        clearAuth();
+      }
     }
   };
 
@@ -567,6 +610,11 @@ export const AdminProvider = ({ children }) => {
       }
     } catch (error) {
       console.error('Load category error:', error);
+      
+      if (error.message.includes('Invalid or expired token')) {
+        clearAuth();
+      }
+      
       return { success: false, error: error.message };
     }
   };
@@ -590,6 +638,11 @@ export const AdminProvider = ({ children }) => {
       }
     } catch (error) {
       console.error('Create category error:', error);
+      
+      if (error.message.includes('Invalid or expired token')) {
+        clearAuth();
+      }
+      
       addNotification({
         type: 'error',
         message: error.message || 'Failed to create category',
@@ -618,6 +671,11 @@ export const AdminProvider = ({ children }) => {
       }
     } catch (error) {
       console.error('Update category error:', error);
+      
+      if (error.message.includes('Invalid or expired token')) {
+        clearAuth();
+      }
+      
       addNotification({
         type: 'error',
         message: error.message || 'Failed to update category',
@@ -646,6 +704,11 @@ export const AdminProvider = ({ children }) => {
       }
     } catch (error) {
       console.error('Delete category error:', error);
+      
+      if (error.message.includes('Invalid or expired token')) {
+        clearAuth();
+      }
+      
       addNotification({
         type: 'error',
         message: error.message || 'Failed to delete category',
@@ -671,6 +734,7 @@ export const AdminProvider = ({ children }) => {
     // Auth actions
     login,
     logout,
+    clearAuth, // NEW: Manual auth clearing
     
     // Dashboard actions
     loadDashboardStats,
@@ -697,6 +761,9 @@ export const AdminProvider = ({ children }) => {
     // Utility functions
     formatCurrency: adminApi.formatCurrency,
     formatDate: adminApi.formatDate,
+    
+    // Debug utilities
+    getTokenInfo, // NEW: For debugging
   };
 
   return (

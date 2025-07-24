@@ -19,7 +19,10 @@ import {
   Clock,
   Star,
   CheckCircle,
-  XCircle
+  XCircle,
+  ArrowUpRight,
+  ArrowDownRight,
+  Activity
 } from 'lucide-react';
 
 const AdminDashboard = () => {
@@ -32,104 +35,87 @@ const AdminDashboard = () => {
     loadProducts,
     loadCategories,
     products,
-    categories
+    categories,
+    addNotification
   } = useAdmin();
 
   const [loading, setLoading] = useState(true);
-  const [timeRange, setTimeRange] = useState('7d');
-  const [statsLoading, setStatsLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
-  // Load dashboard data
-  useEffect(() => {
-    const loadDashboardData = async () => {
-      setLoading(true);
-      try {
-        await Promise.all([
-          loadDashboardStats(),
-          loadProducts({ limit: 5 }),
-          loadCategories()
-        ]);
-      } catch (error) {
-        console.error('Error loading dashboard data:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadDashboardData();
-  }, []);
-
-  // Mock analytics data (replace with real API calls later)
-  const [analyticsData] = useState({
-    revenue: {
-      total: 125400,
-      change: 12.5,
-      trend: 'up'
-    },
-    orders: {
-      total: 156,
-      change: -3.2,
-      trend: 'down'
-    },
-    customers: {
-      total: 89,
-      change: 8.7,
-      trend: 'up'
-    },
-    products: {
-      total: products.length || 0,
-      change: 15.3,
-      trend: 'up'
-    },
-    topProducts: [
-      { id: 1, name: 'Safety Helmet Professional', sales: 45, revenue: 112500 },
-      { id: 2, name: 'Safety Goggles Clear', sales: 38, revenue: 45600 },
-      { id: 3, name: 'Work Gloves Heavy Duty', sales: 32, revenue: 25600 },
-      { id: 4, name: 'High-Vis Vest', sales: 28, revenue: 16800 },
-      { id: 5, name: 'Safety Boots Steel Toe', sales: 25, revenue: 87500 }
-    ],
-    recentOrders: [
-      { id: 'ORD-001', customer: 'John Construction Co.', amount: 15600, status: 'processing', date: new Date() },
-      { id: 'ORD-002', customer: 'Safety First Ltd.', amount: 8900, status: 'shipped', date: new Date(Date.now() - 86400000) },
-      { id: 'ORD-003', customer: 'Industrial Solutions', amount: 12400, status: 'delivered', date: new Date(Date.now() - 172800000) },
-      { id: 'ORD-004', customer: 'WorkSafe Inc.', amount: 6700, status: 'pending', date: new Date(Date.now() - 259200000) },
-      { id: 'ORD-005', customer: 'ProTech Equipment', amount: 9200, status: 'processing', date: new Date(Date.now() - 345600000) }
-    ],
-    lowStockProducts: [
-      { id: 1, name: 'Safety Helmet Professional', stock: 5, threshold: 10 },
-      { id: 2, name: 'Work Gloves Heavy Duty', stock: 3, threshold: 15 },
-      { id: 3, name: 'Safety Goggles Clear', stock: 8, threshold: 20 }
-    ]
-  });
-
-  // Refresh stats
-  const handleRefreshStats = async () => {
-    setStatsLoading(true);
+  // Load all dashboard data
+  const loadDashboardData = async (showRefreshingState = false) => {
     try {
-      await loadDashboardStats();
+      if (showRefreshingState) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
+
+      console.log('📊 Loading dashboard data...');
+      
+      // Load all dashboard data in parallel
+      await Promise.all([
+        loadDashboardStats(),
+        loadProducts({ limit: 5, sort: 'salesCount', order: 'desc' }),
+        loadCategories()
+      ]);
+
+      console.log('✅ Dashboard data loaded successfully');
+      
     } catch (error) {
-      console.error('Error refreshing stats:', error);
+      console.error('❌ Error loading dashboard data:', error);
+      addNotification({
+        type: 'error',
+        message: 'Failed to load dashboard data'
+      });
     } finally {
-      setStatsLoading(false);
+      setLoading(false);
+      setRefreshing(false);
     }
   };
 
-  // Get status color and icon
-  const getOrderStatus = (status) => {
-    const statusConfig = {
-      pending: { color: 'text-yellow-600 bg-yellow-100', icon: Clock },
-      processing: { color: 'text-blue-600 bg-blue-100', icon: RefreshCw },
-      shipped: { color: 'text-purple-600 bg-purple-100', icon: Package },
-      delivered: { color: 'text-green-600 bg-green-100', icon: CheckCircle },
-      cancelled: { color: 'text-red-600 bg-red-100', icon: XCircle }
-    };
-    return statusConfig[status] || statusConfig.pending;
+  // Initial load
+  useEffect(() => {
+    loadDashboardData();
+  }, []);
+
+  // Manual refresh
+  const handleRefresh = () => {
+    loadDashboardData(true);
+  };
+
+  // Calculate real statistics from loaded data
+  const realStats = {
+    products: {
+      total: products.length,
+      active: products.filter(p => p.status === 'active').length,
+      lowStock: products.filter(p => p.stock <= (p.lowStockThreshold || 10)).length,
+      featured: products.filter(p => p.isFeatured).length
+    },
+    categories: {
+      total: categories.length,
+      active: categories.filter(c => c.status === 'active').length,
+      featured: categories.filter(c => c.is_featured).length,
+      withProducts: categories.filter(c => c.productCount > 0).length
+    },
+    dashboard: dashboardStats || {
+      totalRevenue: 0,
+      totalOrders: 0,
+      recentOrders: [],
+      topProducts: []
+    }
   };
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-8 w-8 border-2 border-blue-600 border-t-transparent"></div>
+      <div className="p-6">
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="text-center">
+            <RefreshCw className="w-8 h-8 text-blue-600 mx-auto mb-4 animate-spin" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">Loading Dashboard</h3>
+            <p className="text-gray-600">Fetching latest statistics...</p>
+          </div>
+        </div>
       </div>
     );
   }
@@ -139,300 +125,483 @@ const AdminDashboard = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">
-            Welcome back, {admin?.name || 'Admin'}! 👋
-          </h1>
+          <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
           <p className="text-gray-600 mt-1">
-            Here's what's happening with your safety equipment store today.
+            Welcome back, {admin?.name || 'Admin'}! Here's your store overview.
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <select
-            value={timeRange}
-            onChange={(e) => setTimeRange(e.target.value)}
-            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          >
-            <option value="24h">Last 24 hours</option>
-            <option value="7d">Last 7 days</option>
-            <option value="30d">Last 30 days</option>
-            <option value="90d">Last 90 days</option>
-          </select>
           <button
-            onClick={handleRefreshStats}
-            disabled={statsLoading}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2 disabled:opacity-50"
+            onClick={handleRefresh}
+            disabled={refreshing}
+            className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 flex items-center gap-2 disabled:opacity-50"
           >
-            <RefreshCw className={`w-4 h-4 ${statsLoading ? 'animate-spin' : ''}`} />
-            Refresh
+            <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+            {refreshing ? 'Refreshing...' : 'Refresh'}
           </button>
+          <div className="text-sm text-gray-500">
+            Last updated: {formatDate(new Date(), { 
+              hour: '2-digit', 
+              minute: '2-digit' 
+            })}
+          </div>
         </div>
       </div>
 
-      {/* Stats Cards */}
+      {/* Main Statistics Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {/* Revenue */}
-        <div className="bg-white rounded-lg shadow p-6">
+        {/* Total Revenue */}
+        <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-600">Total Revenue</p>
               <p className="text-2xl font-bold text-gray-900">
-                {formatCurrency ? formatCurrency(analyticsData.revenue.total) : `KES ${analyticsData.revenue.total.toLocaleString()}`}
+                {formatCurrency(realStats.dashboard.totalRevenue)}
               </p>
+              <div className="flex items-center mt-2">
+                <TrendingUp className="w-4 h-4 text-green-500 mr-1" />
+                <span className="text-sm text-green-600">This month</span>
+              </div>
             </div>
             <div className="p-3 bg-green-100 rounded-full">
               <DollarSign className="w-6 h-6 text-green-600" />
             </div>
           </div>
-          <div className="mt-4 flex items-center">
-            {analyticsData.revenue.trend === 'up' ? (
-              <TrendingUp className="w-4 h-4 text-green-500 mr-1" />
-            ) : (
-              <TrendingDown className="w-4 h-4 text-red-500 mr-1" />
-            )}
-            <span className={`text-sm ${analyticsData.revenue.trend === 'up' ? 'text-green-600' : 'text-red-600'}`}>
-              {analyticsData.revenue.change > 0 ? '+' : ''}{analyticsData.revenue.change}%
-            </span>
-            <span className="text-sm text-gray-500 ml-1">vs last period</span>
-          </div>
         </div>
 
-        {/* Orders */}
-        <div className="bg-white rounded-lg shadow p-6">
+        {/* Total Orders */}
+        <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-600">Total Orders</p>
-              <p className="text-2xl font-bold text-gray-900">{analyticsData.orders.total}</p>
+              <p className="text-2xl font-bold text-gray-900">
+                {realStats.dashboard.totalOrders}
+              </p>
+              <div className="flex items-center mt-2">
+                <Activity className="w-4 h-4 text-blue-500 mr-1" />
+                <span className="text-sm text-blue-600">All time</span>
+              </div>
             </div>
             <div className="p-3 bg-blue-100 rounded-full">
               <ShoppingCart className="w-6 h-6 text-blue-600" />
             </div>
           </div>
-          <div className="mt-4 flex items-center">
-            {analyticsData.orders.trend === 'up' ? (
-              <TrendingUp className="w-4 h-4 text-green-500 mr-1" />
-            ) : (
-              <TrendingDown className="w-4 h-4 text-red-500 mr-1" />
-            )}
-            <span className={`text-sm ${analyticsData.orders.trend === 'up' ? 'text-green-600' : 'text-red-600'}`}>
-              {analyticsData.orders.change > 0 ? '+' : ''}{analyticsData.orders.change}%
-            </span>
-            <span className="text-sm text-gray-500 ml-1">vs last period</span>
-          </div>
         </div>
 
-        {/* Customers */}
-        <div className="bg-white rounded-lg shadow p-6">
+        {/* Total Products */}
+        <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">New Customers</p>
-              <p className="text-2xl font-bold text-gray-900">{analyticsData.customers.total}</p>
+              <p className="text-sm font-medium text-gray-600">Products</p>
+              <p className="text-2xl font-bold text-gray-900">
+                {realStats.products.total}
+              </p>
+              <div className="flex items-center mt-2">
+                <span className="text-sm text-gray-600">
+                  {realStats.products.active} active • {realStats.products.lowStock} low stock
+                </span>
+              </div>
             </div>
             <div className="p-3 bg-purple-100 rounded-full">
-              <Users className="w-6 h-6 text-purple-600" />
+              <Package className="w-6 h-6 text-purple-600" />
             </div>
-          </div>
-          <div className="mt-4 flex items-center">
-            {analyticsData.customers.trend === 'up' ? (
-              <TrendingUp className="w-4 h-4 text-green-500 mr-1" />
-            ) : (
-              <TrendingDown className="w-4 h-4 text-red-500 mr-1" />
-            )}
-            <span className={`text-sm ${analyticsData.customers.trend === 'up' ? 'text-green-600' : 'text-red-600'}`}>
-              {analyticsData.customers.change > 0 ? '+' : ''}{analyticsData.customers.change}%
-            </span>
-            <span className="text-sm text-gray-500 ml-1">vs last period</span>
           </div>
         </div>
 
-        {/* Products */}
-        <div className="bg-white rounded-lg shadow p-6">
+        {/* Total Categories */}
+        <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Total Products</p>
-              <p className="text-2xl font-bold text-gray-900">{categories.length || 0}</p>
+              <p className="text-sm font-medium text-gray-600">Categories</p>
+              <p className="text-2xl font-bold text-gray-900">
+                {realStats.categories.total}
+              </p>
+              <div className="flex items-center mt-2">
+                <span className="text-sm text-gray-600">
+                  {realStats.categories.withProducts} with products
+                </span>
+              </div>
             </div>
             <div className="p-3 bg-orange-100 rounded-full">
-              <Package className="w-6 h-6 text-orange-600" />
-            </div>
-          </div>
-          <div className="mt-4 flex items-center">
-            <FolderTree className="w-4 h-4 text-blue-500 mr-1" />
-            <span className="text-sm text-blue-600">{categories.length || 0} Categories</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Quick Actions */}
-      <div className="bg-white rounded-lg shadow p-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <Link
-            to="/admin/products/create"
-            className="flex items-center gap-3 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
-          >
-            <div className="p-2 bg-blue-100 rounded-lg">
-              <Plus className="w-5 h-5 text-blue-600" />
-            </div>
-            <div>
-              <p className="font-medium text-gray-900">Add Product</p>
-              <p className="text-sm text-gray-500">Create new product</p>
-            </div>
-          </Link>
-
-          <Link
-            to="/admin/categories/create"
-            className="flex items-center gap-3 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
-          >
-            <div className="p-2 bg-green-100 rounded-lg">
-              <FolderTree className="w-5 h-5 text-green-600" />
-            </div>
-            <div>
-              <p className="font-medium text-gray-900">Add Category</p>
-              <p className="text-sm text-gray-500">Create category</p>
-            </div>
-          </Link>
-
-          <Link
-            to="/admin/orders"
-            className="flex items-center gap-3 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
-          >
-            <div className="p-2 bg-purple-100 rounded-lg">
-              <ShoppingCart className="w-5 h-5 text-purple-600" />
-            </div>
-            <div>
-              <p className="font-medium text-gray-900">View Orders</p>
-              <p className="text-sm text-gray-500">Manage orders</p>
-            </div>
-          </Link>
-
-          <Link
-            to="/admin/analytics"
-            className="flex items-center gap-3 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
-          >
-            <div className="p-2 bg-orange-100 rounded-lg">
-              <BarChart3 className="w-5 h-5 text-orange-600" />
-            </div>
-            <div>
-              <p className="font-medium text-gray-900">Analytics</p>
-              <p className="text-sm text-gray-500">View reports</p>
-            </div>
-          </Link>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Recent Orders */}
-        <div className="bg-white rounded-lg shadow">
-          <div className="p-6 border-b border-gray-200">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-gray-900">Recent Orders</h2>
-              <Link
-                to="/admin/orders"
-                className="text-blue-600 hover:text-blue-700 text-sm font-medium flex items-center gap-1"
-              >
-                View All <Eye className="w-4 h-4" />
-              </Link>
-            </div>
-          </div>
-          <div className="p-6">
-            <div className="space-y-4">
-              {analyticsData.recentOrders.map((order) => {
-                const statusConfig = getOrderStatus(order.status);
-                const StatusIcon = statusConfig.icon;
-                
-                return (
-                  <div key={order.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
-                    <div className="flex items-center gap-3">
-                      <div className={`p-2 rounded-full ${statusConfig.color}`}>
-                        <StatusIcon className="w-4 h-4" />
-                      </div>
-                      <div>
-                        <p className="font-medium text-gray-900">{order.id}</p>
-                        <p className="text-sm text-gray-500">{order.customer}</p>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-medium text-gray-900">
-                        {formatCurrency ? formatCurrency(order.amount) : `KES ${order.amount.toLocaleString()}`}
-                      </p>
-                      <p className="text-sm text-gray-500 capitalize">{order.status}</p>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-
-        {/* Top Products */}
-        <div className="bg-white rounded-lg shadow">
-          <div className="p-6 border-b border-gray-200">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-gray-900">Top Products</h2>
-              <Link
-                to="/admin/products"
-                className="text-blue-600 hover:text-blue-700 text-sm font-medium flex items-center gap-1"
-              >
-                View All <Eye className="w-4 h-4" />
-              </Link>
-            </div>
-          </div>
-          <div className="p-6">
-            <div className="space-y-4">
-              {analyticsData.topProducts.map((product, index) => (
-                <div key={product.id} className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="flex items-center justify-center w-8 h-8 bg-gray-100 rounded-full">
-                      <span className="text-sm font-medium text-gray-600">#{index + 1}</span>
-                    </div>
-                    <div>
-                      <p className="font-medium text-gray-900">{product.name}</p>
-                      <p className="text-sm text-gray-500">{product.sales} sales</p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-medium text-gray-900">
-                      {formatCurrency ? formatCurrency(product.revenue) : `KES ${product.revenue.toLocaleString()}`}
-                    </p>
-                  </div>
-                </div>
-              ))}
+              <FolderTree className="w-6 h-6 text-orange-600" />
             </div>
           </div>
         </div>
       </div>
 
-      {/* Low Stock Alert */}
-      {analyticsData.lowStockProducts.length > 0 && (
-        <div className="bg-white rounded-lg shadow">
-          <div className="p-6 border-b border-gray-200">
-            <div className="flex items-center gap-2">
-              <AlertTriangle className="w-5 h-5 text-red-500" />
-              <h2 className="text-lg font-semibold text-gray-900">Low Stock Alert</h2>
-            </div>
-          </div>
-          <div className="p-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {analyticsData.lowStockProducts.map((product) => (
-                <div key={product.id} className="flex items-center justify-between p-4 bg-red-50 border border-red-200 rounded-lg">
-                  <div>
-                    <p className="font-medium text-gray-900">{product.name}</p>
-                    <p className="text-sm text-red-600">
-                      Only {product.stock} left (threshold: {product.threshold})
-                    </p>
-                  </div>
-                  <Link
-                    to={`/admin/products/${product.id}/edit`}
-                    className="px-3 py-1 bg-red-600 text-white text-sm rounded hover:bg-red-700"
-                  >
-                    Restock
-                  </Link>
-                </div>
-              ))}
+      {/* Alert Cards */}
+      {realStats.products.lowStock > 0 && (
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+          <div className="flex items-center">
+            <AlertTriangle className="w-5 h-5 text-yellow-600 mr-3" />
+            <div>
+              <h3 className="text-sm font-medium text-yellow-800">
+                Low Stock Alert
+              </h3>
+              <p className="text-sm text-yellow-700 mt-1">
+                {realStats.products.lowStock} products are running low on stock. 
+                <Link to="/admin/products?filter=lowstock" className="font-medium underline ml-1">
+                  View products
+                </Link>
+              </p>
             </div>
           </div>
         </div>
       )}
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Recent Products */}
+        <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
+          <div className="p-6 border-b border-gray-200">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-gray-900">Recent Products</h2>
+              <Link 
+                to="/admin/products"
+                className="text-blue-600 hover:text-blue-700 flex items-center gap-1 text-sm font-medium"
+              >
+                View all
+                <ArrowUpRight className="w-4 h-4" />
+              </Link>
+            </div>
+          </div>
+          <div className="p-6">
+            {products.length === 0 ? (
+              <div className="text-center py-8">
+                <Package className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-gray-900 mb-2">No Products Yet</h3>
+                <p className="text-gray-600 mb-4">Start by adding your first product to the store.</p>
+                <Link
+                  to="/admin/products/create"
+                  className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Product
+                </Link>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {products.slice(0, 5).map((product) => (
+                  <div key={product._id} className="flex items-center justify-between">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-10 h-10 bg-gray-200 rounded-lg flex items-center justify-center">
+                        {product.images && product.images[0] ? (
+                          <img 
+                            src={product.images[0]} 
+                            alt={product.product_name}
+                            className="w-10 h-10 object-cover rounded-lg"
+                          />
+                        ) : (
+                          <Package className="w-5 h-5 text-gray-400" />
+                        )}
+                      </div>
+                      <div>
+                        <p className="font-medium text-gray-900">
+                          {product.product_name}
+                        </p>
+                        <p className="text-sm text-gray-500">
+                          Stock: {product.stock || 0} • {formatCurrency(product.product_price)}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                        product.status === 'active' 
+                          ? 'bg-green-100 text-green-800' 
+                          : 'bg-gray-100 text-gray-800'
+                      }`}>
+                        {product.status}
+                      </span>
+                      <Link
+                        to={`/admin/products/${product._id}`}
+                        className="text-gray-400 hover:text-gray-600"
+                      >
+                        <Eye className="w-4 h-4" />
+                      </Link>
+                    </div>
+                  </div>
+                ))}
+                <div className="pt-4 border-t border-gray-200">
+                  <Link
+                    to="/admin/products"
+                    className="w-full flex items-center justify-center px-4 py-2 text-blue-600 border border-blue-600 rounded-lg hover:bg-blue-50"
+                  >
+                    View All Products ({realStats.products.total})
+                  </Link>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Categories Overview */}
+        <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
+          <div className="p-6 border-b border-gray-200">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-gray-900">Categories</h2>
+              <Link 
+                to="/admin/categories"
+                className="text-blue-600 hover:text-blue-700 flex items-center gap-1 text-sm font-medium"
+              >
+                Manage
+                <ArrowUpRight className="w-4 h-4" />
+              </Link>
+            </div>
+          </div>
+          <div className="p-6">
+            {categories.length === 0 ? (
+              <div className="text-center py-8">
+                <FolderTree className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-gray-900 mb-2">No Categories Yet</h3>
+                <p className="text-gray-600 mb-4">Organize your products by creating categories.</p>
+                <Link
+                  to="/admin/categories/create"
+                  className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Category
+                </Link>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {categories.slice(0, 5).map((category) => (
+                  <div key={category._id} className="flex items-center justify-between">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
+                        {category.icon ? (
+                          <span className="text-lg">{category.icon}</span>
+                        ) : (
+                          <FolderTree className="w-5 h-5 text-gray-400" />
+                        )}
+                      </div>
+                      <div>
+                        <p className="font-medium text-gray-900">{category.name}</p>
+                        <p className="text-sm text-gray-500">
+                          {category.productCount || 0} products
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      {category.is_featured && (
+                        <Star className="w-4 h-4 text-yellow-500" />
+                      )}
+                      <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                        category.status === 'active' 
+                          ? 'bg-green-100 text-green-800' 
+                          : 'bg-gray-100 text-gray-800'
+                      }`}>
+                        {category.status}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+                <div className="pt-4 border-t border-gray-200">
+                  <Link
+                    to="/admin/categories"
+                    className="w-full flex items-center justify-center px-4 py-2 text-blue-600 border border-blue-600 rounded-lg hover:bg-blue-50"
+                  >
+                    View All Categories ({realStats.categories.total})
+                  </Link>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Recent Orders Section */}
+      <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
+        <div className="p-6 border-b border-gray-200">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-gray-900">Recent Orders</h2>
+            <Link 
+              to="/admin/orders"
+              className="text-blue-600 hover:text-blue-700 flex items-center gap-1 text-sm font-medium"
+            >
+              View all
+              <ArrowUpRight className="w-4 h-4" />
+            </Link>
+          </div>
+        </div>
+        <div className="p-6">
+          {!realStats.dashboard.recentOrders || realStats.dashboard.recentOrders.length === 0 ? (
+            <div className="text-center py-8">
+              <ShoppingCart className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No Orders Yet</h3>
+              <p className="text-gray-600">Orders will appear here once customers start purchasing.</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="min-w-full">
+                <thead>
+                  <tr className="border-b border-gray-200">
+                    <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider py-3">
+                      Order
+                    </th>
+                    <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider py-3">
+                      Customer
+                    </th>
+                    <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider py-3">
+                      Status
+                    </th>
+                    <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider py-3">
+                      Total
+                    </th>
+                    <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider py-3">
+                      Date
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {realStats.dashboard.recentOrders.slice(0, 5).map((order) => (
+                    <tr key={order._id} className="hover:bg-gray-50">
+                      <td className="py-4">
+                        <div className="text-sm font-medium text-gray-900">
+                          #{order.orderNumber || order._id.slice(-8)}
+                        </div>
+                      </td>
+                      <td className="py-4">
+                        <div className="text-sm text-gray-900">
+                          {order.customer?.name || 'Guest Customer'}
+                        </div>
+                        <div className="text-sm text-gray-500">
+                          {order.customer?.email || order.email}
+                        </div>
+                      </td>
+                      <td className="py-4">
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                          order.status === 'delivered' ? 'bg-green-100 text-green-800' :
+                          order.status === 'shipped' ? 'bg-blue-100 text-blue-800' :
+                          order.status === 'processing' ? 'bg-yellow-100 text-yellow-800' :
+                          'bg-gray-100 text-gray-800'
+                        }`}>
+                          {order.status}
+                        </span>
+                      </td>
+                      <td className="py-4 text-sm font-medium text-gray-900">
+                        {formatCurrency(order.total)}
+                      </td>
+                      <td className="py-4 text-sm text-gray-500">
+                        {formatDate(order.createdAt)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Quick Actions */}
+      <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
+        <div className="p-6 border-b border-gray-200">
+          <h2 className="text-lg font-semibold text-gray-900">Quick Actions</h2>
+        </div>
+        <div className="p-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <Link
+              to="/admin/products/create"
+              className="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              <div className="p-2 bg-blue-100 rounded-lg mr-3">
+                <Plus className="w-5 h-5 text-blue-600" />
+              </div>
+              <div>
+                <p className="font-medium text-gray-900">Add Product</p>
+                <p className="text-sm text-gray-500">Create new product</p>
+              </div>
+            </Link>
+
+            <Link
+              to="/admin/categories/create"
+              className="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              <div className="p-2 bg-green-100 rounded-lg mr-3">
+                <FolderTree className="w-5 h-5 text-green-600" />
+              </div>
+              <div>
+                <p className="font-medium text-gray-900">Add Category</p>
+                <p className="text-sm text-gray-500">Create new category</p>
+              </div>
+            </Link>
+
+            <Link
+              to="/admin/orders"
+              className="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              <div className="p-2 bg-orange-100 rounded-lg mr-3">
+                <ShoppingCart className="w-5 h-5 text-orange-600" />
+              </div>
+              <div>
+                <p className="font-medium text-gray-900">Manage Orders</p>
+                <p className="text-sm text-gray-500">Process orders</p>
+              </div>
+            </Link>
+
+            <Link
+              to="/admin/products?filter=lowstock"
+              className="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              <div className="p-2 bg-red-100 rounded-lg mr-3">
+                <AlertTriangle className="w-5 h-5 text-red-600" />
+              </div>
+              <div>
+                <p className="font-medium text-gray-900">Low Stock</p>
+                <p className="text-sm text-gray-500">{realStats.products.lowStock} items</p>
+              </div>
+            </Link>
+          </div>
+        </div>
+      </div>
+
+      {/* Store Health Overview */}
+      <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
+        <div className="p-6 border-b border-gray-200">
+          <h2 className="text-lg font-semibold text-gray-900">Store Health</h2>
+        </div>
+        <div className="p-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* Products Health */}
+            <div className="text-center">
+              <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Package className="w-8 h-8 text-blue-600" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900">{realStats.products.total}</h3>
+              <p className="text-gray-600">Total Products</p>
+              <div className="mt-2 text-sm">
+                <span className="text-green-600">{realStats.products.active} active</span>
+                {realStats.products.lowStock > 0 && (
+                  <span className="text-red-600 ml-2">{realStats.products.lowStock} low stock</span>
+                )}
+              </div>
+            </div>
+
+            {/* Categories Health */}
+            <div className="text-center">
+              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <FolderTree className="w-8 h-8 text-green-600" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900">{realStats.categories.total}</h3>
+              <p className="text-gray-600">Categories</p>
+              <div className="mt-2 text-sm">
+                <span className="text-green-600">{realStats.categories.withProducts} with products</span>
+              </div>
+            </div>
+
+            {/* System Status */}
+            <div className="text-center">
+              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <CheckCircle className="w-8 h-8 text-green-600" />
+              </div>
+              <h3 className="text-lg font-semibold text-green-600">System Healthy</h3>
+              <p className="text-gray-600">All services running</p>
+              <div className="mt-2 text-sm text-gray-500">
+                Last updated: {formatDate(new Date(), { hour: '2-digit', minute: '2-digit' })}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 };

@@ -28,9 +28,10 @@ class AdminApiService {
 
   // Generic request method with better error handling
   async makeRequest(endpoint, options = {}) {
+    // Ensure endpoint starts with / - declared outside try block
+    const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+    
     try {
-      // Ensure endpoint starts with /
-      const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
       const url = `${this.baseURL}${cleanEndpoint}`;
       
       console.log('🌐 Making API request:', {
@@ -224,6 +225,15 @@ class AdminApiService {
     }
   }
 
+  async getAdminProduct(productId) {
+    try {
+      return await this.makeRequest(`/admin/products/${productId}`);
+    } catch (error) {
+      console.error('Error fetching admin product:', error);
+      throw error;
+    }
+  }
+
   async createProduct(productData) {
     try {
       return await this.makeRequest('/admin/products', {
@@ -274,6 +284,15 @@ class AdminApiService {
     }
   }
 
+  async getAdminCategory(categoryId) {
+    try {
+      return await this.makeRequest(`/admin/categories/${categoryId}`);
+    } catch (error) {
+      console.error('Error fetching admin category:', error);
+      throw error;
+    }
+  }
+
   async createCategory(categoryData) {
     try {
       return await this.makeRequest('/admin/categories', {
@@ -313,31 +332,31 @@ class AdminApiService {
   // ORDER MANAGEMENT
   // =============================================
 
-  async getOrders(params = {}) {
+  async getAdminOrders(params = {}) {
     try {
       const queryString = new URLSearchParams(params).toString();
-      const endpoint = `/orders${queryString ? `?${queryString}` : ''}`;
+      const endpoint = `/admin/orders${queryString ? `?${queryString}` : ''}`;
       return await this.makeRequest(endpoint);
     } catch (error) {
-      console.error('Error fetching orders:', error);
+      console.error('Error fetching admin orders:', error);
       throw error;
     }
   }
 
-  async getOrder(orderId) {
+  async getAdminOrder(orderId) {
     try {
-      return await this.makeRequest(`/orders/${orderId}`);
+      return await this.makeRequest(`/admin/orders/${orderId}`);
     } catch (error) {
-      console.error('Error fetching order:', error);
+      console.error('Error fetching admin order:', error);
       throw error;
     }
   }
 
-  async updateOrderStatus(orderId, status, note) {
+  async updateOrderStatus(orderId, status) {
     try {
-      return await this.makeRequest(`/orders/${orderId}/status`, {
-        method: 'PATCH',
-        body: JSON.stringify({ status, note }),
+      return await this.makeRequest(`/admin/orders/${orderId}/status`, {
+        method: 'PUT',
+        body: JSON.stringify({ status }),
       });
     } catch (error) {
       console.error('Error updating order status:', error);
@@ -345,26 +364,63 @@ class AdminApiService {
     }
   }
 
-  async addTrackingInfo(orderId, trackingNumber, carrier) {
+  async getOrderStats(params = {}) {
     try {
-      return await this.makeRequest(`/orders/${orderId}/tracking`, {
-        method: 'PATCH',
-        body: JSON.stringify({ trackingNumber, carrier }),
-      });
+      const queryString = new URLSearchParams(params).toString();
+      const endpoint = `/admin/orders/stats${queryString ? `?${queryString}` : ''}`;
+      return await this.makeRequest(endpoint);
     } catch (error) {
-      console.error('Error adding tracking info:', error);
+      console.error('Error fetching order stats:', error);
       throw error;
     }
   }
 
-  async processRefund(orderId, amount, reason) {
+  async exportOrders(params = {}) {
     try {
-      return await this.makeRequest(`/orders/${orderId}/refund`, {
-        method: 'POST',
-        body: JSON.stringify({ amount, reason }),
+      const queryString = new URLSearchParams(params).toString();
+      const endpoint = `/orders/export${queryString ? `?${queryString}` : ''}`;
+      return await this.makeRequest(endpoint);
+    } catch (error) {
+      console.error('Error exporting orders:', error);
+      throw error;
+    }
+  }
+
+  // =============================================
+  // ORDER MANAGEMENT
+  // =============================================
+
+  async getAdminOrders(params = {}) {
+    try {
+      const queryString = new URLSearchParams(params).toString();
+      const endpoint = `/orders${queryString ? `?${queryString}` : ''}`;
+      return await this.makeRequest(endpoint);
+    } catch (error) {
+      console.error('Error fetching admin orders:', error);
+      throw error;
+    }
+  }
+
+  async getAdminOrder(orderId) {
+    try {
+      return await this.makeRequest(`/orders/${orderId}`);
+    } catch (error) {
+      console.error('Error fetching admin order:', error);
+      throw error;
+    }
+  }
+
+  async updateOrderStatus(orderId, status) {
+    try {
+      return await this.makeRequest(`/orders/${orderId}/status`, {
+        method: 'PATCH',
+        body: JSON.stringify({ 
+          status,
+          note: `Status updated to ${status} by admin`
+        }),
       });
     } catch (error) {
-      console.error('Error processing refund:', error);
+      console.error('Error updating order status:', error);
       throw error;
     }
   }
@@ -429,6 +485,45 @@ class AdminApiService {
     } catch (error) {
       console.error('Error uploading files:', error);
       throw error;
+    }
+  }
+
+  // =============================================
+  // UTILITY METHODS
+  // =============================================
+
+  formatCurrency(amount, currency = 'KES') {
+    if (!amount && amount !== 0) return 'KES 0';
+    
+    const numericAmount = parseFloat(amount);
+    if (isNaN(numericAmount)) return 'KES 0';
+
+    return new Intl.NumberFormat('en-KE', {
+      style: 'currency',
+      currency: 'KES',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 2,
+    }).format(numericAmount);
+  }
+
+  formatDate(date, options = {}) {
+    if (!date) return '';
+    
+    const defaultOptions = {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZone: 'Africa/Nairobi',
+      ...options
+    };
+
+    try {
+      return new Date(date).toLocaleDateString('en-KE', defaultOptions);
+    } catch (error) {
+      console.error('Error formatting date:', error);
+      return date;
     }
   }
 }
