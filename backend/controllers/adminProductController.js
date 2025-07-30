@@ -475,7 +475,7 @@ export const bulkUpdateProducts = async (req, res) => {
 };
 
 // @desc    Duplicate product
-// @route   POST /api/admin/products/:id/duplicate
+// @route   POST /api/admin/products/:id/duplimcate
 // @access  Private (Admin only)
 export const duplicateProduct = async (req, res) => {
   try {
