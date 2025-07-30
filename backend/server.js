@@ -28,7 +28,8 @@ import uploadRoutes from './routes/uploadRoutes.js';
 import categoryRoutes from './routes/categoryRoutes.js';
 import adminRoutes from './routes/adminRoutes.js';
 import adminProductRoutes from './routes/adminProductRoutes.js';
-import adminCategoryRoutes from './routes/adminCategoryRoutes.js'; // 🆕 NEW IMPORT
+import adminCategoryRoutes from './routes/adminCategoryRoutes.js';
+import adminOrderRoutes from './routes/adminOrderRoutes.js'; // 🆕 NEW IMPORT
 import debugRoutes from './routes/debugRoutes.js';
 import orderRoutes from './routes/orderRoutes.js';
 
@@ -142,7 +143,8 @@ app.get('/api/health', (req, res) => {
     timestamp: new Date().toISOString(),
     version: '1.0.0',
     environment: process.env.NODE_ENV || 'development',
-    server: 'main-server'
+    server: 'main-server',
+    currency: 'KES'
   });
 });
 
@@ -155,7 +157,8 @@ app.get('/api/test', (req, res) => {
       server: 'Bondex Safety API',
       timestamp: new Date().toISOString(),
       userAgent: req.get('User-Agent'),
-      ip: req.ip
+      ip: req.ip,
+      currency: 'KES'
     }
   });
 });
@@ -199,6 +202,10 @@ try {
   console.error('❌ Error registering upload routes:', error.message);
 }
 
+// ============================================
+// ADMIN ROUTES - Specific to General Order
+// ============================================
+
 try {
   app.use('/api/admin', adminRoutes);
   console.log('✅ Admin routes registered at /api/admin');
@@ -213,12 +220,19 @@ try {
   console.error('❌ Error registering admin product routes:', error.message);
 }
 
-// 🆕 NEW: Admin Categories Routes
 try {
   app.use('/api/admin/categories', adminCategoryRoutes);
   console.log('✅ Admin category routes registered at /api/admin/categories');
 } catch (error) {
   console.error('❌ Error registering admin category routes:', error.message);
+}
+
+// 🆕 NEW: Admin Order Routes
+try {
+  app.use('/api/admin/orders', adminOrderRoutes);
+  console.log('✅ Admin order routes registered at /api/admin/orders');
+} catch (error) {
+  console.error('❌ Error registering admin order routes:', error.message);
 }
 
 console.log('✅ All API routes registered successfully');
@@ -242,14 +256,18 @@ app.use('/api/*', (req, res) => {
       'GET /api/orders/stats (requires admin auth)',
       'GET /api/orders/recent (requires admin auth)',
       'POST /api/admin/login',
-      'GET /api/admin/products (requires auth)',
-      'GET /api/admin/categories (requires auth)', // 🆕 NEW ENDPOINT
       'GET /api/admin/dashboard (requires auth)',
+      'GET /api/admin/products (requires auth)',
+      'GET /api/admin/categories (requires auth)',
+      'GET /api/admin/orders (requires auth)', // 🆕 NEW ENDPOINT
+      'PUT /api/admin/orders/:id/status (requires auth)', // 🆕 NEW ENDPOINT
+      'POST /api/admin/orders/:id/refund (requires auth)', // 🆕 NEW ENDPOINT
       ...(process.env.NODE_ENV === 'development' ? 
         ['GET /api/debug/*'] : [])
     ],
     timestamp: new Date().toISOString(),
-    server: 'main-server'
+    server: 'main-server',
+    currency: 'KES'
   });
 });
 
@@ -270,7 +288,8 @@ if (process.env.NODE_ENV === 'production') {
       return res.status(404).json({
         success: false,
         message: `API endpoint not found: ${req.path}`,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        currency: 'KES'
       });
     }
     
@@ -284,7 +303,8 @@ if (process.env.NODE_ENV === 'production') {
       return res.status(404).json({
         success: false,
         message: `API endpoint not found: ${req.method} ${req.originalUrl}`,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        currency: 'KES'
       });
     }
     
@@ -295,7 +315,8 @@ if (process.env.NODE_ENV === 'production') {
         'http://localhost:3000',
         'http://localhost:5173'
       ],
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      currency: 'KES'
     });
   });
 }
@@ -330,9 +351,10 @@ const server = app.listen(PORT, () => {
    6️⃣ Upload: /api/upload
    7️⃣ Admin: /api/admin
    8️⃣ Admin Products: /api/admin/products
-   9️⃣ Admin Categories: /api/admin/categories 🆕
-   🔟 API 404 handler
-   1️⃣1️⃣ Static files (production) / React catch-all
+   9️⃣ Admin Categories: /api/admin/categories
+   🔟 Admin Orders: /api/admin/orders 🆕 NEW
+   1️⃣1️⃣ API 404 handler
+   1️⃣2️⃣ Static files (production) / React catch-all
 
 📋 Test these API endpoints:
    ✅ http://localhost:${PORT}/api/health
@@ -340,7 +362,8 @@ const server = app.listen(PORT, () => {
    ✅ http://localhost:${PORT}/api/categories
    ✅ http://localhost:${PORT}/api/products
    ✅ http://localhost:${PORT}/api/orders (admin auth required)
-   ✅ http://localhost:${PORT}/api/admin/categories (admin auth required) 🆕
+   ✅ http://localhost:${PORT}/api/admin/categories (admin auth required)
+   ✅ http://localhost:${PORT}/api/admin/orders (admin auth required) 🆕 NEW
    ${process.env.NODE_ENV === 'development' ? `✅ http://localhost:${PORT}/api/debug/database` : ''}
    ${process.env.NODE_ENV === 'development' ? `✅ http://localhost:${PORT}/api/debug/routes` : ''}
 
@@ -351,7 +374,17 @@ const server = app.listen(PORT, () => {
    🗄️  Database: ${process.env.MONGODB_URI ? '✅ Connected' : '❌ Missing'}
    ☁️  Cloudinary: ${process.env.CLOUDINARY_URL ? '✅ Configured' : '❌ Missing'}
 
-🚀 Ready to handle requests!
+🆕 NEW ADMIN ORDER ENDPOINTS:
+   📦 GET  /api/admin/orders - List all orders with filtering
+   📋 GET  /api/admin/orders/:id - Get order details
+   📝 PUT  /api/admin/orders/:id/status - Update order status
+   💳 PUT  /api/admin/orders/:id/payment - Update payment status
+   🚚 PUT  /api/admin/orders/:id/tracking - Add tracking info
+   💰 POST /api/admin/orders/:id/refund - Process refunds
+   📊 GET  /api/admin/orders/analytics - Order analytics
+   🗑️  DELETE /api/admin/orders/:id - Delete orders (cautiously)
+
+🚀 Ready to handle requests with enhanced admin order management!
   `);
 });
 
