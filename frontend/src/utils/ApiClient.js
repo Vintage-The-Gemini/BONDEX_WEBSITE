@@ -1,8 +1,8 @@
-// frontend/src/utils/apiClient.js
+// frontend/src/utils/ApiClient.js
 class ApiClient {
   constructor() {
     // 🔧 FIXED: Ensure correct base URL for development
-    this.baseURL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+    this.baseURL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
     this.defaultHeaders = {
       'Content-Type': 'application/json',
       'Accept': 'application/json'
@@ -30,7 +30,9 @@ class ApiClient {
 
   // Generic request method
   async request(endpoint, options = {}) {
-    const url = `${this.baseURL}${endpoint}`;
+    // 🔧 FIXED: Remove leading slash and /api prefix to avoid double /api
+    const cleanEndpoint = endpoint.replace(/^\/api\//, '/').replace(/^\//, '');
+    const url = `${this.baseURL}/${cleanEndpoint}`;
     
     const config = {
       credentials: 'include',
@@ -139,76 +141,93 @@ class ApiClient {
     });
   }
 
-  // Specific API methods for categories
+  // 🔧 FIXED: Specific API methods for categories (removed /api prefix)
   async getCategories(params = {}) {
-    return this.get('/api/categories', params);
+    return this.get('categories', params);
   }
 
   async getCategory(id) {
-    return this.get(`/api/categories/${id}`);
+    return this.get(`categories/${id}`);
   }
 
   async createCategory(categoryData) {
-    return this.post('/api/categories', categoryData);
+    return this.post('categories', categoryData);
   }
 
   async updateCategory(id, categoryData) {
-    return this.put(`/api/categories/${id}`, categoryData);
+    return this.put(`categories/${id}`, categoryData);
   }
 
   async deleteCategory(id) {
-    return this.delete(`/api/categories/${id}`);
+    return this.delete(`categories/${id}`);
   }
 
-  // Specific API methods for products
+  // 🔧 FIXED: Specific API methods for products (removed /api prefix)
   async getProducts(params = {}) {
-    return this.get('/api/products', params);
+    return this.get('products', params);
   }
 
   async getProduct(id) {
-    return this.get(`/api/products/${id}`);
+    return this.get(`products/${id}`);
   }
 
   async createProduct(productData) {
-    return this.post('/api/admin/products', productData);
+    return this.post('admin/products', productData);
   }
 
   async updateProduct(id, productData) {
-    return this.put(`/api/admin/products/${id}`, productData);
+    return this.put(`admin/products/${id}`, productData);
   }
 
   async deleteProduct(id) {
-    return this.delete(`/api/admin/products/${id}`);
+    return this.delete(`admin/products/${id}`);
   }
 
-  // Admin authentication
+  // 🔧 FIXED: Admin authentication (removed /api prefix)
   async adminLogin(credentials) {
-    return this.post('/api/admin/login', credentials);
+    return this.post('admin/login', credentials);
   }
 
   async adminLogout() {
-    const result = await this.post('/api/admin/logout');
+    const result = await this.post('admin/logout');
     localStorage.removeItem('adminToken');
     localStorage.removeItem('adminUser');
     return result;
   }
 
   async getAdminProfile() {
-    return this.get('/api/admin/profile');
+    return this.get('admin/profile');
   }
 
   async getDashboardStats() {
-    return this.get('/api/admin/dashboard');
+    return this.get('admin/dashboard');
   }
 
-  // Health check
+  // 🔧 FIXED: Health check (removed /api prefix)
   async healthCheck() {
-    return this.get('/api/health');
+    return this.get('health');
   }
 
-  // Test endpoint
+  // 🔧 FIXED: Test endpoint (removed /api prefix)
   async testConnection() {
-    return this.get('/api/test');
+    return this.get('test');
+  }
+
+  // 🔧 ADDED: Orders methods for future use
+  async getOrders(params = {}) {
+    return this.get('orders', params);
+  }
+
+  async getOrder(id) {
+    return this.get(`orders/${id}`);
+  }
+
+  async createOrder(orderData) {
+    return this.post('orders', orderData);
+  }
+
+  async updateOrder(id, orderData) {
+    return this.put(`orders/${id}`, orderData);
   }
 }
 

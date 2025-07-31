@@ -1,8 +1,8 @@
-// src/App.jsx
+// frontend/src/App.jsx
 import React, { useState } from 'react'
 import { Routes, Route } from 'react-router-dom'
 
-// Customer-facing components (your existing components)
+// Customer-facing components (existing)
 import Header from './components/Header'
 import UrgencyBanner from './components/UrgencyBanner'
 import Hero from './components/Hero'
@@ -18,11 +18,14 @@ import ShoppingCart from './components/ShoppingCart'
 import ProductModal from './components/ProductModal'
 import Products from './pages/Products'
 
-// Admin components and context
+// Admin components and context (existing)
 import { AdminProvider } from './context/AdminContext'
 import AdminRouter from './routes/AdminRouter'
 
-// Homepage Component (your existing)
+// Cart context (new)
+import { CartProvider } from './context/CartContext'
+
+// Homepage Component (existing)
 const HomePage = ({ onOpenProductModal }) => (
   <>
     <Hero />
@@ -36,7 +39,7 @@ const HomePage = ({ onOpenProductModal }) => (
   </>
 );
 
-// Customer App Component (your existing functionality)
+// Customer App Component (enhanced existing functionality)
 const CustomerApp = () => {
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
@@ -70,16 +73,21 @@ const CustomerApp = () => {
       return [...prev, { ...product, quantity: product.quantity || 1 }];
     });
     
-    // Show success notification (you can implement toast notifications here)
+    // Show success notification
     console.log('Item added to cart successfully!');
+    openCart(); // Open cart to show the added item
   };
+
+  const cartCount = cartItems.reduce((total, item) => total + item.quantity, 0);
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Urgency Banner for immediate conversions */}
       <UrgencyBanner />
-      
-      <Header onOpenCart={openCart} cartCount={cartItems.length} />
+      <Header 
+        cartCount={cartCount}
+        onCartClick={openCart}
+        onAddToCart={addToCart}
+      />
       
       <Routes>
         {/* Homepage Route */}
@@ -88,7 +96,7 @@ const CustomerApp = () => {
           element={<HomePage onOpenProductModal={openProductModal} />} 
         />
         
-        {/* Products Catalog Route */}
+        {/* Products Page Route */}
         <Route 
           path="/products" 
           element={
@@ -104,17 +112,7 @@ const CustomerApp = () => {
           path="/products/head-protection" 
           element={
             <Products 
-              defaultCategory="Head Protection"
-              onOpenProductModal={openProductModal} 
-              onAddToCart={addToCart}
-            />
-          } 
-        />
-        <Route 
-          path="/products/foot-protection" 
-          element={
-            <Products 
-              defaultCategory="Foot Protection"
+              defaultCategory="head-protection"
               onOpenProductModal={openProductModal} 
               onAddToCart={addToCart}
             />
@@ -124,7 +122,7 @@ const CustomerApp = () => {
           path="/products/eye-protection" 
           element={
             <Products 
-              defaultCategory="Eye Protection"
+              defaultCategory="eye-protection"
               onOpenProductModal={openProductModal} 
               onAddToCart={addToCart}
             />
@@ -134,7 +132,17 @@ const CustomerApp = () => {
           path="/products/hand-protection" 
           element={
             <Products 
-              defaultCategory="Hand Protection"
+              defaultCategory="hand-protection"
+              onOpenProductModal={openProductModal} 
+              onAddToCart={addToCart}
+            />
+          } 
+        />
+        <Route 
+          path="/products/foot-protection" 
+          element={
+            <Products 
+              defaultCategory="foot-protection"
               onOpenProductModal={openProductModal} 
               onAddToCart={addToCart}
             />
@@ -144,49 +152,39 @@ const CustomerApp = () => {
           path="/products/breathing-protection" 
           element={
             <Products 
-              defaultCategory="Breathing Protection"
+              defaultCategory="breathing-protection"
               onOpenProductModal={openProductModal} 
               onAddToCart={addToCart}
             />
           } 
         />
-        <Route 
-          path="/products/workwear" 
-          element={
-            <Products 
-              defaultCategory="Workwear"
-              onOpenProductModal={openProductModal} 
-              onAddToCart={addToCart}
-            />
-          } 
-        />
-        
+
         {/* Industry Routes */}
         <Route 
-          path="/industries/medical" 
+          path="/industry/medical" 
           element={
             <Products 
-              defaultIndustry="Medical"
+              defaultIndustry="medical"
               onOpenProductModal={openProductModal} 
               onAddToCart={addToCart}
             />
           } 
         />
         <Route 
-          path="/industries/construction" 
+          path="/industry/construction" 
           element={
             <Products 
-              defaultIndustry="Construction"
+              defaultIndustry="construction"
               onOpenProductModal={openProductModal} 
               onAddToCart={addToCart}
             />
           } 
         />
         <Route 
-          path="/industries/manufacturing" 
+          path="/industry/manufacturing" 
           element={
             <Products 
-              defaultIndustry="Manufacturing"
+              defaultIndustry="manufacturing"
               onOpenProductModal={openProductModal} 
               onAddToCart={addToCart}
             />
@@ -219,7 +217,7 @@ const CustomerApp = () => {
       
       <Footer />
       
-      {/* Shopping Cart Sidebar */}
+      {/* Shopping Cart Sidebar (existing) */}
       <ShoppingCart 
         isOpen={isCartOpen} 
         onClose={closeCart}
@@ -227,7 +225,7 @@ const CustomerApp = () => {
         setCartItems={setCartItems}
       />
       
-      {/* Product Quick View Modal */}
+      {/* Product Quick View Modal (existing) */}
       <ProductModal
         product={selectedProduct}
         isOpen={isProductModalOpen}
@@ -238,19 +236,21 @@ const CustomerApp = () => {
   );
 };
 
-// Main App Component
+// Main App Component (enhanced existing)
 function App() {
   return (
     <AdminProvider>
-      <Routes>
-        {/* Admin Panel Routes */}
-        <Route path="/admin/*" element={<AdminRouter />} />
-        
-        {/* Customer-facing Routes (your existing app) */}
-        <Route path="/*" element={<CustomerApp />} />
-      </Routes>
+      <CartProvider>
+        <Routes>
+          {/* Admin Panel Routes (existing) */}
+          <Route path="/admin/*" element={<AdminRouter />} />
+          
+          {/* Customer-facing Routes (existing + enhanced) */}
+          <Route path="/*" element={<CustomerApp />} />
+        </Routes>
+      </CartProvider>
     </AdminProvider>
   )
 }
 
-export default App// frontend/src/App.jsx
+export default App
