@@ -108,13 +108,17 @@ const userSchema = new mongoose.Schema({
   passwordResetToken: String,
   passwordResetExpire: Date,
   
-  // Security
+  // Security and analytics
   lastLogin: Date,
   loginAttempts: {
     type: Number,
     default: 0
   },
   lockUntil: Date,
+  loginCount: {
+    type: Number,
+    default: 0
+  },
   
   // Customer analytics
   totalOrders: {
@@ -133,7 +137,7 @@ const userSchema = new mongoose.Schema({
   // Account creation source
   registrationSource: {
     type: String,
-    enum: ['website', 'mobile', 'admin', 'import'],
+    enum: ['website', 'mobile', 'admin', 'import', 'admin_setup'],
     default: 'website'
   },
   
@@ -180,7 +184,7 @@ userSchema.pre('save', async function(next) {
   }
 });
 
-// Method to compare password
+// ✅ FIXED: Method to compare password (original name)
 userSchema.methods.comparePassword = async function(candidatePassword) {
   if (!this.password) {
     return false;
@@ -191,6 +195,11 @@ userSchema.methods.comparePassword = async function(candidatePassword) {
   } catch (error) {
     throw new Error('Password comparison failed');
   }
+};
+
+// ✅ FIXED: Add matchPassword method for compatibility with admin controller
+userSchema.methods.matchPassword = async function(candidatePassword) {
+  return this.comparePassword(candidatePassword);
 };
 
 // Method to increment login attempts
