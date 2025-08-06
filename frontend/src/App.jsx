@@ -2,44 +2,26 @@
 import React, { useState } from 'react'
 import { Routes, Route } from 'react-router-dom'
 
-// Customer-facing components (existing)
+// Essential customer-facing components
 import Header from './components/Header'
 import UrgencyBanner from './components/UrgencyBanner'
-import Hero from './components/Hero'
-import Categories from './components/Categories'
-import FeaturedProducts from './components/FeaturedProducts'
-import QuickBuy from './components/QuickBuy'
-import WhyChooseUs from './components/WhyChooseUs'
-import Testimonials from './components/Testimonials'
-import Newsletter from './components/Newsletter'
-import CallToAction from './components/CallToAction'
 import Footer from './components/Footer'
 import ShoppingCart from './components/ShoppingCart'
 import ProductModal from './components/ProductModal'
-import Products from './pages/Products'
 
-// Admin components and context (existing)
+// Pages
+import Home from './pages/Home'
+import Products from './pages/Products'
+import ProductDetail from './pages/ProductDetail'
+
+// Admin components and context
 import { AdminProvider } from './context/AdminContext'
 import AdminRouter from './routes/AdminRouter'
 
-// Cart context (new)
+// Cart context
 import { CartProvider } from './context/CartContext'
 
-// Homepage Component (existing)
-const HomePage = ({ onOpenProductModal }) => (
-  <>
-    <Hero />
-    <Categories />
-    <FeaturedProducts onOpenProductModal={onOpenProductModal} />
-    <QuickBuy />
-    <WhyChooseUs />
-    <Testimonials />
-    <Newsletter />
-    <CallToAction />
-  </>
-);
-
-// Customer App Component (enhanced existing functionality)
+// Customer App Component
 const CustomerApp = () => {
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
@@ -73,30 +55,40 @@ const CustomerApp = () => {
       return [...prev, { ...product, quantity: product.quantity || 1 }];
     });
     
-    // Show success notification
     console.log('Item added to cart successfully!');
-    openCart(); // Open cart to show the added item
   };
-
-  const cartCount = cartItems.reduce((total, item) => total + item.quantity, 0);
 
   return (
     <div className="min-h-screen bg-gray-50">
       <UrgencyBanner />
       <Header 
-        cartCount={cartCount}
-        onCartClick={openCart}
-        onAddToCart={addToCart}
+        onOpenCart={openCart}
+        cartItems={cartItems}
       />
       
       <Routes>
-        {/* Homepage Route */}
+        {/* Home Page */}
         <Route 
           path="/" 
-          element={<HomePage onOpenProductModal={openProductModal} />} 
+          element={
+            <Home 
+              onOpenProductModal={openProductModal} 
+              onAddToCart={addToCart}
+            />
+          } 
         />
         
-        {/* Products Page Route */}
+        {/* Product Detail Page */}
+        <Route 
+          path="/products/:id" 
+          element={
+            <ProductDetail 
+              onAddToCart={addToCart}
+            />
+          } 
+        />
+
+        {/* Products Page */}
         <Route 
           path="/products" 
           element={
@@ -106,92 +98,29 @@ const CustomerApp = () => {
             />
           } 
         />
-        
-        {/* Category Routes */}
+
+        {/* Category & Industry Pages */}
         <Route 
-          path="/products/head-protection" 
+          path="/category/:category" 
           element={
             <Products 
-              defaultCategory="head-protection"
-              onOpenProductModal={openProductModal} 
-              onAddToCart={addToCart}
-            />
-          } 
-        />
-        <Route 
-          path="/products/eye-protection" 
-          element={
-            <Products 
-              defaultCategory="eye-protection"
-              onOpenProductModal={openProductModal} 
-              onAddToCart={addToCart}
-            />
-          } 
-        />
-        <Route 
-          path="/products/hand-protection" 
-          element={
-            <Products 
-              defaultCategory="hand-protection"
-              onOpenProductModal={openProductModal} 
-              onAddToCart={addToCart}
-            />
-          } 
-        />
-        <Route 
-          path="/products/foot-protection" 
-          element={
-            <Products 
-              defaultCategory="foot-protection"
-              onOpenProductModal={openProductModal} 
-              onAddToCart={addToCart}
-            />
-          } 
-        />
-        <Route 
-          path="/products/breathing-protection" 
-          element={
-            <Products 
-              defaultCategory="breathing-protection"
               onOpenProductModal={openProductModal} 
               onAddToCart={addToCart}
             />
           } 
         />
 
-        {/* Industry Routes */}
         <Route 
-          path="/industry/medical" 
+          path="/industry/:industry" 
           element={
             <Products 
-              defaultIndustry="medical"
-              onOpenProductModal={openProductModal} 
-              onAddToCart={addToCart}
-            />
-          } 
-        />
-        <Route 
-          path="/industry/construction" 
-          element={
-            <Products 
-              defaultIndustry="construction"
-              onOpenProductModal={openProductModal} 
-              onAddToCart={addToCart}
-            />
-          } 
-        />
-        <Route 
-          path="/industry/manufacturing" 
-          element={
-            <Products 
-              defaultIndustry="manufacturing"
               onOpenProductModal={openProductModal} 
               onAddToCart={addToCart}
             />
           } 
         />
 
-        {/* Search Results Route */}
+        {/* Search & Sale Pages */}
         <Route 
           path="/search" 
           element={
@@ -202,7 +131,6 @@ const CustomerApp = () => {
           } 
         />
         
-        {/* Sale/Special Offers Route */}
         <Route 
           path="/sale" 
           element={
@@ -213,11 +141,74 @@ const CustomerApp = () => {
             />
           } 
         />
+
+        {/* Simple About Page */}
+        <Route 
+          path="/about" 
+          element={
+            <div className="max-w-4xl mx-auto px-4 py-16">
+              <h1 className="text-4xl font-bold text-center mb-8">About Us</h1>
+              <div className="bg-white rounded-lg p-8 space-y-6 text-lg text-gray-700">
+                <p>
+                  Kenya's leading supplier of professional safety equipment, serving healthcare, 
+                  construction, and industrial sectors since 2020.
+                </p>
+                <p>
+                  We provide high-quality, certified safety gear that meets international standards 
+                  to protect Kenya's workforce.
+                </p>
+              </div>
+            </div>
+          } 
+        />
+
+        {/* Simple Contact Page */}
+        <Route 
+          path="/contact" 
+          element={
+            <div className="max-w-2xl mx-auto px-4 py-16">
+              <h1 className="text-4xl font-bold text-center mb-8">Contact Us</h1>
+              <div className="bg-white rounded-lg p-8 space-y-6">
+                <div>
+                  <h3 className="text-xl font-semibold mb-4">Get in Touch</h3>
+                  <div className="space-y-3">
+                    <div><strong>Phone:</strong> +254 700 000 000</div>
+                    <div><strong>Email:</strong> info@safetyequipment.co.ke</div>
+                    <div><strong>Address:</strong> Nairobi, Kenya</div>
+                  </div>
+                </div>
+                <a 
+                  href="tel:+254700000000" 
+                  className="inline-block bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  Call Now
+                </a>
+              </div>
+            </div>
+          } 
+        />
+
+        {/* 404 Page */}
+        <Route 
+          path="*" 
+          element={
+            <div className="max-w-4xl mx-auto px-4 py-16 text-center">
+              <h1 className="text-6xl font-bold text-gray-300 mb-4">404</h1>
+              <h2 className="text-2xl font-semibold text-gray-700 mb-4">Page Not Found</h2>
+              <a 
+                href="/" 
+                className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                Go Home
+              </a>
+            </div>
+          } 
+        />
       </Routes>
       
       <Footer />
       
-      {/* Shopping Cart Sidebar (existing) */}
+      {/* Shopping Cart Sidebar */}
       <ShoppingCart 
         isOpen={isCartOpen} 
         onClose={closeCart}
@@ -225,7 +216,7 @@ const CustomerApp = () => {
         setCartItems={setCartItems}
       />
       
-      {/* Product Quick View Modal (existing) */}
+      {/* Product Quick View Modal */}
       <ProductModal
         product={selectedProduct}
         isOpen={isProductModalOpen}
@@ -236,16 +227,16 @@ const CustomerApp = () => {
   );
 };
 
-// Main App Component (enhanced existing)
+// Main App Component
 function App() {
   return (
     <AdminProvider>
       <CartProvider>
         <Routes>
-          {/* Admin Panel Routes (existing) */}
+          {/* Admin Panel Routes */}
           <Route path="/admin/*" element={<AdminRouter />} />
           
-          {/* Customer-facing Routes (existing + enhanced) */}
+          {/* Customer-facing Routes */}
           <Route path="/*" element={<CustomerApp />} />
         </Routes>
       </CartProvider>

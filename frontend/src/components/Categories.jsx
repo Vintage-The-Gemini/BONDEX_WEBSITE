@@ -1,221 +1,180 @@
-// src/components/Categories.jsx
+// frontend/src/components/Categories.jsx
 import React from 'react';
-import { ArrowRight, Shield, Eye, Footprints, Hand, Wind, Shirt } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { ArrowRight, TrendingUp } from 'lucide-react';
 
 const Categories = () => {
   const categories = [
     {
       id: 1,
       name: "Head Protection",
-      description: "Safety helmets, hard hats, and bump caps",
-      icon: "🪖",
+      description: "Safety helmets & hard hats",
+      icon: "⛑️",
       productCount: 45,
-      bgColor: "from-blue-500 to-blue-600",
-      textColor: "text-blue-600"
+      bgGradient: "from-blue-500 to-cyan-400",
+      image: "https://images.unsplash.com/photo-1503387837-b154d5074bd2?w=400&h=300&fit=crop",
+      popular: true
     },
     {
       id: 2,
-      name: "Foot Protection",
-      description: "Safety boots, shoes, and toe caps",
-      icon: "🥾",
-      productCount: 67,
-      bgColor: "from-green-500 to-green-600",
-      textColor: "text-green-600"
+      name: "Eye Protection", 
+      description: "Safety glasses & goggles",
+      icon: "🥽",
+      productCount: 34,
+      bgGradient: "from-purple-500 to-pink-400",
+      image: "https://images.unsplash.com/photo-1559827260-dc66d52bef19?w=400&h=300&fit=crop",
+      popular: false
     },
     {
       id: 3,
-      name: "Eye Protection",
-      description: "Safety glasses, goggles, and face shields",
-      icon: "🥽",
-      productCount: 34,
-      bgColor: "from-purple-500 to-purple-600",
-      textColor: "text-purple-600"
+      name: "Hand Protection",
+      description: "Work gloves & safety gear",
+      icon: "🧤", 
+      productCount: 89,
+      bgGradient: "from-red-500 to-orange-400",
+      image: "https://images.unsplash.com/photo-1582719508461-905c673771fd?w=400&h=300&fit=crop",
+      popular: true
     },
     {
       id: 4,
-      name: "Hand Protection",
-      description: "Work gloves, chemical resistant gloves",
-      icon: "🧤",
-      productCount: 89,
-      bgColor: "from-red-500 to-red-600",
-      textColor: "text-red-600"
+      name: "Foot Protection",
+      description: "Safety boots & shoes",
+      icon: "🥾",
+      productCount: 67,
+      bgGradient: "from-green-500 to-teal-400", 
+      image: "https://images.unsplash.com/photo-1549298916-b41d501d3772?w=400&h=300&fit=crop",
+      popular: false
     },
     {
       id: 5,
       name: "Breathing Protection",
-      description: "Masks, respirators, and filters",
+      description: "Masks & respirators",
       icon: "😷",
       productCount: 56,
-      bgColor: "from-indigo-500 to-indigo-600",
-      textColor: "text-indigo-600"
+      bgGradient: "from-indigo-500 to-blue-400",
+      image: "https://images.unsplash.com/photo-1584515933487-779824d29309?w=400&h=300&fit=crop",
+      popular: true
     },
     {
       id: 6,
-      name: "Workwear & Clothing",
-      description: "High-vis vests, coveralls, and uniforms",
+      name: "High-Vis Clothing",
+      description: "Vests & safety uniforms", 
       icon: "🦺",
       productCount: 78,
-      bgColor: "from-orange-500 to-orange-600",
-      textColor: "text-orange-600"
+      bgGradient: "from-yellow-500 to-orange-400",
+      image: "https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=400&h=300&fit=crop",
+      popular: false
     }
   ];
 
   return (
-    <section className="bg-white py-16">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <section className="py-20 bg-gray-50">
+      <div className="max-w-7xl mx-auto px-4">
+        
         {/* Section Header */}
-        <div className="text-center mb-12">
-          <h2 className="text-3xl lg:text-4xl font-bold text-gray-900 mb-4">
-            Shop by Protection Type
+        <div className="text-center mb-16">
+          <h2 className="text-4xl lg:text-5xl font-bold text-gray-900 mb-6">
+            Shop by Category
           </h2>
           <p className="text-xl text-gray-600 max-w-3xl mx-auto">
-            Find the right safety equipment for your specific needs. All our products meet 
-            international safety standards and come with quality guarantees.
+            Professional safety equipment for every workplace. All products certified to international standards.
           </p>
         </div>
 
         {/* Categories Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-16">
           {categories.map((category) => (
-            <div
+            <Link
               key={category.id}
-              className="group relative bg-white rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden border border-gray-100 hover:border-gray-200"
+              to={`/products?category=${category.name.toLowerCase().replace(' ', '-')}`}
+              className="group relative bg-white rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-2 overflow-hidden"
             >
-              {/* Background Gradient */}
-              <div className={`absolute inset-0 bg-gradient-to-br ${category.bgColor} opacity-0 group-hover:opacity-5 transition-opacity duration-300`}></div>
-              
-              {/* Content */}
-              <div className="relative p-8">
+              {/* Popular Badge */}
+              {category.popular && (
+                <div className="absolute top-4 right-4 z-10 bg-yellow-400 text-black px-3 py-1 rounded-full text-sm font-semibold flex items-center space-x-1">
+                  <TrendingUp className="h-3 w-3" />
+                  <span>Popular</span>
+                </div>
+              )}
+
+              {/* Category Image */}
+              <div className="relative h-48 overflow-hidden">
+                <img 
+                  src={category.image}
+                  alt={category.name}
+                  className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                />
+                {/* Gradient Overlay */}
+                <div className={`absolute inset-0 bg-gradient-to-br ${category.bgGradient} opacity-80 group-hover:opacity-90 transition-opacity`} />
+                
                 {/* Icon */}
-                <div className="text-center mb-6">
-                  <div className="text-6xl mb-4">{category.icon}</div>
-                  <div className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-gray-100 ${category.textColor}`}>
-                    {category.productCount} Products
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="text-6xl transform group-hover:scale-125 transition-transform duration-300">
+                    {category.icon}
                   </div>
                 </div>
+              </div>
 
-                {/* Category Info */}
-                <div className="text-center mb-6">
-                  <h3 className="text-xl font-bold text-gray-900 mb-2 group-hover:text-gray-800 transition-colors">
+              {/* Content */}
+              <div className="p-6">
+                <div className="mb-4">
+                  <h3 className="text-xl font-bold text-gray-900 mb-2 group-hover:text-blue-600 transition-colors">
                     {category.name}
                   </h3>
-                  <p className="text-gray-600 text-sm leading-relaxed">
+                  <p className="text-gray-600 text-sm">
                     {category.description}
                   </p>
                 </div>
 
-                {/* Popular Items Preview */}
-                <div className="mb-6">
-                  <h4 className="text-sm font-semibold text-gray-700 mb-3">Popular Items:</h4>
-                  <div className="space-y-2">
-                    {category.id === 1 && (
-                      <>
-                        <div className="flex justify-between text-sm">
-                          <span className="text-gray-600">Hard Hat with Chin Strap</span>
-                          <span className="text-gray-900 font-medium">KES 2,500</span>
-                        </div>
-                        <div className="flex justify-between text-sm">
-                          <span className="text-gray-600">Bump Cap Lightweight</span>
-                          <span className="text-gray-900 font-medium">KES 1,800</span>
-                        </div>
-                      </>
-                    )}
-                    {category.id === 2 && (
-                      <>
-                        <div className="flex justify-between text-sm">
-                          <span className="text-gray-600">Steel Toe Safety Boots</span>
-                          <span className="text-gray-900 font-medium">KES 4,800</span>
-                        </div>
-                        <div className="flex justify-between text-sm">
-                          <span className="text-gray-600">Slip Resistant Shoes</span>
-                          <span className="text-gray-900 font-medium">KES 3,200</span>
-                        </div>
-                      </>
-                    )}
-                    {category.id === 3 && (
-                      <>
-                        <div className="flex justify-between text-sm">
-                          <span className="text-gray-600">Safety Goggles Clear</span>
-                          <span className="text-gray-900 font-medium">KES 800</span>
-                        </div>
-                        <div className="flex justify-between text-sm">
-                          <span className="text-gray-600">Face Shield Full</span>
-                          <span className="text-gray-900 font-medium">KES 1,200</span>
-                        </div>
-                      </>
-                    )}
-                    {category.id === 4 && (
-                      <>
-                        <div className="flex justify-between text-sm">
-                          <span className="text-gray-600">Nitrile Work Gloves</span>
-                          <span className="text-gray-900 font-medium">KES 350</span>
-                        </div>
-                        <div className="flex justify-between text-sm">
-                          <span className="text-gray-600">Cut Resistant Gloves</span>
-                          <span className="text-gray-900 font-medium">KES 650</span>
-                        </div>
-                      </>
-                    )}
-                    {category.id === 5 && (
-                      <>
-                        <div className="flex justify-between text-sm">
-                          <span className="text-gray-600">N95 Masks (50 Pack)</span>
-                          <span className="text-gray-900 font-medium">KES 2,800</span>
-                        </div>
-                        <div className="flex justify-between text-sm">
-                          <span className="text-gray-600">P2 Respirator</span>
-                          <span className="text-gray-900 font-medium">KES 450</span>
-                        </div>
-                      </>
-                    )}
-                    {category.id === 6 && (
-                      <>
-                        <div className="flex justify-between text-sm">
-                          <span className="text-gray-600">High-Vis Safety Vest</span>
-                          <span className="text-gray-900 font-medium">KES 1,200</span>
-                        </div>
-                        <div className="flex justify-between text-sm">
-                          <span className="text-gray-600">Coverall Suit</span>
-                          <span className="text-gray-900 font-medium">KES 2,800</span>
-                        </div>
-                      </>
-                    )}
-                  </div>
+                {/* Stats */}
+                <div className="flex items-center justify-between mb-4">
+                  <span className="text-2xl font-bold text-blue-600">
+                    {category.productCount}+
+                  </span>
+                  <span className="text-sm text-gray-500">
+                    Products Available
+                  </span>
                 </div>
 
-                {/* Shop Category Button */}
-                <button className={`w-full ${category.textColor} bg-gray-50 hover:bg-gray-100 border border-gray-200 font-semibold py-3 px-4 rounded-lg transition-all duration-300 flex items-center justify-center space-x-2 group-hover:scale-105`}>
-                  <span>Shop {category.name}</span>
-                  <ArrowRight className="h-4 w-4 transform group-hover:translate-x-1 transition-transform" />
-                </button>
+                {/* CTA Button */}
+                <div className="flex items-center justify-between">
+                  <span className="text-blue-600 font-semibold group-hover:text-blue-700 transition-colors">
+                    Shop Now
+                  </span>
+                  <ArrowRight className="h-5 w-5 text-blue-600 group-hover:text-blue-700 group-hover:translate-x-1 transition-all" />
+                </div>
               </div>
 
               {/* Hover Effect Border */}
-              <div className={`absolute inset-0 border-2 border-transparent group-hover:bg-gradient-to-br group-hover:${category.bgColor} group-hover:opacity-10 rounded-2xl transition-all duration-300`}></div>
-            </div>
+              <div className="absolute inset-0 border-2 border-transparent group-hover:border-blue-200 rounded-2xl transition-colors" />
+            </Link>
           ))}
         </div>
 
-        {/* Call to Action */}
-        <div className="text-center mt-12">
-          <div className="bg-primary-50 rounded-2xl p-8 max-w-3xl mx-auto">
-            <h3 className="text-2xl font-bold text-gray-900 mb-4">
-              Need Help Choosing the Right Equipment?
-            </h3>
-            <p className="text-gray-600 mb-6">
-              Our safety experts are here to help you find the perfect protection for your industry. 
-              Get personalized recommendations based on your specific requirements.
-            </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <button className="bg-primary-500 hover:bg-primary-600 text-white font-semibold py-3 px-6 rounded-lg transition-colors">
-                Get Expert Advice
-              </button>
-              <button className="border-2 border-primary-500 text-primary-500 hover:bg-primary-500 hover:text-white font-semibold py-3 px-6 rounded-lg transition-colors">
-                Download Catalog
-              </button>
-            </div>
+        {/* Bottom CTA Section */}
+        <div className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-2xl p-8 text-center text-white">
+          <h3 className="text-2xl lg:text-3xl font-bold mb-4">
+            Can't Find What You Need?
+          </h3>
+          <p className="text-lg mb-6 text-blue-100">
+            Our safety experts are ready to help you find the perfect equipment for your industry
+          </p>
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <Link
+              to="/contact"
+              className="bg-white text-blue-600 px-8 py-3 rounded-lg font-semibold hover:bg-gray-100 transition-colors"
+            >
+              Contact Expert
+            </Link>
+            <Link
+              to="/products"
+              className="border-2 border-white text-white px-8 py-3 rounded-lg font-semibold hover:bg-white hover:text-blue-600 transition-colors"
+            >
+              View All Products
+            </Link>
           </div>
         </div>
+
       </div>
     </section>
   );
