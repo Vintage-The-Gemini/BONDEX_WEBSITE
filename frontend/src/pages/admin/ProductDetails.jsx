@@ -1,475 +1,630 @@
-// frontend/src/components/admin/ProductDetails.jsx
-import React from 'react';
-import { 
-  Sparkles, 
-  Settings, 
-  Plus, 
-  Minus, 
-  Tag, 
-  CheckCircle,
+// frontend/src/pages/admin/ProductDetails.jsx
+import React, { useState, useEffect } from 'react';
+import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useAdmin } from '../../context/AdminContext';
+import {
+  ArrowLeft,
+  Edit,
+  Trash2,
+  Copy,
+  ExternalLink,
+  Star,
+  Package,
+  DollarSign,
+  Calendar,
+  Eye,
+  EyeOff,
+  Settings,
+  Tag,
   Award,
   Shield,
-  Zap
+  CheckCircle,
+  AlertTriangle,
+  Clock,
+  Image as ImageIcon,
+  RefreshCw,
+  TrendingUp,
+  Users,
+  ShoppingCart
 } from 'lucide-react';
 
-const ProductDetails = ({ 
-  features = [''],
-  specifications = [{ key: '', value: '' }],
-  tags = [''],
-  certifications = [''],
-  complianceStandards = [''],
-  onFeaturesChange,
-  onSpecificationsChange,
-  onTagsChange,
-  onCertificationsChange,
-  onComplianceChange
-}) => {
+const ProductDetails = () => {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const { addNotification } = useAdmin();
+  
+  const [product, setProduct] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [activeTab, setActiveTab] = useState('overview');
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [analytics, setAnalytics] = useState({
+    views: 245,
+    orders: 12,
+    revenue: 72000,
+    conversionRate: 4.9
+  });
 
-  // Feature management
-  const addFeature = () => onFeaturesChange([...features, '']);
-  const updateFeature = (index, value) => {
-    const updated = features.map((feature, i) => i === index ? value : feature);
-    onFeaturesChange(updated);
-  };
-  const removeFeature = (index) => {
-    if (features.length > 1) {
-      onFeaturesChange(features.filter((_, i) => i !== index));
+  const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+
+  useEffect(() => {
+    if (id) {
+      fetchProduct();
+      fetchProductAnalytics();
+    }
+  }, [id]);
+
+  const fetchProduct = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch(`${API_BASE}/admin/products/${id}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
+        }
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        setProduct(data.data);
+      } else {
+        setError(data.message || 'Failed to fetch product');
+      }
+    } catch (error) {
+      console.error('Error fetching product:', error);
+      setError('Failed to fetch product');
+    } finally {
+      setLoading(false);
     }
   };
 
-  // Specification management
-  const addSpecification = () => onSpecificationsChange([...specifications, { key: '', value: '' }]);
-  const updateSpecification = (index, field, value) => {
-    const updated = specifications.map((spec, i) => 
-      i === index ? { ...spec, [field]: value } : spec
-    );
-    onSpecificationsChange(updated);
-  };
-  const removeSpecification = (index) => {
-    if (specifications.length > 1) {
-      onSpecificationsChange(specifications.filter((_, i) => i !== index));
+  const fetchProductAnalytics = async () => {
+    try {
+      // Simulate analytics data - replace with real API call
+      await new Promise(resolve => setTimeout(resolve, 500));
+      // const response = await fetch(`${API_BASE}/admin/products/${id}/analytics`);
+    } catch (error) {
+      console.error('Error fetching analytics:', error);
     }
   };
 
-  // Tag management
-  const addTag = () => onTagsChange([...tags, '']);
-  const updateTag = (index, value) => {
-    const updated = tags.map((tag, i) => i === index ? value : tag);
-    onTagsChange(updated);
-  };
-  const removeTag = (index) => {
-    if (tags.length > 1) {
-      onTagsChange(tags.filter((_, i) => i !== index));
+  const handleDelete = async () => {
+    try {
+      const response = await fetch(`${API_BASE}/admin/products/${id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
+        }
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        addNotification('Product deleted successfully', 'success');
+        navigate('/admin/products');
+      } else {
+        addNotification(data.message || 'Failed to delete product', 'error');
+      }
+    } catch (error) {
+      addNotification('Failed to delete product', 'error');
     }
+    setShowDeleteModal(false);
   };
 
-  // Certification management
-  const addCertification = () => onCertificationsChange([...certifications, '']);
-  const updateCertification = (index, value) => {
-    const updated = certifications.map((cert, i) => i === index ? value : cert);
-    onCertificationsChange(updated);
-  };
-  const removeCertification = (index) => {
-    if (certifications.length > 1) {
-      onCertificationsChange(certifications.filter((_, i) => i !== index));
-    }
+  const copyProductURL = () => {
+    const url = `${window.location.origin}/products/${product.slug || product._id}`;
+    navigator.clipboard.writeText(url);
+    addNotification('Product URL copied to clipboard', 'success');
   };
 
-  // Compliance management
-  const addCompliance = () => onComplianceChange([...complianceStandards, '']);
-  const updateCompliance = (index, value) => {
-    const updated = complianceStandards.map((std, i) => i === index ? value : std);
-    onComplianceChange(updated);
-  };
-  const removeCompliance = (index) => {
-    if (complianceStandards.length > 1) {
-      onComplianceChange(complianceStandards.filter((_, i) => i !== index));
-    }
+  const formatPrice = (price) => {
+    if (!price) return 'KES 0';
+    const numPrice = parseFloat(price);
+    return isNaN(numPrice) ? 'KES 0' : `KES ${numPrice.toLocaleString()}`;
   };
 
-  // Get completion stats
-  const getCompletionStats = () => {
-    const validFeatures = features.filter(f => f.trim());
-    const validSpecs = specifications.filter(s => s.key.trim() && s.value.trim());
-    const validTags = tags.filter(t => t.trim());
-    const validCerts = certifications.filter(c => c.trim());
-    const validCompliance = complianceStandards.filter(c => c.trim());
-    
-    return {
-      features: validFeatures.length,
-      specifications: validSpecs.length,
-      tags: validTags.length,
-      certifications: validCerts.length,
-      compliance: validCompliance.length,
-      total: validFeatures.length + validSpecs.length + validTags.length + validCerts.length + validCompliance.length
+  const getStatusConfig = (status) => {
+    const configs = {
+      active: { color: 'green', icon: CheckCircle, text: 'Active' },
+      draft: { color: 'orange', icon: Clock, text: 'Draft' },
+      inactive: { color: 'red', icon: AlertTriangle, text: 'Inactive' }
     };
+    return configs[status] || configs.draft;
   };
 
-  const stats = getCompletionStats();
+  const tabs = [
+    { id: 'overview', label: 'Overview', icon: Eye },
+    { id: 'details', label: 'Details', icon: Settings },
+    { id: 'analytics', label: 'Analytics', icon: TrendingUp },
+    { id: 'seo', label: 'SEO', icon: Tag }
+  ];
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-2 border-orange-500 border-t-transparent mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading product details...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !product) {
+    return (
+      <div className="text-center py-20">
+        <AlertTriangle className="w-16 h-16 text-red-500 mx-auto mb-4" />
+        <h2 className="text-2xl font-bold text-gray-900 mb-2">Product Not Found</h2>
+        <p className="text-gray-600 mb-6">{error || 'The product you are looking for does not exist.'}</p>
+        <Link
+          to="/admin/products"
+          className="bg-orange-500 text-white px-6 py-3 rounded-lg hover:bg-orange-600 transition-colors"
+        >
+          Back to Products
+        </Link>
+      </div>
+    );
+  }
+
+  const statusConfig = getStatusConfig(product.status);
+  const StatusIcon = statusConfig.icon;
 
   return (
-    <div className="space-y-8">
-      
-      {/* Completion Overview */}
-      <div className="bg-gradient-to-r from-green-50 to-blue-50 rounded-xl p-6 border-2 border-green-200">
-        <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
-          <Zap className="h-5 w-5 text-green-600" />
-          📊 Product Details Completion
-        </h3>
-        
-        <div className="grid grid-cols-3 md:grid-cols-5 gap-4 text-center">
-          <div className="bg-white p-3 rounded-lg shadow-sm">
-            <div className="text-lg font-bold text-green-600">{stats.features}</div>
-            <div className="text-xs text-gray-600">Features</div>
-          </div>
-          <div className="bg-white p-3 rounded-lg shadow-sm">
-            <div className="text-lg font-bold text-blue-600">{stats.specifications}</div>
-            <div className="text-xs text-gray-600">Specs</div>
-          </div>
-          <div className="bg-white p-3 rounded-lg shadow-sm">
-            <div className="text-lg font-bold text-orange-600">{stats.tags}</div>
-            <div className="text-xs text-gray-600">Tags</div>
-          </div>
-          <div className="bg-white p-3 rounded-lg shadow-sm">
-            <div className="text-lg font-bold text-purple-600">{stats.certifications}</div>
-            <div className="text-xs text-gray-600">Certs</div>
-          </div>
-          <div className="bg-white p-3 rounded-lg shadow-sm">
-            <div className="text-lg font-bold text-red-600">{stats.compliance}</div>
-            <div className="text-xs text-gray-600">Standards</div>
-          </div>
-        </div>
-        
-        <p className="text-center text-sm text-green-700 mt-3 font-medium">
-          💡 Total Details: {stats.total} items • 
-          {stats.total >= 10 ? ' ✅ Comprehensive product info' : 
-           stats.total >= 5 ? ' 📈 Good detail level' : 
-           ' ⚠️ Add more details for better SEO'}
-        </p>
-      </div>
-
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
-        
-        {/* 🌟 Product Features */}
-        <div className="bg-white rounded-xl shadow-lg border p-6">
-          <h2 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-green-600" />
-            Key Features
-            <span className="text-sm bg-green-100 text-green-800 px-2 py-1 rounded-full font-medium">
-              ✨ SELLING POINTS
-            </span>
-          </h2>
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <button
+            onClick={() => navigate('/admin/products')}
+            className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </button>
           
-          <div className="space-y-3">
-            {features.map((feature, index) => (
-              <div key={index} className="flex gap-3">
-                <div className="flex-1 relative">
-                  <input
-                    type="text"
-                    value={feature}
-                    onChange={(e) => updateFeature(index, e.target.value)}
-                    className="w-full p-4 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 pr-12"
-                    placeholder={`Feature ${index + 1} (e.g., Steel toe protection, Slip resistant sole, Waterproof construction)`}
-                  />
-                  {feature.trim() && (
-                    <CheckCircle className="absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-green-500" />
-                  )}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => removeFeature(index)}
-                  className="p-3 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                  disabled={features.length === 1}
-                >
-                  <Minus size={16} />
-                </button>
+          <div>
+            <div className="flex items-center gap-3 mb-2">
+              <h1 className="text-2xl font-bold text-gray-900">{product.product_name}</h1>
+              <div className={`flex items-center gap-1 px-3 py-1 rounded-full text-sm font-medium ${
+                product.status === 'active' 
+                  ? 'bg-green-100 text-green-800' 
+                  : product.status === 'draft'
+                  ? 'bg-orange-100 text-orange-800'
+                  : 'bg-red-100 text-red-800'
+              }`}>
+                <StatusIcon size={14} />
+                {product.status.toUpperCase()}
               </div>
-            ))}
-            
-            <button
-              type="button"
-              onClick={addFeature}
-              className="w-full p-4 border-2 border-dashed border-green-300 text-green-600 rounded-lg hover:bg-green-50 transition-colors flex items-center justify-center gap-2 font-medium"
-            >
-              <Plus size={16} />
-              Add Feature
-            </button>
-          </div>
-          
-          {/* Feature Examples */}
-          <div className="mt-4 p-3 bg-green-50 rounded-lg border border-green-200">
-            <p className="text-sm text-green-800 font-medium mb-2">💡 Feature Examples:</p>
-            <div className="grid grid-cols-1 gap-1 text-xs text-green-700">
-              <p>• "200-joule impact protection"</p>
-              <p>• "Anti-slip rubber outsole"</p>
-              <p>• "Moisture-wicking interior lining"</p>
-              <p>• "Quick-release buckle system"</p>
+              {product.isFeatured && (
+                <div className="flex items-center gap-1 px-2 py-1 bg-orange-100 text-orange-800 rounded-full text-xs font-medium">
+                  <Star size={12} className="fill-current" />
+                  Featured
+                </div>
+              )}
+            </div>
+            <div className="flex items-center gap-4 text-sm text-gray-600">
+              <span>Brand: {product.product_brand}</span>
+              <span>•</span>
+              <span>Created {new Date(product.createdAt).toLocaleDateString()}</span>
+              <span>•</span>
+              <span>ID: {product._id}</span>
             </div>
           </div>
         </div>
+        
+        <div className="flex gap-3">
+          <button
+            onClick={copyProductURL}
+            className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 flex items-center gap-2 transition-colors"
+          >
+            <Copy size={16} />
+            Copy URL
+          </button>
+          
+          <button
+            onClick={() => window.open(`/products/${product.slug || product._id}`, '_blank')}
+            className="px-4 py-2 text-orange-700 border border-orange-300 rounded-lg hover:bg-orange-50 flex items-center gap-2 transition-colors"
+          >
+            <ExternalLink size={16} />
+            View Live
+          </button>
+          
+          <Link
+            to={`/admin/products/${id}/edit`}
+            className="px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 flex items-center gap-2 transition-colors"
+          >
+            <Edit size={16} />
+            Edit Product
+          </Link>
+          
+          <button
+            onClick={() => setShowDeleteModal(true)}
+            className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 flex items-center gap-2 transition-colors"
+          >
+            <Trash2 size={16} />
+            Delete
+          </button>
+        </div>
+      </div>
 
-        {/* ⚙️ Technical Specifications */}
-        <div className="bg-white rounded-xl shadow-lg border p-6">
-          <h2 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2">
-            <Settings className="h-5 w-5 text-blue-600" />
-            Technical Specifications
-            <span className="text-sm bg-blue-100 text-blue-800 px-2 py-1 rounded-full font-medium">
-              ⚙️ TECH SPECS
-            </span>
-          </h2>
+      {/* Product Hero Section */}
+      <div className="bg-white rounded-xl shadow-lg border p-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           
-          <div className="space-y-3">
-            {specifications.map((spec, index) => (
-              <div key={index} className="grid grid-cols-5 gap-3">
-                <div className="col-span-2">
-                  <input
-                    type="text"
-                    value={spec.key}
-                    onChange={(e) => updateSpecification(index, 'key', e.target.value)}
-                    className="w-full p-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                    placeholder="Property"
+          {/* Product Images */}
+          <div>
+            {product.images && product.images.length > 0 ? (
+              <div className="space-y-4">
+                <div className="aspect-square bg-gray-100 rounded-lg overflow-hidden">
+                  <img
+                    src={product.images[0]}
+                    alt={product.product_name}
+                    className="w-full h-full object-cover"
                   />
                 </div>
-                <div className="col-span-2">
-                  <input
-                    type="text"
-                    value={spec.value}
-                    onChange={(e) => updateSpecification(index, 'value', e.target.value)}
-                    className="w-full p-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                    placeholder="Value"
-                  />
-                </div>
-                <button
-                  type="button"
-                  onClick={() => removeSpecification(index)}
-                  className="p-3 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                  disabled={specifications.length === 1}
-                >
-                  <Minus size={16} />
-                </button>
+                {product.images.length > 1 && (
+                  <div className="grid grid-cols-4 gap-2">
+                    {product.images.slice(1, 5).map((image, index) => (
+                      <div key={index} className="aspect-square bg-gray-100 rounded-lg overflow-hidden">
+                        <img
+                          src={image}
+                          alt={`${product.product_name} ${index + 2}`}
+                          className="w-full h-full object-cover cursor-pointer hover:opacity-80"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
-            ))}
-            
-            <button
-              type="button"
-              onClick={addSpecification}
-              className="w-full p-4 border-2 border-dashed border-blue-300 text-blue-600 rounded-lg hover:bg-blue-50 transition-colors flex items-center justify-center gap-2 font-medium"
-            >
-              <Plus size={16} />
-              Add Specification
-            </button>
+            ) : (
+              <div className="aspect-square bg-gray-100 rounded-lg flex items-center justify-center">
+                <ImageIcon size={48} className="text-gray-400" />
+              </div>
+            )}
           </div>
-          
-          {/* Specification Examples */}
-          <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
-            <p className="text-sm text-blue-800 font-medium mb-2">⚙️ Specification Examples:</p>
-            <div className="grid grid-cols-2 gap-2 text-xs text-blue-700">
+
+          {/* Product Info */}
+          <div className="space-y-6">
+            
+            {/* Price & Stock */}
+            <div className="grid grid-cols-2 gap-6">
               <div>
-                <p><span className="font-medium">Material:</span> Leather/Steel</p>
-                <p><span className="font-medium">Size Range:</span> 38-47</p>
+                <h3 className="text-sm font-medium text-gray-600 mb-2">Price</h3>
+                <div className="text-3xl font-bold text-gray-900">
+                  {formatPrice(product.price || product.product_price)}
+                </div>
+                {product.isOnSale && product.salePrice && (
+                  <div className="text-lg text-gray-500 line-through">
+                    {formatPrice(product.originalPrice)}
+                  </div>
+                )}
+              </div>
+              
+              <div>
+                <h3 className="text-sm font-medium text-gray-600 mb-2">Stock Level</h3>
+                <div className="text-3xl font-bold text-gray-900">{product.stock}</div>
+                <div className="text-sm text-gray-500">
+                  {product.stock <= (product.lowStockThreshold || 10) ? 'Low Stock' : 'In Stock'}
+                </div>
+              </div>
+            </div>
+
+            {/* Categories */}
+            <div>
+              <h3 className="text-sm font-medium text-gray-600 mb-2">Categories</h3>
+              <div className="flex flex-wrap gap-2">
+                <span className="px-3 py-1 bg-orange-100 text-orange-800 rounded-full text-sm font-medium">
+                  {product.protectionType || product.category}
+                </span>
+                {product.secondaryCategories && product.secondaryCategories.map((cat, index) => (
+                  <span key={index} className="px-3 py-1 bg-gray-100 text-gray-800 rounded-full text-sm">
+                    {cat}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            {/* Quick Stats */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="text-center p-3 bg-orange-50 rounded-lg">
+                <Eye className="w-6 h-6 text-orange-600 mx-auto mb-1" />
+                <div className="text-lg font-bold text-gray-900">{analytics.views}</div>
+                <div className="text-xs text-gray-600">Views</div>
+              </div>
+              <div className="text-center p-3 bg-green-50 rounded-lg">
+                <ShoppingCart className="w-6 h-6 text-green-600 mx-auto mb-1" />
+                <div className="text-lg font-bold text-gray-900">{analytics.orders}</div>
+                <div className="text-xs text-gray-600">Orders</div>
+              </div>
+              <div className="text-center p-3 bg-blue-50 rounded-lg">
+                <DollarSign className="w-6 h-6 text-blue-600 mx-auto mb-1" />
+                <div className="text-lg font-bold text-gray-900">KES {analytics.revenue.toLocaleString()}</div>
+                <div className="text-xs text-gray-600">Revenue</div>
+              </div>
+              <div className="text-center p-3 bg-purple-50 rounded-lg">
+                <TrendingUp className="w-6 h-6 text-purple-600 mx-auto mb-1" />
+                <div className="text-lg font-bold text-gray-900">{analytics.conversionRate}%</div>
+                <div className="text-xs text-gray-600">Conversion</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div className="bg-white rounded-xl shadow-lg border">
+        <div className="border-b border-gray-200">
+          <nav className="flex space-x-8 px-6">
+            {tabs.map((tab) => {
+              const Icon = tab.icon;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`flex items-center gap-2 py-4 px-2 border-b-2 font-medium text-sm transition-colors ${
+                    activeTab === tab.id
+                      ? 'border-orange-500 text-orange-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  <Icon className="h-4 w-4" />
+                  {tab.label}
+                </button>
+              );
+            })}
+          </nav>
+        </div>
+
+        <div className="p-6">
+          {activeTab === 'overview' && (
+            <div className="space-y-6">
+              
+              {/* Product Description */}
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-3">Product Description</h3>
+                <div className="prose max-w-none">
+                  <p className="text-gray-700 leading-relaxed">
+                    {product.product_description}
+                  </p>
+                </div>
+              </div>
+
+              {/* Features */}
+              {product.features && product.features.length > 0 && (
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-3">Key Features</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {product.features.map((feature, index) => (
+                      <div key={index} className="flex items-start gap-3 p-3 bg-green-50 rounded-lg">
+                        <CheckCircle className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
+                        <span className="text-gray-700">{feature}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Certifications */}
+              {product.certifications && product.certifications.length > 0 && (
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-3">Certifications</h3>
+                  <div className="flex flex-wrap gap-3">
+                    {product.certifications.map((cert, index) => (
+                      <div key={index} className="flex items-center gap-2 px-4 py-2 bg-blue-50 border border-blue-200 rounded-lg">
+                        <Award className="h-4 w-4 text-blue-600" />
+                        <span className="text-blue-800 font-medium">{cert}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeTab === 'details' && (
+            <div className="space-y-6">
+              
+              {/* Technical Specifications */}
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Technical Specifications</h3>
+                {product.specifications && Object.keys(product.specifications).length > 0 ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {Object.entries(product.specifications).map(([key, value]) => (
+                      <div key={key} className="flex justify-between items-center py-3 px-4 bg-gray-50 rounded-lg">
+                        <span className="font-medium text-gray-900 capitalize">
+                          {key.replace('_', ' ')}
+                        </span>
+                        <span className="text-gray-700">{value}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-gray-500 italic">No specifications available</p>
+                )}
+              </div>
+
+              {/* Product Tags */}
+              {product.tags && product.tags.length > 0 && (
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Product Tags</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {product.tags.map((tag, index) => (
+                      <span
+                        key={index}
+                        className="inline-flex items-center gap-1 px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-sm"
+                      >
+                        <Tag size={12} />
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Compliance Standards */}
+              {product.complianceStandards && product.complianceStandards.length > 0 && (
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Compliance Standards</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {product.complianceStandards.map((standard, index) => (
+                      <div key={index} className="flex items-center gap-3 p-3 bg-blue-50 rounded-lg">
+                        <Shield className="h-5 w-5 text-blue-600 flex-shrink-0" />
+                        <span className="text-blue-800 font-medium">{standard}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeTab === 'analytics' && (
+            <div className="space-y-6">
+              
+              {/* Performance Metrics */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <div className="bg-orange-50 rounded-lg p-6 text-center">
+                  <Eye className="w-8 h-8 text-orange-600 mx-auto mb-2" />
+                  <div className="text-2xl font-bold text-gray-900">{analytics.views}</div>
+                  <div className="text-sm text-gray-600">Total Views</div>
+                  <div className="text-xs text-green-600 mt-1">+12% this week</div>
+                </div>
+                
+                <div className="bg-green-50 rounded-lg p-6 text-center">
+                  <ShoppingCart className="w-8 h-8 text-green-600 mx-auto mb-2" />
+                  <div className="text-2xl font-bold text-gray-900">{analytics.orders}</div>
+                  <div className="text-sm text-gray-600">Orders</div>
+                  <div className="text-xs text-green-600 mt-1">+3 this week</div>
+                </div>
+                
+                <div className="bg-blue-50 rounded-lg p-6 text-center">
+                  <DollarSign className="w-8 h-8 text-blue-600 mx-auto mb-2" />
+                  <div className="text-2xl font-bold text-gray-900">KES {analytics.revenue.toLocaleString()}</div>
+                  <div className="text-sm text-gray-600">Revenue</div>
+                  <div className="text-xs text-green-600 mt-1">+8% this month</div>
+                </div>
+                
+                <div className="bg-purple-50 rounded-lg p-6 text-center">
+                  <TrendingUp className="w-8 h-8 text-purple-600 mx-auto mb-2" />
+                  <div className="text-2xl font-bold text-gray-900">{analytics.conversionRate}%</div>
+                  <div className="text-sm text-gray-600">Conversion Rate</div>
+                  <div className="text-xs text-green-600 mt-1">Above average</div>
+                </div>
+              </div>
+
+              {/* Performance Insights */}
+              <div className="bg-white border border-gray-200 rounded-lg p-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Performance Insights</h3>
+                <div className="space-y-4">
+                  <div className="flex items-start gap-3 p-3 bg-green-50 rounded-lg">
+                    <CheckCircle className="w-5 h-5 text-green-600 mt-0.5" />
+                    <div>
+                      <p className="text-sm text-green-700">This product has a conversion rate above the store average.</p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-start gap-3 p-3 bg-orange-50 rounded-lg">
+                    <AlertTriangle className="w-5 h-5 text-orange-600 mt-0.5" />
+                    <div>
+                      <p className="font-medium text-orange-900">Optimization Opportunity</p>
+                      <p className="text-sm text-orange-700">Consider adding more product images to improve engagement.</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'seo' && (
+            <div className="space-y-6">
+              
+              {/* SEO Overview */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="bg-green-50 rounded-lg p-6 text-center">
+                  <div className="text-2xl font-bold text-green-700">85</div>
+                  <div className="text-sm text-gray-600">SEO Score</div>
+                  <div className="text-xs text-green-600 mt-1">Good optimization</div>
+                </div>
+                
+                <div className="bg-blue-50 rounded-lg p-6 text-center">
+                  <div className="text-2xl font-bold text-blue-700">#{product.searchRanking || 12}</div>
+                  <div className="text-sm text-gray-600">Search Ranking</div>
+                  <div className="text-xs text-blue-600 mt-1">For main keyword</div>
+                </div>
+                
+                <div className="bg-purple-50 rounded-lg p-6 text-center">
+                  <div className="text-2xl font-bold text-purple-700">{product.keywords?.length || 5}</div>
+                  <div className="text-sm text-gray-600">Target Keywords</div>
+                  <div className="text-xs text-purple-600 mt-1">Optimized</div>
+                </div>
+              </div>
+
+              {/* SEO Details */}
+              <div className="space-y-4">
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-3">SEO Information</h3>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-sm font-medium text-gray-600">Meta Title</label>
+                      <p className="text-gray-900 mt-1">{product.metaTitle || product.product_name}</p>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-gray-600">Meta Description</label>
+                      <p className="text-gray-900 mt-1">{product.metaDescription || 'No meta description set'}</p>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-gray-600">URL Slug</label>
+                      <p className="text-gray-900 mt-1">/products/{product.slug || product._id}</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* SEO Recommendations */}
+                <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+                  <h4 className="font-medium text-orange-900 mb-2">SEO Recommendations</h4>
+                  <ul className="text-sm text-orange-800 space-y-1">
+                    <li>• Add more specific keywords related to "{product.protectionType}" in Kenya</li>
+                    <li>• Include price range keywords like "affordable safety boots"</li>
+                    <li>• Add location-based terms like "Nairobi safety equipment"</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 bg-red-100 rounded-full">
+                <Trash2 className="w-6 h-6 text-red-600" />
               </div>
               <div>
-                <p><span className="font-medium">Weight:</span> 1.2kg per pair</p>
-                <p><span className="font-medium">Temperature:</span> -20°C to +50°C</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
-        {/* 🏷️ Product Tags */}
-        <div className="bg-white rounded-xl shadow-lg border p-6">
-          <h2 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2">
-            <Tag className="h-5 w-5 text-orange-600" />
-            Product Tags
-          </h2>
-          
-          <div className="space-y-3">
-            {tags.map((tag, index) => (
-              <div key={index} className="flex gap-3">
-                <input
-                  type="text"
-                  value={tag}
-                  onChange={(e) => updateTag(index, e.target.value)}
-                  className="flex-1 p-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500"
-                  placeholder={`Tag ${index + 1}`}
-                />
-                <button
-                  type="button"
-                  onClick={() => removeTag(index)}
-                  className="p-3 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                  disabled={tags.length === 1}
-                >
-                  <Minus size={16} />
-                </button>
-              </div>
-            ))}
-            
-            <button
-              type="button"
-              onClick={addTag}
-              className="w-full p-3 border-2 border-dashed border-orange-300 text-orange-600 rounded-lg hover:bg-orange-50 transition-colors flex items-center justify-center gap-2 font-medium"
-            >
-              <Plus size={16} />
-              Add Tag
-            </button>
-          </div>
-        </div>
-
-        {/* 🏆 Certifications */}
-        <div className="bg-white rounded-xl shadow-lg border p-6">
-          <h2 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2">
-            <Award className="h-5 w-5 text-purple-600" />
-            Certifications
-          </h2>
-          
-          <div className="space-y-3">
-            {certifications.map((cert, index) => (
-              <div key={index} className="flex gap-3">
-                <input
-                  type="text"
-                  value={cert}
-                  onChange={(e) => updateCertification(index, e.target.value)}
-                  className="flex-1 p-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
-                  placeholder={`Certification ${index + 1}`}
-                />
-                <button
-                  type="button"
-                  onClick={() => removeCertification(index)}
-                  className="p-3 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                  disabled={certifications.length === 1}
-                >
-                  <Minus size={16} />
-                </button>
-              </div>
-            ))}
-            
-            <button
-              type="button"
-              onClick={addCertification}
-              className="w-full p-3 border-2 border-dashed border-purple-300 text-purple-600 rounded-lg hover:bg-purple-50 transition-colors flex items-center justify-center gap-2 font-medium"
-            >
-              <Plus size={16} />
-              Add Certification
-            </button>
-          </div>
-          
-          {/* Certification Examples */}
-          <div className="mt-4 p-3 bg-purple-50 rounded-lg border border-purple-200">
-            <p className="text-xs text-purple-800 font-medium mb-1">🏆 Examples:</p>
-            <div className="text-xs text-purple-700 space-y-1">
-              <p>• CE Marking (Europe)</p>
-              <p>• ANSI Z87.1 (Eye Protection)</p>
-              <p>• ISO 20345 (Safety Footwear)</p>
-              <p>• KEBS 1515 (Kenya Standard)</p>
-            </div>
-          </div>
-        </div>
-
-        {/* 🛡️ Compliance Standards */}
-        <div className="bg-white rounded-xl shadow-lg border p-6">
-          <h2 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2">
-            <Shield className="h-5 w-5 text-red-600" />
-            Compliance
-          </h2>
-          
-          <div className="space-y-3">
-            {complianceStandards.map((standard, index) => (
-              <div key={index} className="flex gap-3">
-                <input
-                  type="text"
-                  value={standard}
-                  onChange={(e) => updateCompliance(index, e.target.value)}
-                  className="flex-1 p-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500"
-                  placeholder={`Standard ${index + 1}`}
-                />
-                <button
-                  type="button"
-                  onClick={() => removeCompliance(index)}
-                  className="p-3 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                  disabled={complianceStandards.length === 1}
-                >
-                  <Minus size={16} />
-                </button>
-              </div>
-            ))}
-            
-            <button
-              type="button"
-              onClick={addCompliance}
-              className="w-full p-3 border-2 border-dashed border-red-300 text-red-600 rounded-lg hover:bg-red-50 transition-colors flex items-center justify-center gap-2 font-medium"
-            >
-              <Plus size={16} />
-              Add Standard
-            </button>
-          </div>
-          
-          {/* Compliance Examples */}
-          <div className="mt-4 p-3 bg-red-50 rounded-lg border border-red-200">
-            <p className="text-xs text-red-800 font-medium mb-1">🛡️ Examples:</p>
-            <div className="text-xs text-red-700 space-y-1">
-              <p>• OSHA Compliant</p>
-              <p>• FDA Approved</p>
-              <p>• KEBS Standards</p>
-              <p>• IEC 61340-5-1</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* 📈 SEO Impact Analysis */}
-      {stats.total > 0 && (
-        <div className="bg-gradient-to-br from-yellow-50 to-orange-50 rounded-xl p-6 border-2 border-yellow-200">
-          <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
-            <Zap className="h-5 w-5 text-yellow-600" />
-            📈 SEO Impact Analysis
-          </h3>
-          
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            
-            {/* Content Richness Score */}
-            <div className="text-center p-4 bg-white rounded-lg shadow-sm">
-              <div className="text-2xl font-bold text-yellow-600">
-                {Math.min(stats.total * 10, 100)}%
-              </div>
-              <div className="text-sm text-gray-600">Content Richness</div>
-              <div className="text-xs text-gray-500 mt-1">
-                {stats.total >= 10 ? '🚀 Excellent' : 
-                 stats.total >= 5 ? '📈 Good' : '⚠️ Basic'}
+                <h3 className="text-lg font-semibold text-gray-900">Delete Product</h3>
+                <p className="text-sm text-gray-600">This action cannot be undone</p>
               </div>
             </div>
             
-            {/* Search Keywords Generated */}
-            <div className="text-center p-4 bg-white rounded-lg shadow-sm">
-              <div className="text-2xl font-bold text-blue-600">
-                {stats.features + stats.tags + stats.certifications}
-              </div>
-              <div className="text-sm text-gray-600">Search Keywords</div>
-              <div className="text-xs text-gray-500 mt-1">Auto-generated</div>
-            </div>
-            
-            {/* Trust Signals */}
-            <div className="text-center p-4 bg-white rounded-lg shadow-sm">
-              <div className="text-2xl font-bold text-green-600">
-                {stats.certifications + stats.compliance}
-              </div>
-              <div className="text-sm text-gray-600">Trust Signals</div>
-              <div className="text-xs text-gray-500 mt-1">
-                {(stats.certifications + stats.compliance) >= 3 ? '🏆 High' : 
-                 (stats.certifications + stats.compliance) >= 1 ? '📊 Medium' : '📈 Low'}
-              </div>
-            </div>
-          </div>
-          
-          <div className="mt-4 p-3 bg-white rounded-lg border border-yellow-200">
-            <p className="text-sm text-yellow-800">
-              <span className="font-medium">🎯 SEO Benefits:</span>
-              {stats.total >= 10 && " Your detailed product info will rank higher in search results and build customer trust."}
-              {stats.total >= 5 && stats.total < 10 && " Good detail level. Consider adding more specifications for better SEO."}
-              {stats.total < 5 && " Add more features and specifications to improve search ranking and customer confidence."}
+            <p className="text-gray-700 mb-6">
+              Are you sure you want to delete <strong>{product.product_name}</strong>?
             </p>
+            
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setShowDeleteModal(false)}
+                className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDelete}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+              >
+                Delete Product
+              </button>
+            </div>
           </div>
         </div>
       )}

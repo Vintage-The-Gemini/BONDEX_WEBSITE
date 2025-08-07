@@ -1,6 +1,7 @@
 // frontend/src/components/admin/AdminSidebar.jsx
 import React from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
+import { useAdmin } from '../../context/AdminContext';
 import {
   LayoutDashboard,
   Package,
@@ -11,133 +12,145 @@ import {
   BarChart3,
   Settings,
   Target,
+  X,
+  Search,
+  TrendingUp,
   Globe,
-  Eye,
-  Edit
+  ChevronDown,
+  ChevronRight,
+  Menu
 } from 'lucide-react';
 
-const AdminSidebar = ({ isOpen, onClose }) => {
+const AdminSidebar = () => {
   const location = useLocation();
+  const { sidebarOpen, toggleSidebar } = useAdmin();
+  const [expandedMenus, setExpandedMenus] = React.useState(new Set(['products', 'analytics']));
 
   const navigationItems = [
     {
+      id: 'dashboard',
       name: 'Dashboard',
       href: '/admin/dashboard',
-      icon: LayoutDashboard,
-      current: location.pathname === '/admin' || location.pathname === '/admin/dashboard'
+      icon: LayoutDashboard
     },
     {
+      id: 'products',
       name: 'Products',
       icon: Package,
       children: [
-        {
-          name: 'All Products',
-          href: '/admin/products',
-          icon: Package,
-          current: location.pathname === '/admin/products'
-        },
-        {
-          name: 'Create Product',
-          href: '/admin/products/create',
-          icon: Plus,
-          current: location.pathname === '/admin/products/create',
-          highlight: true // 🎯 Highlight the enhanced create page
-        },
-        {
-          name: 'Product Details',
-          href: '#',
-          icon: Eye,
-          current: location.pathname.includes('/admin/products/') && 
-                   !location.pathname.includes('/edit') && 
-                   !location.pathname.includes('/create'),
-          disabled: true,
-          note: 'Select a product to view details' // 🎯 Dynamic route
-        }
+        { name: 'All Products', href: '/admin/products', icon: Package },
+        { name: 'Create Product', href: '/admin/products/create', icon: Plus, highlight: true }
       ]
     },
     {
+      id: 'categories',
       name: 'Categories',
       icon: FolderTree,
       children: [
-        {
-          name: 'All Categories',
-          href: '/admin/categories',
-          icon: FolderTree,
-          current: location.pathname === '/admin/categories'
-        },
-        {
-          name: 'Create Category',
-          href: '/admin/categories/create',
-          icon: Plus,
-          current: location.pathname === '/admin/categories/create'
-        }
+        { name: 'All Categories', href: '/admin/categories', icon: FolderTree },
+        { name: 'Create Category', href: '/admin/categories/create', icon: Plus }
       ]
     },
     {
+      id: 'orders',
       name: 'Orders',
       href: '/admin/orders',
-      icon: ShoppingCart,
-      current: location.pathname.startsWith('/admin/orders')
+      icon: ShoppingCart
     },
     {
+      id: 'customers',
       name: 'Customers',
       href: '/admin/customers',
-      icon: Users,
-      current: location.pathname.startsWith('/admin/customers')
+      icon: Users
     },
     {
+      id: 'analytics',
       name: 'Analytics',
-      href: '/admin/analytics',
       icon: BarChart3,
-      current: location.pathname.startsWith('/admin/analytics')
+      children: [
+        { name: 'Sales Analytics', href: '/admin/analytics/sales', icon: TrendingUp },
+        { name: 'SEO Monitoring', href: '/admin/analytics/seo', icon: Search, highlight: true },
+        { name: 'Site Analytics', href: '/admin/analytics/site', icon: Globe }
+      ]
     },
     {
+      id: 'settings',
       name: 'Settings',
       href: '/admin/settings',
-      icon: Settings,
-      current: location.pathname.startsWith('/admin/settings')
+      icon: Settings
     }
   ];
 
-  const NavItem = ({ item, isChild = false }) => {
-    const Icon = item.icon;
-    
-    if (item.children) {
-      return (
-        <div className="space-y-1">
-          <div className={`flex items-center px-3 py-2 text-sm font-medium rounded-lg ${
-            item.children.some(child => child.current)
-              ? 'bg-blue-100 text-blue-700'
-              : 'text-gray-600 hover:bg-gray-100'
-          }`}>
-            <Icon className="mr-3 h-5 w-5" />
-            {item.name}
-          </div>
-          
-          <div className="ml-6 space-y-1">
-            {item.children.map((child) => (
-              <NavItem key={child.name} item={child} isChild={true} />
-            ))}
-          </div>
-        </div>
-      );
+  const isActive = (href) => {
+    if (href === '/admin/dashboard') {
+      return location.pathname === '/admin' || location.pathname === '/admin/dashboard';
     }
+    return location.pathname === href || location.pathname.startsWith(href + '/');
+  };
 
-    if (item.disabled) {
+  const isParentActive = (children) => {
+    return children.some(child => isActive(child.href));
+  };
+
+  const toggleMenu = (menuId) => {
+    const newExpanded = new Set(expandedMenus);
+    if (newExpanded.has(menuId)) {
+      newExpanded.delete(menuId);
+    } else {
+      newExpanded.add(menuId);
+    }
+    setExpandedMenus(newExpanded);
+  };
+
+  const renderNavItem = (item) => {
+    const hasChildren = item.children && item.children.length > 0;
+    const isExpanded = expandedMenus.has(item.id);
+    const itemIsActive = hasChildren ? isParentActive(item.children) : isActive(item.href);
+
+    if (hasChildren) {
       return (
-        <div className={`flex items-center px-3 py-2 text-sm font-medium rounded-lg cursor-not-allowed ${
-          isChild ? 'ml-0' : ''
-        } ${
-          item.current
-            ? 'bg-blue-100 text-blue-700'
-            : 'text-gray-400'
-        }`}>
-          <Icon className="mr-3 h-4 w-4" />
-          <span>{item.name}</span>
-          {item.note && (
-            <span className="ml-2 text-xs bg-gray-200 text-gray-600 px-2 py-1 rounded">
-              {item.note}
-            </span>
+        <div key={item.id} className="space-y-1">
+          <button
+            onClick={() => toggleMenu(item.id)}
+            className={`w-full flex items-center justify-between px-3 py-2 text-sm font-medium rounded-lg transition-all ${
+              itemIsActive
+                ? 'bg-orange-100 text-orange-800 border-l-4 border-orange-500'
+                : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+            }`}
+          >
+            <div className="flex items-center">
+              <item.icon className="mr-3 h-5 w-5" />
+              {sidebarOpen && <span>{item.name}</span>}
+            </div>
+            {sidebarOpen && (
+              isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />
+            )}
+          </button>
+          
+          {sidebarOpen && isExpanded && (
+            <div className="ml-6 space-y-1">
+              {item.children.map((child) => (
+                <NavLink
+                  key={child.href}
+                  to={child.href}
+                  className={({ isActive }) => 
+                    `flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-all ${
+                      isActive
+                        ? 'bg-orange-100 text-orange-800 border-l-4 border-orange-500'
+                        : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                    } ${child.highlight ? 'ring-1 ring-orange-200' : ''}`
+                  }
+                >
+                  <child.icon className="mr-3 h-4 w-4" />
+                  <span>{child.name}</span>
+                  {child.highlight && (
+                    <span className="ml-2 text-xs bg-orange-200 text-orange-800 px-2 py-1 rounded font-bold">
+                      NEW
+                    </span>
+                  )}
+                </NavLink>
+              ))}
+            </div>
           )}
         </div>
       );
@@ -145,27 +158,18 @@ const AdminSidebar = ({ isOpen, onClose }) => {
 
     return (
       <NavLink
+        key={item.id}
         to={item.href}
         className={({ isActive }) => 
           `flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-all ${
-            isChild ? 'ml-0' : ''
-          } ${
-            isActive || item.current
-              ? 'bg-blue-100 text-blue-700 shadow-sm'
+            isActive
+              ? 'bg-orange-100 text-orange-800 border-l-4 border-orange-500'
               : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
-          } ${
-            item.highlight ? 'ring-2 ring-blue-200 bg-gradient-to-r from-blue-50 to-purple-50' : ''
           }`
         }
-        onClick={onClose}
       >
-        <Icon className="mr-3 h-4 w-4" />
-        <span>{item.name}</span>
-        {item.highlight && (
-          <span className="ml-2 text-xs bg-blue-200 text-blue-800 px-2 py-1 rounded font-bold">
-            🎯 ENHANCED
-          </span>
-        )}
+        <item.icon className="mr-3 h-5 w-5" />
+        {sidebarOpen && <span>{item.name}</span>}
       </NavLink>
     );
   };
@@ -173,51 +177,45 @@ const AdminSidebar = ({ isOpen, onClose }) => {
   return (
     <>
       {/* Mobile Overlay */}
-      {isOpen && (
+      {sidebarOpen && (
         <div 
           className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
-          onClick={onClose}
+          onClick={toggleSidebar}
         />
       )}
       
       {/* Sidebar */}
-      <div className={`fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-lg transform transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-0 ${
-        isOpen ? 'translate-x-0' : '-translate-x-full'
-      }`}>
+      <div className={`fixed inset-y-0 left-0 z-50 bg-white shadow-lg transform transition-all duration-300 ease-in-out ${
+        sidebarOpen ? 'w-64' : 'w-20'
+      } flex flex-col`}>
         
-        {/* Logo */}
-        <div className="flex items-center justify-center h-16 px-4 border-b border-gray-200">
+        {/* Header with Logo and Toggle */}
+        <div className="flex items-center justify-between h-16 px-4 border-b border-gray-200 flex-shrink-0">
           <div className="flex items-center gap-2">
-            <Target className="h-8 w-8 text-blue-600" />
-            <span className="text-xl font-bold text-gray-900">Bondex Admin</span>
+            <Target className="h-8 w-8 text-orange-500" />
+            {sidebarOpen && (
+              <span className="text-xl font-bold text-gray-900">Bondex Admin</span>
+            )}
           </div>
+          
+          {/* Toggle Button */}
+          <button
+            onClick={toggleSidebar}
+            className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
+            title={sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
+          >
+            {sidebarOpen ? (
+              <X className="h-5 w-5 text-gray-600" />
+            ) : (
+              <Menu className="h-5 w-5 text-gray-600" />
+            )}
+          </button>
         </div>
         
-        {/* Navigation */}
-        <nav className="mt-8 px-4 space-y-2">
-          {navigationItems.map((item) => (
-            <NavItem key={item.name} item={item} />
-          ))}
+        {/* Scrollable Navigation */}
+        <nav className="flex-1 overflow-y-auto py-4 px-4 space-y-2">
+          {navigationItems.map(renderNavItem)}
         </nav>
-
-        {/* 🎯 QUICK ACTIONS SECTION */}
-        <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-gray-200 bg-gray-50">
-          <div className="space-y-2">
-            <NavLink
-              to="/admin/products/create"
-              className="w-full flex items-center justify-center px-4 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all font-medium shadow-lg"
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              🎯 Create Product
-            </NavLink>
-            
-            <div className="text-center">
-              <p className="text-xs text-gray-500">
-                Multi-Category & Advanced SEO
-              </p>
-            </div>
-          </div>
-        </div>
       </div>
     </>
   );

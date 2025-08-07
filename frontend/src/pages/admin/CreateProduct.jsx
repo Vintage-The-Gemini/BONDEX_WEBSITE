@@ -1,15 +1,387 @@
-// frontend/src/pages/admin/CreateProduct.jsx
+{/* Form */}
+      <form id="product-form" onSubmit={handleSubmit} className="space-y-8">
+        
+        {/* Basic Product Information - DIRECT INPUTS */}
+        <div className="bg-white rounded-xl shadow-lg border p-6">
+          <h2 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2">
+            <Package className="h-6 w-6 text-orange-500" />
+            Product Information
+            <span className="text-sm bg-orange-100 text-orange-800 px-3 py-1 rounded-full font-medium">
+              BASIC INFO
+            </span>
+          </h2>
+          
+          <div className="space-y-6">
+            
+            {/* Product Name & Brand Row */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              
+              {/* Product Name */}
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-2">
+                  Product Name *
+                  <span className="text-xs text-gray-500 ml-2 font-normal">(SEO Important)</span>
+                </label>
+                <input
+                  type="text"
+                  name="product_name"
+                  value={formData.product_name}
+                  onChange={handleInputChange}
+                  className={`w-full p-4 border-2 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 font-medium transition-all ${
+                    validationErrors.product_name ? 'border-red-500 bg-red-50' : 'border-gray-300'
+                  }`}
+                  placeholder="e.g., Professional Steel Toe Safety Boots"
+                  maxLength={200}
+                />
+                
+                <div className="flex justify-between items-center mt-2">
+                  <span className={`text-sm font-medium ${
+                    formData.product_name.length < 10 ? 'text-red-500' :
+                    formData.product_name.length > 200 ? 'text-red-500' :
+                    formData.product_name.length >= 10 && formData.product_name.length <= 160 ? 'text-green-600' : 'text-yellow-600'
+                  }`}>
+                    {formData.product_name.length}/200 characters
+                    {formData.product_name.length < 10 && ' (too short)'}
+                  </span>
+                  
+                  {validationErrors.product_name ? (
+                    <p className="text-red-500 text-sm flex items-center gap-1">
+                      <AlertCircle className="h-4 w-4" />
+                      {validationErrors.product_name}
+                    </p>
+                  ) : formData.product_name.length >= 10 && (
+                    <p className="text-green-500 text-sm flex items-center gap-1">
+                      <CheckCircle className="h-4 w-4" />
+                      Good length
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* Product Brand */}
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-2">
+                  Brand *
+                  <span className="text-xs text-gray-500 ml-2 font-normal">(Manufacturer)</span>
+                </label>
+                <div className="relative">
+                  <Building2 className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                  <input
+                    type="text"
+                    name="product_brand"
+                    value={formData.product_brand}
+                    onChange={handleInputChange}
+                    className={`w-full pl-12 pr-4 py-4 border-2 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 font-medium transition-all ${
+                      validationErrors.product_brand ? 'border-red-500 bg-red-50' : 'border-gray-300'
+                    }`}
+                    placeholder="e.g., 3M, Honeywell, MSA, DuPont"
+                    maxLength={100}
+                  />
+                </div>
+                
+                {validationErrors.product_brand && (
+                  <p className="text-red-500 text-sm mt-2 flex items-center gap-1">
+                    <AlertCircle className="h-4 w-4" />
+                    {validationErrors.product_brand}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Product Description */}
+            <div>
+              <label className="block text-sm font-bold text-gray-700 mb-2">
+                Product Description *
+                <span className="text-xs text-gray-500 ml-2 font-normal">(Minimum 50 characters for SEO)</span>
+              </label>
+              <div className="relative">
+                <FileText className="absolute left-3 top-4 h-5 w-5 text-gray-400" />
+                <textarea
+                  name="product_description"
+                  value={formData.product_description}
+                  onChange={handleInputChange}
+                  rows={5}
+                  className={`w-full pl-12 pr-4 py-4 border-2 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 font-medium resize-none transition-all ${
+                    validationErrors.product_description ? 'border-red-500 bg-red-50' : 'border-gray-300'
+                  }`}
+                  placeholder="Detailed description of the safety equipment:
+• What protection does it provide?
+• What industries/applications is it suitable for?
+• Key features and benefits
+• Technical specifications
+• Certification standards"
+                  maxLength={2000}
+                />
+              </div>
+              <div className="flex justify-between items-center mt-2">
+                <span className={`text-sm font-medium ${
+                  formData.product_description.length < 50 ? 'text-red-500' :
+                  formData.product_description.length >= 50 && formData.product_description.length <= 300 ? 'text-green-600' : 'text-yellow-600'
+                }`}>
+                  {formData.product_description.length}/2000 characters
+                  {formData.product_description.length < 50 && ' (SEO needs 50+)'}
+                </span>
+                {validationErrors.product_description && (
+                  <p className="text-red-500 text-sm flex items-center gap-1">
+                    <AlertCircle className="h-4 w-4" />
+                    {validationErrors.product_description}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* SEO Writing Tips */}
+            <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <h4 className="font-medium text-blue-800 mb-2 flex items-center gap-2">
+                💡 SEO Writing Tips
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <p className="text-blue-800 text-sm">
+                    <span className="font-medium">Product Name:</span> Include main keyword and brand
+                  </p>
+                  <p className="text-blue-800 text-sm">
+                    <span className="font-medium">Description:</span> Start with key benefits
+                  </p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-blue-800 text-sm">
+                    <span className="font-medium">Keywords:</span> Include industry applications
+                  </p>
+                  <p className="text-blue-800 text-sm">
+                    <span className="font-medium">Location:</span> Mention Kenya/Nairobi for local SEO
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Product Name Examples */}
+            {!formData.product_name && (
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                <h4 className="font-medium text-yellow-800 mb-2">📝 Product Name Examples:</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+                  <button
+                    type="button"
+                    onClick={() => setFormData(prev => ({ ...prev, product_name: 'Professional Steel Toe Safety Boots' }))}
+                    className="text-left p-2 bg-white rounded hover:bg-yellow-100 transition-colors"
+                  >
+                    • Professional Steel Toe Safety Boots
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFormData(prev => ({ ...prev, product_name: 'Anti-Fog Safety Goggles with UV Protection' }))}
+                    className="text-left p-2 bg-white rounded hover:bg-yellow-100 transition-colors"
+                  >
+                    • Anti-Fog Safety Goggles with UV Protection
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFormData(prev => ({ ...prev, product_name: 'Cut-Resistant Work Gloves Level 5' }))}
+                    className="text-left p-2 bg-white rounded hover:bg-yellow-100 transition-colors"
+                  >
+                    • Cut-Resistant Work Gloves Level 5
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFormData(prev => ({ ...prev, product_name: 'N95 Respirator Mask with Valve' }))}
+                    className="text-left p-2 bg-white rounded hover:bg-yellow-100 transition-colors"
+                  >
+                    • N95 Respirator Mask with Valve
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Multi-Category Selection */}
+        <MultiCategorySelector
+          categories={categories}
+          selectedCategory={formData.category}
+          selectedIndustries={formData.industries}
+          onCategoryChange={(categoryId) => setFormData(prev => ({ ...prev, category: categoryId }))}
+          onIndustriesChange={handleIndustriesChange}
+          validationErrors={validationErrors}
+        />
+
+        {/* Pricing & Inventory */}
+        <div className="bg-white rounded-xl shadow-lg border p-6">
+          <h2 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2">
+            <DollarSign className="h-6 w-6 text-green-500" />
+            Pricing & Inventory
+          </h2>
+          
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            
+            {/* Price */}
+            <div>
+              <label className="block text-sm font-bold text-gray-700 mb-2">
+                Price (KES) *
+              </label>
+              <div className="relative">
+                <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                <input
+                  type="number"
+                  name="product_price"
+                  value={formData.product_price}
+                  onChange={handleInputChange}
+                  min="0"
+                  step="0.01"
+                  className={`w-full pl-12 pr-4 py-4 border-2 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all ${
+                    validationErrors.product_price ? 'border-red-500 bg-red-50' : 'border-gray-300'
+                  }`}
+                  placeholder="e.g., 6000"
+                />
+              </div>
+              {validationErrors.product_price && (
+                <p className="text-red-500 text-sm mt-1 flex items-center gap-1">
+                  <AlertCircle className="h-4 w-4" />
+                  {validationErrors.product_price}
+                </p>
+              )}
+            </div>
+
+            {/* Stock */}
+            <div>
+              <label className="block text-sm font-bold text-gray-700 mb-2">
+                Stock Quantity *
+              </label>
+              <div className="relative">
+                <Hash className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                <input
+                  type="number"
+                  name="stock"
+                  value={formData.stock}
+                  onChange={handleInputChange}
+                  min="0"
+                  className={`w-full pl-12 pr-4 py-4 border-2 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all ${
+                    validationErrors.stock ? 'border-red-500 bg-red-50' : 'border-gray-300'
+                  }`}
+                  placeholder="e.g., 50"
+                />
+              </div>
+              {validationErrors.stock && (
+                <p className="text-red-500 text-sm mt-1 flex items-center gap-1">
+                  <AlertCircle className="h-4 w-4" />
+                  {validationErrors.stock}
+                </p>
+              )}
+            </div>
+
+            {/* Low Stock Threshold */}
+            <div>
+              <label className="block text-sm font-bold text-gray-700 mb-2">
+                Low Stock Alert
+              </label>
+              <input
+                type="number"
+                name="lowStockThreshold"
+                value={formData.lowStockThreshold}
+                onChange={handleInputChange}
+                min="1"
+                className="w-full p-4 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all"
+                placeholder="10"
+              />
+              <p className="text-xs text-gray-500 mt-1">Alert when stock falls below this number</p>
+            </div>
+          </div>
+
+          {/* Sale Configuration */}
+          <div className="mt-6 pt-6 border-t border-gray-200">
+            <div className="flex items-center gap-3 mb-4">
+              <input
+                type="checkbox"
+                name="isOnSale"
+                checked={formData.isOnSale}
+                onChange={handleInputChange}
+                className="w-4 h-4 text-orange-500 border-gray-300 rounded focus:ring-orange-500"
+              />
+              <label className="text-sm font-bold text-gray-700">
+                Product is on sale
+              </label>
+            </div>
+            
+            {formData.isOnSale && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Sale Price (KES) *
+                </label>
+                <input
+                  type="number"
+                  name="salePrice"
+                  value={formData.salePrice}
+                  onChange={handleInputChange}
+                  min="0"
+                  step="0.01"
+                  className="w-full p-4 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all"
+                  placeholder="e.g., 4500"
+                />
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Additional Product Details */}
+        <div className="bg-white rounded-xl shadow-lg border p-6">
+          <h2 className="text-xl font-bold text-gray-900 mb-6">Additional Details</h2>
+          
+          <div className="space-y-6">
+            
+            {/* Features */}
+            <div>
+              <label className="block text-sm font-bold text-gray-700 mb-2">
+                Key Features
+              </label>
+              <textarea
+                name="features"
+                value={formData.features}
+                onChange={handleInputChange}
+                rows={3}
+                className="w-full p-4 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 resize-none transition-all"
+                placeholder="List key features, separated by commas or new lines"
+              />
+            </div>
+
+            {/* Tags */}
+            <div>
+              <label className="block text-sm font-bold text-gray-700 mb-2">
+                Product Tags
+              </label>
+              <input
+                type="text"
+                name="tags"
+                value={formData.tags}
+                onChange={handleInputChange}
+                className="w-full p-4 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all"
+                placeholder="safety, boots, steel toe, work boots, kenya"
+              />
+              <p className="text-xs text-gray-500 mt-1">Separate tags with commas</p>
+            </div>
+          </div>
+        </div>
+
+        {/* SEO Information */}
+        <div className="bg-white rounded-xl shadow-lg border p-6">
+          <h2 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2">
+            <FileText className="h-6 w-6 text-blue-500" />
+            SEO Information
+          </h2>
+          
+          <div className="space-y-6">
+            
+            {/* Meta Title */}
+            <div>
+              <label className="block text-sm font-bold text-gray-700 mb-2">
+                Meta Title
+              </label>
+              <input
+                type="text// frontend/src/pages/admin/CreateProduct.jsx
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAdmin } from '../../context/AdminContext';
 
-// 🎯 COMPONENT IMPORTS - Broken down for precision
+// Only import components that work properly
 import MultiCategorySelector from '../../components/admin/MultiCategorySelector';
-import AdvancedSEO from '../../components/admin/AdvancedSEO';
-import ProductBasicInfo from '../../components/admin/ProductBasicInfo';
-import ProductPricingInventory from '../../components/admin/ProductPricingInventory';
-import ProductImages from '../../components/admin/ProductImages';
-import ProductDetails from '../../components/admin/ProductDetails';
 
 import {
   ArrowLeft,
@@ -20,78 +392,57 @@ import {
   CheckCircle,
   Target,
   Sparkles,
-  Package
+  Package,
+  Building2,
+  FileText,
+  DollarSign,
+  Hash,
+  Upload,
+  Image as ImageIcon
 } from 'lucide-react';
 
 const CreateProduct = () => {
   const navigate = useNavigate();
-  const { categories, loadCategories } = useAdmin();
+  const { categories, loadCategories, addNotification } = useAdmin();
 
-  // 🎯 ENHANCED: Multi-Category Form State
+  // Simple form state - matching your working version
   const [formData, setFormData] = useState({
-    // Basic Product Information
     product_name: '',
     product_description: '',
     product_brand: '',
-    
-    // 🚀 NEW: Multi-Category Support
-    primaryCategory: '', // Protection type (required)
-    secondaryCategories: [], // Industries (multiple)
-    
-    // Legacy support (will be auto-populated)
     category: '',
-    
-    // Pricing & Inventory
+    industries: [],
     product_price: '',
     stock: '',
     lowStockThreshold: '10',
-    
-    // Sale Configuration
     isOnSale: false,
     salePrice: '',
-    saleStartDate: '',
-    saleEndDate: '',
-    
-    // Status & Features
-    status: 'active',
     isFeatured: false,
-    isNewArrival: false,
-    
-    // 🎯 ENHANCED SEO FIELDS
+    status: 'active',
     metaTitle: '',
     metaDescription: '',
     keywords: '',
-    slug: '',
-    focusKeyword: '',
-    seoScore: 0
+    features: '',
+    specifications: '',
+    tags: '',
+    certifications: '',
+    complianceStandards: ''
   });
 
-  // Images and Media
-  const [images, setImages] = useState([]);
-  const [imagePreviews, setImagePreviews] = useState([]);
-  
-  // Product Details
-  const [features, setFeatures] = useState(['']);
-  const [specifications, setSpecifications] = useState([{ key: '', value: '' }]);
-  const [tags, setTags] = useState(['']);
-  
-  // Certifications and Compliance
-  const [certifications, setCertifications] = useState(['']);
-  const [complianceStandards, setComplianceStandards] = useState(['']);
-
-  // UI State
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [showPreview, setShowPreview] = useState(false);
   const [validationErrors, setValidationErrors] = useState({});
 
+  const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+
   // Load categories on mount
   useEffect(() => {
     loadCategories();
   }, []);
 
-  // 🎯 VALIDATION with Multi-Category Logic
+  // Validation function
   const validateForm = () => {
     const errors = {};
     
@@ -112,12 +463,12 @@ const CreateProduct = () => {
       errors.product_brand = 'Product brand is required';
     }
     
-    // 🎯 MULTI-CATEGORY VALIDATION
-    if (!formData.primaryCategory) {
-      errors.protectionType = 'Protection type selection is required';
+    // Category validation - FIXED
+    if (!formData.category) {
+      errors.category = 'Protection type selection is required';
     }
     
-    if (!formData.secondaryCategories || formData.secondaryCategories.length === 0) {
+    if (!formData.industries || formData.industries.length === 0) {
       errors.industries = 'At least one industry/sector must be selected';
     }
     
@@ -136,10 +487,6 @@ const CreateProduct = () => {
         errors.salePrice = 'Sale price is required when product is on sale';
       } else if (parseFloat(formData.salePrice) >= parseFloat(formData.product_price)) {
         errors.salePrice = 'Sale price must be less than regular price';
-      }
-      
-      if (!formData.saleEndDate) {
-        errors.saleEndDate = 'Sale end date is required';
       }
     }
     
@@ -161,123 +508,35 @@ const CreateProduct = () => {
     return Object.keys(errors).length === 0;
   };
 
-  // 🚀 FORM DATA CHANGE HANDLER with Auto-Population
-  const handleFormDataChange = (field, value) => {
-    setFormData(prev => {
-      const updated = { ...prev, [field]: value };
-      
-      // Auto-populate legacy category field for backward compatibility
-      if (field === 'primaryCategory') {
-        updated.category = value;
-      }
-      
-      return updated;
-    });
-    
-    // Clear specific validation error when field is updated
-    if (validationErrors[field]) {
-      setValidationErrors(prev => {
-        const newErrors = { ...prev };
-        delete newErrors[field];
-        return newErrors;
-      });
-    }
-  };
-
-  // Handle input changes
+  // Handle input changes - SIMPLE VERSION
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
-    const newValue = type === 'checkbox' ? checked : value;
-    handleFormDataChange(name, newValue);
-  };
+    console.log('Input change:', name, type === 'checkbox' ? checked : value);
+    
+    setFormData(prev => ({
+      ...prev,
+      [name]: type === 'checkbox' ? checked : value
+    }));
 
-  // 📸 ENHANCED IMAGE HANDLING
-  const handleImageUpload = (e) => {
-    const files = Array.from(e.target.files);
-    
-    if (files.length === 0) return;
-    
-    // Validate file types
-    const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
-    const invalidFiles = files.filter(file => !validTypes.includes(file.type));
-    
-    if (invalidFiles.length > 0) {
-      setError('Please upload only JPEG, PNG, or WebP images');
-      return;
-    }
-    
-    // Check file sizes (max 5MB each)
-    const oversizedFiles = files.filter(file => file.size > 5 * 1024 * 1024);
-    if (oversizedFiles.length > 0) {
-      setError('Each image must be less than 5MB');
-      return;
-    }
-
-    // Check total image count
-    if (images.length + files.length > 5) {
-      setError('Maximum 5 images allowed per product');
-      return;
-    }
-
-    // Add to images array
-    setImages(prev => [...prev, ...files]);
-    
-    // Create previews
-    files.forEach(file => {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        setImagePreviews(prev => [...prev, {
-          file,
-          url: e.target.result,
-          name: file.name
-        }]);
-      };
-      reader.readAsDataURL(file);
-    });
-    
-    // Clear any existing errors
-    setError('');
-    if (validationErrors.images) {
+    // Clear validation error
+    if (validationErrors[name]) {
       setValidationErrors(prev => {
         const newErrors = { ...prev };
-        delete newErrors.images;
+        delete newErrors[name];
         return newErrors;
       });
     }
   };
 
-  // Remove image with re-indexing
-  const removeImage = (index) => {
-    setImages(prev => prev.filter((_, i) => i !== index));
-    setImagePreviews(prev => prev.filter((_, i) => i !== index));
+  // Handle multiple select for industries
+  const handleIndustriesChange = (industries) => {
+    setFormData(prev => ({
+      ...prev,
+      industries: industries
+    }));
   };
 
-  // Set main image
-  const setMainImage = (index) => {
-    const newPreviews = [...imagePreviews];
-    const [mainImage] = newPreviews.splice(index, 1);
-    newPreviews.unshift(mainImage);
-    setImagePreviews(newPreviews);
-    
-    const newImages = [...images];
-    const [mainFile] = newImages.splice(index, 1);
-    newImages.unshift(mainFile);
-    setImages(newImages);
-  };
-
-  // Save as draft
-  const handleSaveDraft = async () => {
-    const draftData = { ...formData, status: 'draft' };
-    setFormData(draftData);
-    
-    // Auto-submit after brief delay
-    setTimeout(() => {
-      const form = document.getElementById('product-form');
-      if (form) form.requestSubmit();
-    }, 100);
-  };
-
-  // 🚀 ENHANCED SUBMIT with Multi-Category Support
+  // Submit form - FIXED
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -292,456 +551,267 @@ const CreateProduct = () => {
     setSuccess('');
     
     try {
-      console.log('🎯 PRECISION: Creating multi-category product');
-      console.log('Protection Type:', formData.primaryCategory);
-      console.log('Industries:', formData.secondaryCategories);
+      console.log('🎯 Creating product with data:', formData);
       
-      // Create FormData for file upload
-      const formDataToSend = new FormData();
-      
-      // Append all form fields
-      Object.keys(formData).forEach(key => {
-        if (formData[key] !== '' && formData[key] !== null && formData[key] !== undefined) {
-          // Handle arrays properly
-          if (Array.isArray(formData[key])) {
-            formDataToSend.append(key, JSON.stringify(formData[key]));
-          } else {
-            formDataToSend.append(key, formData[key]);
-          }
-        }
-      });
-      
-      // Append features (filter empty)
-      const validFeatures = features.filter(f => f.trim() !== '');
-      if (validFeatures.length > 0) {
-        formDataToSend.append('features', JSON.stringify(validFeatures));
-      }
-      
-      // Append specifications (filter empty)
-      const validSpecs = specifications.filter(s => s.key.trim() !== '' && s.value.trim() !== '');
-      if (validSpecs.length > 0) {
-        const specsObject = {};
-        validSpecs.forEach(spec => {
-          specsObject[spec.key.trim()] = spec.value.trim();
-        });
-        formDataToSend.append('specifications', JSON.stringify(specsObject));
-      }
-      
-      // Append tags (filter empty)
-      const validTags = tags.filter(t => t.trim() !== '');
-      if (validTags.length > 0) {
-        formDataToSend.append('productTags', JSON.stringify(validTags));
-      }
-      
-      // Append certifications
-      const validCertifications = certifications.filter(c => c.trim() !== '');
-      if (validCertifications.length > 0) {
-        formDataToSend.append('certifications', JSON.stringify(validCertifications));
-      }
-      
-      // Append compliance standards
-      const validCompliance = complianceStandards.filter(c => c.trim() !== '');
-      if (validCompliance.length > 0) {
-        formDataToSend.append('complianceStandards', JSON.stringify(validCompliance));
-      }
-      
-      // Append images
-      images.forEach((image, index) => {
-        formDataToSend.append('images', image);
-      });
-      
-      // API call with proper headers
-      const response = await fetch('/api/admin/products', {
+      const response = await fetch(`${API_BASE}/admin/products`, {
         method: 'POST',
-        body: formDataToSend,
-        credentials: 'include'
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
+        },
+        body: JSON.stringify(formData)
       });
       
       const result = await response.json();
       
       if (result.success) {
-        setSuccess('🎯 Product created successfully with multi-category targeting!');
-        console.log('✅ PRECISION SUCCESS:', result.data);
-        
-        // Navigate to product view after brief delay
+        setSuccess('Product created successfully!');
+        addNotification('Product created successfully!', 'success');
         setTimeout(() => {
           navigate(`/admin/products/${result.data._id}`);
-        }, 2000);
+        }, 1500);
       } else {
         throw new Error(result.message || 'Failed to create product');
       }
       
     } catch (error) {
       console.error('❌ Creation error:', error);
-      setError(error.message || 'Failed to create product. Please check your connection and try again.');
+      const errorMessage = error.message || 'Failed to create product. Please check your connection and try again.';
+      setError(errorMessage);
+      addNotification(errorMessage, 'error');
     } finally {
       setLoading(false);
     }
   };
 
-  // Get categories for components
-  const protectionTypes = categories.filter(cat => cat.type === 'protection_type');
+  // Get protection types and industries
+  const protectionTypes = categories.filter(cat => cat.type === 'protection');
   const industries = categories.filter(cat => cat.type === 'industry');
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
-      <div className="max-w-7xl mx-auto px-6">
-        
-        {/* 🎯 ENHANCED HEADER */}
-        <div className="flex items-center justify-between mb-8">
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => navigate('/admin/products')}
-              className="p-3 text-gray-600 hover:text-gray-900 rounded-xl hover:bg-white shadow-sm transition-all"
-            >
-              <ArrowLeft size={24} />
-            </button>
-            <div>
-              <h1 className="text-4xl font-bold text-gray-900 flex items-center gap-3">
-                <Target className="h-8 w-8 text-blue-600" />
-                Create New Product
-                <span className="text-lg bg-gradient-to-r from-blue-600 to-purple-600 text-white px-3 py-1 rounded-full font-medium">
-                  🎯 MULTI-CATEGORY
-                </span>
-              </h1>
-              <p className="text-gray-600 mt-2">
-                Add safety equipment with precision multi-category targeting and advanced SEO optimization
-              </p>
-            </div>
-          </div>
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <button
+            onClick={() => navigate('/admin/products')}
+            className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </button>
           
-          <div className="flex gap-3">
-            <button
-              type="button"
-              onClick={() => setShowPreview(!showPreview)}
-              className="px-6 py-3 text-gray-700 border-2 border-gray-300 rounded-xl hover:bg-gray-50 flex items-center gap-2 transition-all font-medium"
-            >
-              {showPreview ? <EyeOff size={18} /> : <Eye size={18} />}
-              {showPreview ? 'Hide Preview' : 'Show Preview'}
-            </button>
-            
-            <button
-              type="button"
-              onClick={handleSaveDraft}
-              disabled={loading}
-              className="px-6 py-3 bg-gray-600 text-white rounded-xl hover:bg-gray-700 flex items-center gap-2 transition-all font-medium disabled:opacity-50"
-            >
-              <Save size={18} />
-              Save Draft
-            </button>
+          <div>
+            <div className="flex items-center gap-3">
+              <Target className="h-8 w-8 text-orange-500" />
+              <h1 className="text-3xl font-bold text-gray-900">Create New Product</h1>
+              <div className="px-4 py-2 bg-orange-100 text-orange-800 rounded-full text-sm font-medium">
+                🎯 MULTI-CATEGORY
+              </div>
+            </div>
+            <p className="text-gray-600 mt-1">
+              Add safety equipment with precision multi-category targeting and advanced SEO optimization
+            </p>
+          </div>
+        </div>
+        
+        <div className="flex gap-3">
+          <button
+            type="button"
+            onClick={() => setShowPreview(!showPreview)}
+            className="flex items-center gap-2 px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            {showPreview ? <EyeOff size={16} /> : <Eye size={16} />}
+            {showPreview ? 'Hide' : 'Show'} Preview
+          </button>
+          
+          <button
+            type="button"
+            onClick={handleSaveDraft}
+            disabled={loading}
+            className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors disabled:opacity-50"
+          >
+            <Package size={16} />
+            Save Draft
+          </button>
+        </div>
+      </div>
+
+      {/* Error/Success Messages */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg flex items-center gap-2">
+          <AlertCircle size={16} />
+          {error}
+        </div>
+      )}
+      
+      {success && (
+        <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg flex items-center gap-2">
+          <CheckCircle size={16} />
+          {success}
+        </div>
+      )}
+
+      {/* Form */}
+      <form id="product-form" onSubmit={handleSubmit} className="space-y-8">
+        
+                name="metaTitle"
+                value={formData.metaTitle}
+                onChange={handleInputChange}
+                className="w-full p-4 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all"
+                placeholder="SEO-optimized title for search engines"
+                maxLength={60}
+              />
+              <p className="text-xs text-gray-500 mt-1">{formData.metaTitle.length}/60 characters</p>
+            </div>
+
+            {/* Meta Description */}
+            <div>
+              <label className="block text-sm font-bold text-gray-700 mb-2">
+                Meta Description
+              </label>
+              <textarea
+                name="metaDescription"
+                value={formData.metaDescription}
+                onChange={handleInputChange}
+                rows={3}
+                className="w-full p-4 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 resize-none transition-all"
+                placeholder="Brief description for search engine results"
+                maxLength={160}
+              />
+              <p className="text-xs text-gray-500 mt-1">{formData.metaDescription.length}/160 characters</p>
+            </div>
+
+            {/* Keywords */}
+            <div>
+              <label className="block text-sm font-bold text-gray-700 mb-2">
+                Keywords
+              </label>
+              <input
+                type="text"
+                name="keywords"
+                value={formData.keywords}
+                onChange={handleInputChange}
+                className="w-full p-4 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all"
+                placeholder="safety boots, steel toe, work boots, kenya"
+              />
+              <p className="text-xs text-gray-500 mt-1">Separate keywords with commas</p>
+            </div>
           </div>
         </div>
 
-        {/* 🚨 ERROR/SUCCESS ALERTS */}
-        {error && (
-          <div className="mb-6 p-4 bg-red-50 border-2 border-red-200 rounded-xl">
-            <div className="flex items-center gap-2">
-              <AlertCircle className="h-5 w-5 text-red-600" />
-              <span className="font-medium text-red-800">{error}</span>
-            </div>
-          </div>
-        )}
-        
-        {success && (
-          <div className="mb-6 p-4 bg-green-50 border-2 border-green-200 rounded-xl">
-            <div className="flex items-center gap-2">
-              <CheckCircle className="h-5 w-5 text-green-600" />
-              <span className="font-medium text-green-800">{success}</span>
-            </div>
-          </div>
-        )}
-
-        <form id="product-form" onSubmit={handleSubmit} className="space-y-8">
+        {/* Product Settings */}
+        <div className="bg-white rounded-xl shadow-lg border p-6">
+          <h2 className="text-xl font-bold text-gray-900 mb-6">Product Settings</h2>
           
-          {/* 🎯 STEP 1: Multi-Category Selection */}
-          <MultiCategorySelector
-            selectedProtectionType={formData.primaryCategory}
-            selectedIndustries={formData.secondaryCategories}
-            onProtectionTypeChange={(typeId) => handleFormDataChange('primaryCategory', typeId)}
-            onIndustriesChange={(industryIds) => handleFormDataChange('secondaryCategories', industryIds)}
-            errors={validationErrors}
-          />
-
-          {/* 🚀 STEP 2: Advanced SEO Optimization */}
-          <AdvancedSEO
-            formData={formData}
-            onFormDataChange={handleFormDataChange}
-            selectedProtectionType={formData.primaryCategory}
-            selectedIndustries={formData.secondaryCategories}
-            protectionTypes={protectionTypes}
-            industries={industries}
-          />
-
-          {/* 📦 STEP 3: Basic Product Information */}
-          <ProductBasicInfo
-            formData={formData}
-            onInputChange={handleInputChange}
-            validationErrors={validationErrors}
-          />
-
-          {/* 💰 STEP 4: Pricing & Inventory */}
-          <ProductPricingInventory
-            formData={formData}
-            onInputChange={handleInputChange}
-            validationErrors={validationErrors}
-          />
-
-          {/* 📸 STEP 5: Product Images */}
-          <ProductImages
-            images={images}
-            imagePreviews={imagePreviews}
-            onImageUpload={handleImageUpload}
-            onRemoveImage={removeImage}
-            onSetMainImage={setMainImage}
-            validationErrors={validationErrors}
-          />
-
-          {/* 🏷️ STEP 6: Product Details & Specifications */}
-          <ProductDetails
-            features={features}
-            specifications={specifications}
-            tags={tags}
-            certifications={certifications}
-            complianceStandards={complianceStandards}
-            onFeaturesChange={setFeatures}
-            onSpecificationsChange={setSpecifications}
-            onTagsChange={setTags}
-            onCertificationsChange={setCertifications}
-            onComplianceChange={setComplianceStandards}
-          />
-
-          {/* 👁️ STEP 7: Product Preview */}
-          {showPreview && (
-            <div className="bg-white rounded-xl shadow-lg border-2 border-blue-200 p-6">
-              <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-2">
-                <Eye className="h-6 w-6 text-blue-600" />
-                Product Preview
-                <span className="text-sm bg-blue-100 text-blue-800 px-2 py-1 rounded-full font-medium">
-                  Customer View
-                </span>
-              </h2>
-              
-              <div className="border-2 border-gray-200 rounded-xl p-6 bg-gray-50">
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                  
-                  {/* Product Images Preview */}
-                  <div>
-                    {imagePreviews.length > 0 ? (
-                      <div className="space-y-4">
-                        <div className="aspect-square rounded-lg overflow-hidden bg-white shadow-md">
-                          <img
-                            src={imagePreviews[0].url}
-                            alt="Main product"
-                            className="w-full h-full object-cover"
-                          />
-                        </div>
-                        
-                        {imagePreviews.length > 1 && (
-                          <div className="grid grid-cols-4 gap-2">
-                            {imagePreviews.slice(1).map((preview, index) => (
-                              <div key={index} className="aspect-square rounded-md overflow-hidden bg-white shadow-sm">
-                                <img
-                                  src={preview.url}
-                                  alt={`Preview ${index + 2}`}
-                                  className="w-full h-full object-cover"
-                                />
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="aspect-square rounded-lg bg-gray-200 flex items-center justify-center">
-                        <Package className="h-16 w-16 text-gray-400" />
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Product Info Preview */}
-                  <div className="space-y-4">
-                    <div>
-                      <h3 className="text-2xl font-bold text-gray-900">
-                        {formData.product_name || 'Product Name'}
-                      </h3>
-                      <p className="text-lg text-gray-600 mt-1">
-                        by {formData.product_brand || 'Brand Name'}
-                      </p>
-                    </div>
-
-                    {/* Category Badges */}
-                    <div className="flex flex-wrap gap-2">
-                      {formData.primaryCategory && (
-                        <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-medium">
-                          {protectionTypes.find(p => p._id === formData.primaryCategory)?.name}
-                        </span>
-                      )}
-                      
-                      {formData.secondaryCategories.map(industryId => {
-                        const industry = industries.find(i => i._id === industryId);
-                        return industry ? (
-                          <span
-                            key={industryId}
-                            className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm font-medium"
-                          >
-                            {industry.name}
-                          </span>
-                        ) : null;
-                      })}
-                    </div>
-
-                    {/* Price Display */}
-                    <div className="flex items-center gap-4">
-                      {formData.isOnSale && formData.salePrice ? (
-                        <div className="flex items-center gap-3">
-                          <span className="text-3xl font-bold text-red-600">
-                            KES {parseInt(formData.salePrice || 0).toLocaleString()}
-                          </span>
-                          <span className="text-xl text-gray-500 line-through">
-                            KES {parseInt(formData.product_price || 0).toLocaleString()}
-                          </span>
-                          <span className="bg-red-600 text-white px-2 py-1 rounded text-sm font-bold">
-                            SALE
-                          </span>
-                        </div>
-                      ) : (
-                        <span className="text-3xl font-bold text-blue-600">
-                          KES {parseInt(formData.product_price || 0).toLocaleString()}
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Stock Status */}
-                    <div className="flex items-center gap-2">
-                      <div className={`w-3 h-3 rounded-full ${
-                        parseInt(formData.stock) > 20 ? 'bg-green-500' :
-                        parseInt(formData.stock) > 5 ? 'bg-yellow-500' : 'bg-red-500'
-                      }`}></div>
-                      <span className="text-sm font-medium">
-                        {parseInt(formData.stock) > 0 
-                          ? `${formData.stock} units in stock` 
-                          : 'Out of stock'
-                        }
-                      </span>
-                    </div>
-
-                    {/* Description Preview */}
-                    <div>
-                      <p className="text-gray-700 leading-relaxed">
-                        {formData.product_description || 'Product description will appear here...'}
-                      </p>
-                    </div>
-
-                    {/* Features Preview */}
-                    {features.some(f => f.trim()) && (
-                      <div>
-                        <h4 className="font-semibold text-gray-900 mb-2">Key Features:</h4>
-                        <ul className="space-y-1">
-                          {features.filter(f => f.trim()).map((feature, index) => (
-                            <li key={index} className="flex items-center gap-2 text-sm text-gray-700">
-                              <CheckCircle className="h-4 w-4 text-green-500 flex-shrink-0" />
-                              {feature}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* 🚀 SUBMIT SECTION */}
-          <div className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-xl shadow-xl p-6">
-            <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-              
-              {/* Form Completion Status */}
-              <div className="text-white">
-                <h3 className="text-xl font-bold mb-2">🎯 Multi-Category Product Creation</h3>
-                <div className="flex items-center gap-4 text-sm">
-                  <div className="flex items-center gap-2">
-                    <div className={`w-3 h-3 rounded-full ${
-                      formData.primaryCategory ? 'bg-green-400' : 'bg-red-400'
-                    }`}></div>
-                    <span>Protection Type</span>
-                  </div>
-                  
-                  <div className="flex items-center gap-2">
-                    <div className={`w-3 h-3 rounded-full ${
-                      formData.secondaryCategories.length > 0 ? 'bg-green-400' : 'bg-red-400'
-                    }`}></div>
-                    <span>Industries ({formData.secondaryCategories.length})</span>
-                  </div>
-                  
-                  <div className="flex items-center gap-2">
-                    <div className={`w-3 h-3 rounded-full ${
-                      formData.metaTitle && formData.metaDescription ? 'bg-green-400' : 'bg-yellow-400'
-                    }`}></div>
-                    <span>SEO Optimized</span>
-                  </div>
-                  
-                  <div className="flex items-center gap-2">
-                    <div className={`w-3 h-3 rounded-full ${
-                      images.length > 0 ? 'bg-green-400' : 'bg-red-400'
-                    }`}></div>
-                    <span>Images ({images.length})</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex gap-4">
-                <button
-                  type="button"
-                  onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-                  className="px-6 py-3 bg-white bg-opacity-20 text-white rounded-lg hover:bg-opacity-30 transition-all font-medium"
-                >
-                  ⬆️ Review Form
-                </button>
-                
-                <button
-                  type="submit"
-                  disabled={loading || Object.keys(validationErrors).length > 0}
-                  className="px-8 py-4 bg-white text-blue-600 rounded-xl hover:bg-gray-100 flex items-center gap-3 transition-all font-bold text-lg disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
-                >
-                  {loading ? (
-                    <>
-                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
-                      Creating Product...
-                    </>
-                  ) : (
-                    <>
-                      <Target className="h-5 w-5" />
-                      🎯 CREATE PRODUCT
-                      <Sparkles className="h-5 w-5" />
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
-          </div>
-        </form>
-
-        {/* 📊 VALIDATION SUMMARY (when errors exist) */}
-        {Object.keys(validationErrors).length > 0 && (
-          <div className="mt-8 bg-red-50 border-2 border-red-200 rounded-xl p-6">
-            <h3 className="font-bold text-red-800 mb-4 flex items-center gap-2">
-              <AlertCircle className="h-5 w-5" />
-              Validation Errors ({Object.keys(validationErrors).length})
-            </h3>
+          <div className="space-y-4">
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {Object.entries(validationErrors).map(([field, message]) => (
-                <div key={field} className="flex items-center gap-2 text-sm">
-                  <AlertCircle className="h-4 w-4 text-red-500 flex-shrink-0" />
-                  <span className="font-medium text-red-700">{field}:</span>
-                  <span className="text-red-600">{message}</span>
-                </div>
-              ))}
+            {/* Status */}
+            <div>
+              <label className="block text-sm font-bold text-gray-700 mb-2">
+                Status
+              </label>
+              <select
+                name="status"
+                value={formData.status}
+                onChange={handleInputChange}
+                className="w-full p-4 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all"
+              >
+                <option value="active">Active - Visible to customers</option>
+                <option value="draft">Draft - Hidden from customers</option>
+                <option value="inactive">Inactive - Temporarily disabled</option>
+              </select>
+            </div>
+
+            {/* Featured Product */}
+            <div className="flex items-center gap-3">
+              <input
+                type="checkbox"
+                name="isFeatured"
+                checked={formData.isFeatured}
+                onChange={handleInputChange}
+                className="w-4 h-4 text-orange-500 border-gray-300 rounded focus:ring-orange-500"
+              />
+              <label className="text-sm font-medium text-gray-700">
+                Featured Product
+              </label>
             </div>
           </div>
-        )}
-      </div>
+        </div>
+
+        {/* Submit Buttons */}
+        <div className="flex items-center justify-between pt-6 border-t border-gray-200">
+          <button
+            type="button"
+            onClick={() => navigate('/admin/products')}
+            className="px-6 py-3 text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors font-medium"
+          >
+            Cancel
+          </button>
+          
+          <button
+            type="submit"
+            disabled={loading}
+            className="px-8 py-3 bg-orange-500 text-white rounded-xl hover:bg-orange-600 transition-colors font-medium disabled:opacity-50 shadow-lg flex items-center gap-2"
+          >
+            {loading ? (
+              <>
+                <Save className="w-4 h-4 animate-spin" />
+                Creating...
+              </>
+            ) : (
+              <>
+                <Save className="w-4 h-4" />
+                Create Product
+              </>
+            )}
+          </button>
+        </div>
+      </form>
+
+      {/* Product Preview */}
+      {showPreview && (
+        <div className="bg-white rounded-xl shadow-lg border p-6">
+          <div className="flex items-center gap-2 mb-4">
+            <Sparkles className="h-5 w-5 text-orange-500" />
+            <h3 className="text-lg font-semibold text-gray-900">Product Preview</h3>
+          </div>
+          
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="w-full h-64 bg-gray-100 rounded-lg flex items-center justify-center">
+              <Package className="h-12 w-12 text-gray-400" />
+              <span className="ml-2 text-gray-500">No image uploaded</span>
+            </div>
+            
+            <div className="space-y-4">
+              <div>
+                <h4 className="text-xl font-bold text-gray-900">{formData.product_name || 'Product Name'}</h4>
+                <p className="text-gray-600">{formData.product_brand || 'Brand'}</p>
+              </div>
+              
+              <div className="text-2xl font-bold text-orange-600">
+                KES {formData.product_price ? parseFloat(formData.product_price).toLocaleString() : '0'}
+              </div>
+              
+              <p className="text-gray-700">
+                {formData.product_description || 'Product description will appear here...'}
+              </p>
+              
+              <div className="flex flex-wrap gap-2">
+                {formData.category && (
+                  <span className="px-3 py-1 bg-orange-100 text-orange-800 rounded-full text-sm">
+                    {categories.find(c => c._id === formData.category)?.name || 'Protection Type'}
+                  </span>
+                )}
+                {formData.industries && formData.industries.map((industry, index) => (
+                  <span key={index} className="px-3 py-1 bg-gray-100 text-gray-800 rounded-full text-sm">
+                    {categories.find(c => c._id === industry)?.name || industry}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

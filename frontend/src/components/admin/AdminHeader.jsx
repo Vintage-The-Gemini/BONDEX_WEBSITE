@@ -6,14 +6,10 @@ import {
   Menu,
   Search,
   Bell,
-  Plus,
   ChevronDown,
   User,
   Settings,
   LogOut,
-  Package,
-  FolderTree,
-  BarChart3,
   RefreshCw
 } from 'lucide-react';
 
@@ -63,9 +59,9 @@ const AdminHeader = () => {
     if (path === '/admin/categories') return 'Categories';
     if (path === '/admin/categories/create') return 'Create Category';
     if (path.includes('/admin/categories/') && path.includes('/edit')) return 'Edit Category';
+    if (path === '/admin/orders') return 'Orders';
+    if (path === '/admin/customers') return 'Customers';
     if (path === '/admin/analytics') return 'Analytics';
-    if (path === '/admin/reports') return 'Reports';
-    if (path === '/admin/profile') return 'Admin Profile';
     if (path === '/admin/settings') return 'Settings';
     
     return 'Admin Panel';
@@ -82,8 +78,6 @@ const AdminHeader = () => {
         breadcrumbs.push({ name: 'Create', href: null });
       } else if (path.includes('/edit')) {
         breadcrumbs.push({ name: 'Edit', href: null });
-      } else if (path !== '/admin/products') {
-        breadcrumbs.push({ name: 'Details', href: null });
       }
     } else if (path.includes('/categories')) {
       breadcrumbs.push({ name: 'Categories', href: '/admin/categories' });
@@ -92,12 +86,12 @@ const AdminHeader = () => {
       } else if (path.includes('/edit')) {
         breadcrumbs.push({ name: 'Edit', href: null });
       }
+    } else if (path.includes('/orders')) {
+      breadcrumbs.push({ name: 'Orders', href: null });
+    } else if (path.includes('/customers')) {
+      breadcrumbs.push({ name: 'Customers', href: null });
     } else if (path.includes('/analytics')) {
       breadcrumbs.push({ name: 'Analytics', href: null });
-    } else if (path.includes('/reports')) {
-      breadcrumbs.push({ name: 'Reports', href: null });
-    } else if (path.includes('/profile')) {
-      breadcrumbs.push({ name: 'Profile', href: null });
     } else if (path.includes('/settings')) {
       breadcrumbs.push({ name: 'Settings', href: null });
     }
@@ -109,33 +103,13 @@ const AdminHeader = () => {
     e.preventDefault();
     if (searchQuery.trim()) {
       navigate(`/admin/products?search=${encodeURIComponent(searchQuery.trim())}`);
-      setSearchQuery('');
     }
   };
 
-  const handleLogout = async () => {
-    if (window.confirm('Are you sure you want to logout?')) {
-      await logout();
-    }
-    setProfileDropdownOpen(false);
+  const handleLogout = () => {
+    logout();
+    navigate('/admin/login');
   };
-
-  const quickActions = [
-    {
-      name: 'Add Product',
-      href: '/admin/products/create',
-      icon: Package,
-      description: 'Create new safety equipment'
-    },
-    {
-      name: 'Add Category',
-      href: '/admin/categories/create',
-      icon: FolderTree,
-      description: 'Create product category'
-    }
-  ];
-
-  const unreadNotifications = notifications.filter(n => !n.read);
 
   return (
     <header className="bg-white border-b border-gray-200 px-6 py-4">
@@ -145,16 +119,14 @@ const AdminHeader = () => {
           {/* Mobile Menu Button */}
           <button
             onClick={toggleSidebar}
-            className="lg:hidden p-2 rounded-lg hover:bg-gray-100"
+            className="lg:hidden p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
           >
             <Menu className="h-5 w-5" />
           </button>
 
           {/* Page Title & Breadcrumbs */}
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">
-              {getPageTitle()}
-            </h1>
+            <h1 className="text-2xl font-bold text-gray-900">{getPageTitle()}</h1>
             <nav className="flex items-center space-x-2 text-sm text-gray-500 mt-1">
               {getBreadcrumbs().map((item, index) => (
                 <React.Fragment key={item.name}>
@@ -189,7 +161,7 @@ const AdminHeader = () => {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search products..."
-                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-transparent"
+                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
               />
             </div>
           </form>
@@ -206,17 +178,6 @@ const AdminHeader = () => {
             <RefreshCw className="h-5 w-5" />
           </button>
 
-          {/* Quick Actions Dropdown */}
-          <div className="relative">
-            <button
-              onClick={() => navigate('/admin/products/create')}
-              className="flex items-center space-x-1 bg-yellow-500 text-gray-900 px-4 py-2 rounded-lg hover:bg-yellow-600 transition-colors font-medium"
-            >
-              <Plus className="h-4 w-4" />
-              <span className="hidden sm:inline">Add Product</span>
-            </button>
-          </div>
-
           {/* Notifications */}
           <div className="relative" ref={notificationDropdownRef}>
             <button
@@ -224,8 +185,10 @@ const AdminHeader = () => {
               className="relative p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
             >
               <Bell className="h-5 w-5" />
-              {unreadNotifications.length > 0 && (
-                <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
+              {notifications.length > 0 && (
+                <span className="absolute -top-1 -right-1 h-4 w-4 bg-orange-500 text-white text-xs rounded-full flex items-center justify-center">
+                  {notifications.length}
+                </span>
               )}
             </button>
 
@@ -233,31 +196,29 @@ const AdminHeader = () => {
             {notificationDropdownOpen && (
               <div className="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
                 <div className="px-4 py-2 border-b border-gray-200">
-                  <h3 className="text-sm font-semibold text-gray-900">
-                    Notifications ({unreadNotifications.length})
-                  </h3>
+                  <h3 className="text-sm font-medium text-gray-900">Notifications</h3>
                 </div>
-                
                 <div className="max-h-64 overflow-y-auto">
                   {notifications.length > 0 ? (
-                    notifications.slice(0, 5).map((notification) => (
+                    notifications.map((notification) => (
                       <div
                         key={notification.id}
-                        className={`px-4 py-3 hover:bg-gray-50 transition-colors ${
-                          !notification.read ? 'bg-blue-50' : ''
-                        }`}
+                        className="px-4 py-3 hover:bg-gray-50 border-b border-gray-100 last:border-b-0"
                       >
                         <div className="flex items-start space-x-3">
-                          <div className={`w-2 h-2 rounded-full mt-2 ${
-                            notification.type === 'success' ? 'bg-green-500' :
-                            notification.type === 'error' ? 'bg-red-500' :
-                            notification.type === 'warning' ? 'bg-yellow-500' :
-                            'bg-blue-500'
-                          }`} />
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm text-gray-900">
-                              {notification.message}
-                            </p>
+                          <div className={`p-1 rounded-full ${
+                            notification.type === 'success' ? 'bg-green-100' :
+                            notification.type === 'error' ? 'bg-red-100' :
+                            notification.type === 'warning' ? 'bg-orange-100' : 'bg-blue-100'
+                          }`}>
+                            <div className={`w-2 h-2 rounded-full ${
+                              notification.type === 'success' ? 'bg-green-500' :
+                              notification.type === 'error' ? 'bg-red-500' :
+                              notification.type === 'warning' ? 'bg-orange-500' : 'bg-blue-500'
+                            }`} />
+                          </div>
+                          <div className="flex-1">
+                            <p className="text-sm text-gray-900">{notification.message}</p>
                             <p className="text-xs text-gray-500 mt-1">
                               {new Date(notification.timestamp).toLocaleTimeString()}
                             </p>
@@ -266,86 +227,60 @@ const AdminHeader = () => {
                       </div>
                     ))
                   ) : (
-                    <div className="px-4 py-6 text-center text-gray-500">
-                      <Bell className="h-8 w-8 mx-auto mb-2 text-gray-300" />
-                      <p className="text-sm">No notifications</p>
+                    <div className="px-4 py-8 text-center">
+                      <p className="text-sm text-gray-500">No notifications</p>
                     </div>
                   )}
                 </div>
-                
-                {notifications.length > 5 && (
-                  <div className="px-4 py-2 border-t border-gray-200">
-                    <button className="text-sm text-yellow-600 hover:text-yellow-700">
-                      View all notifications
-                    </button>
-                  </div>
-                )}
               </div>
             )}
           </div>
 
-          {/* Profile Dropdown */}
+          {/* Admin Profile Dropdown */}
           <div className="relative" ref={profileDropdownRef}>
             <button
               onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
-              className="flex items-center space-x-3 p-2 rounded-lg hover:bg-gray-100 transition-colors"
+              className="flex items-center space-x-3 p-2 text-sm bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
             >
-              <div className="w-8 h-8 bg-yellow-500 rounded-full flex items-center justify-center">
-                <User className="h-4 w-4 text-gray-900" />
+              <div className="w-8 h-8 bg-gradient-to-br from-orange-500 to-black rounded-full flex items-center justify-center">
+                <User className="h-4 w-4 text-white" />
               </div>
-              <div className="hidden md:block text-left">
-                <p className="text-sm font-medium text-gray-900">
-                  {admin?.name || 'Admin User'}
+              <div className="hidden sm:block text-left">
+                <p className="font-medium text-gray-900">
+                  {admin?.name || 'Bondex Admin'}
                 </p>
-                <p className="text-xs text-gray-500">
-                  Administrator
-                </p>
+                <p className="text-xs text-gray-500">Administrator</p>
               </div>
-              <ChevronDown className="h-4 w-4 text-gray-500" />
+              <ChevronDown className="h-4 w-4 text-gray-400" />
             </button>
 
-            {/* Profile Dropdown Menu */}
+            {/* Profile Dropdown */}
             {profileDropdownOpen && (
-              <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50">
+              <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
                 <div className="px-4 py-2 border-b border-gray-200">
                   <p className="text-sm font-medium text-gray-900">
-                    {admin?.name || 'Admin User'}
+                    {admin?.email || 'admin@bondex.com'}
                   </p>
-                  <p className="text-xs text-gray-500 truncate">
-                    {admin?.email || 'admin@bondex.co.ke'}
-                  </p>
+                  <p className="text-xs text-gray-500">Administrator</p>
                 </div>
-                
-                <button
-                  onClick={() => {
-                    navigate('/admin/profile');
-                    setProfileDropdownOpen(false);
-                  }}
-                  className="w-full flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
-                >
-                  <User className="h-4 w-4 mr-3" />
-                  Profile Settings
-                </button>
                 
                 <button
                   onClick={() => {
                     navigate('/admin/settings');
                     setProfileDropdownOpen(false);
                   }}
-                  className="w-full flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
+                  className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-2"
                 >
-                  <Settings className="h-4 w-4 mr-3" />
-                  Admin Settings
+                  <Settings className="h-4 w-4" />
+                  <span>Settings</span>
                 </button>
-                
-                <div className="border-t border-gray-200 my-1"></div>
                 
                 <button
                   onClick={handleLogout}
-                  className="w-full flex items-center px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                  className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center space-x-2"
                 >
-                  <LogOut className="h-4 w-4 mr-3" />
-                  Logout
+                  <LogOut className="h-4 w-4" />
+                  <span>Sign out</span>
                 </button>
               </div>
             )}

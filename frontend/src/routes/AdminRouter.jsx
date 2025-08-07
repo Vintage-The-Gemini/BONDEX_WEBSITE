@@ -16,6 +16,7 @@ import AdminDashboard from '../pages/admin/AdminDashboard';
 import ProductList from '../pages/admin/ProductList';
 import CreateProduct from '../pages/admin/CreateProduct';
 import EditProduct from '../pages/admin/EditProduct';
+import ProductDetails from '../components/admin/ProductDetails';
 
 // Category Management
 import CategoryList from '../pages/admin/CategoryList';
@@ -24,6 +25,9 @@ import EditCategory from '../pages/admin/EditCategory';
 
 // Order Management
 import OrderList from '../pages/admin/OrderList';
+
+// Analytics
+import SEOAnalytics from '../pages/admin/SEOAnalytics';
 
 // Components
 import ProtectedRoute from '../components/ProtectedRoute';
@@ -35,7 +39,7 @@ const AdminRouter = () => {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="animate-spin rounded-full h-8 w-8 border-2 border-blue-600 border-t-transparent"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-2 border-orange-500 border-t-transparent"></div>
       </div>
     );
   }
@@ -44,9 +48,7 @@ const AdminRouter = () => {
     <Routes>
       {/* Public Admin Routes (No Authentication Required) */}
       <Route path="/login" element={
-        isAuthenticated ? 
-          <Navigate to="/admin/dashboard" replace /> : 
-          <AdminLogin />
+        isAuthenticated ? <Navigate to="/admin/dashboard" replace /> : <AdminLogin />
       } />
 
       {/* Protected Admin Routes (Authentication Required) */}
@@ -63,20 +65,7 @@ const AdminRouter = () => {
         <Route path="products" element={<ProductList />} />
         <Route path="products/create" element={<CreateProduct />} />
         <Route path="products/:id/edit" element={<EditProduct />} />
-        <Route path="products/:id" element={
-          <div className="p-6">
-            <h1 className="text-2xl font-bold">Product Details</h1>
-            <p className="text-gray-600 mt-2">Product detail component coming soon...</p>
-            <div className="mt-4">
-              <a 
-                href="/admin/products" 
-                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                Back to Products
-              </a>
-            </div>
-          </div>
-        } />
+        <Route path="products/:id" element={<ProductDetails />} />
 
         {/* Category Management */}
         <Route path="categories" element={<CategoryList />} />
@@ -89,7 +78,7 @@ const AdminRouter = () => {
             <div className="mt-4">
               <a 
                 href="/admin/categories" 
-                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+                className="bg-orange-500 text-white px-4 py-2 rounded-lg hover:bg-orange-600 transition-colors"
               >
                 Back to Categories
               </a>
@@ -106,21 +95,7 @@ const AdminRouter = () => {
             <div className="mt-4">
               <a 
                 href="/admin/orders" 
-                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                Back to Orders
-              </a>
-            </div>
-          </div>
-        } />
-        <Route path="orders/:id/edit" element={
-          <div className="p-6">
-            <h1 className="text-2xl font-bold">Edit Order</h1>
-            <p className="text-gray-600 mt-2">Edit order component coming soon...</p>
-            <div className="mt-4">
-              <a 
-                href="/admin/orders" 
-                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+                className="bg-orange-500 text-white px-4 py-2 rounded-lg hover:bg-orange-600 transition-colors"
               >
                 Back to Orders
               </a>
@@ -136,29 +111,21 @@ const AdminRouter = () => {
           </div>
         } />
 
-        {/* Analytics */}
-        <Route path="analytics" element={
+        {/* Analytics Routes */}
+        <Route path="analytics/seo" element={<SEOAnalytics />} />
+        <Route path="analytics/sales" element={
           <div className="p-6">
-            <h1 className="text-2xl font-bold">Analytics</h1>
-            <p className="text-gray-600 mt-2">Analytics dashboard coming soon...</p>
+            <h1 className="text-2xl font-bold">Sales Analytics</h1>
+            <p className="text-gray-600 mt-2">Sales analytics dashboard coming soon...</p>
           </div>
         } />
-
-        {/* Reports */}
-        <Route path="reports" element={
+        <Route path="analytics/site" element={
           <div className="p-6">
-            <h1 className="text-2xl font-bold">Reports</h1>
-            <p className="text-gray-600 mt-2">Reports section coming soon...</p>
+            <h1 className="text-2xl font-bold">Site Analytics</h1>
+            <p className="text-gray-600 mt-2">Site traffic analytics coming soon...</p>
           </div>
         } />
-
-        {/* Profile */}
-        <Route path="profile" element={
-          <div className="p-6">
-            <h1 className="text-2xl font-bold">Admin Profile</h1>
-            <p className="text-gray-600 mt-2">Profile settings coming soon...</p>
-          </div>
-        } />
+        <Route path="analytics" element={<Navigate to="/admin/analytics/seo" replace />} />
 
         {/* Settings */}
         <Route path="settings" element={
@@ -175,7 +142,7 @@ const AdminRouter = () => {
             <p className="text-gray-600 mt-2">This admin page doesn't exist.</p>
             <a 
               href="/admin/dashboard" 
-              className="mt-4 inline-block bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+              className="mt-4 inline-block bg-orange-500 text-white px-4 py-2 rounded-lg hover:bg-orange-600 transition-colors"
             >
               Back to Dashboard
             </a>
