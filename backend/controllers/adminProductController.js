@@ -1,117 +1,436 @@
 // backend/controllers/adminProductController.js
 import Product from '../models/Product.js';
 import Category from '../models/Category.js';
-import { deleteFromCloudinary } from '../config/cloudinary.js';
+import { cloudinary } from '../config/cloudinary.js';
 
-// @desc    Get all products for admin (includes inactive)
+// @desc    Create new product with multi-category support
+// @route   POST /api/admin/products
+// @access  Private (Admin only)
+export const createProduct = async (req, res) => {
+  try {
+    console.log('🎯 PRECISION: Creating multi-category product');
+    console.log('Form Data:', req.body);
+    console.log('Files:', req.files?.length || 0);
+
+    const {
+      // Basic product info
+      product_name,
+      product_description,
+      product_brand,
+      
+      // 🎯 MULTI-CATEGORY SUPPORT
+      primaryCategory,
+      secondaryCategories,
+      
+      // Pricing & inventory
+      product_price,
+      stock,
+      lowStockThreshold,
+      
+      // Sale configuration
+      isOnSale,
+      salePrice,
+      saleStartDate,
+      saleEndDate,
+      
+      // Status & features
+      status,
+      isFeatured,
+      isNewArrival,
+      
+      // 🚀 ENHANCED SEO
+      metaTitle,
+      metaDescription,
+      keywords,
+      slug,
+      focusKeyword,
+      
+      // Additional data (JSON strings)
+      features,
+      specifications,
+      productTags,
+      certifications,
+      complianceStandards
+    } = req.body;
+
+    // 🎯 VALIDATION: Multi-category requirements
+    if (!product_name || !product_description || !product_brand) {
+      return res.status(400).json({
+        success: false,
+        message: 'Product name, description, and brand are required'
+      });
+    }
+
+    if (!primaryCategory) {
+      return res.status(400).json({
+        success: false,
+        message: 'Primary category (protection type) is required'
+      });
+    }
+
+    // Parse secondary categories
+    let parsedSecondaryCategories = [];
+    if (secondaryCategories) {
+      try {
+        parsedSecondaryCategories = Array.isArray(secondaryCategories) 
+          ? secondaryCategories 
+          : JSON.parse(secondaryCategories);
+      } catch (error) {
+        console.log('📝 Secondary categories as string array:', secondaryCategories);
+        parsedSecondaryCategories = [secondaryCategories];
+      }
+    }
+
+    if (parsedSecondaryCategories.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'At least one industry/sector must be selected'
+      });
+    }
+
+    // 🎯 VALIDATE: Categories exist and are correct types
+    const primaryCat = await Category.findById(primaryCategory);
+    if (!primaryCat || primaryCat.type !== 'protection_type') {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid protection type selected'
+      });
+    }
+
+    const industryCats = await Category.find({
+      _id: { $in: parsedSecondaryCategories },
+      type: 'industry'
+    });
+
+    if (industryCats.length !== parsedSecondaryCategories.length) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid industry categories selected'
+      });
+    }
+
+    // 📸 HANDLE IMAGE UPLOADS with Cloudinary
+    let uploadedImages = [];
+    if (req.files && req.files.length > 0) {
+      console.log(`🖼️ Processing ${req.files.length} images`);
+      
+      for (const file of req.files) {
+        try {
+          const result = await cloudinary.uploader.upload(file.path, {
+            folder: 'bondex-safety/products',
+            transformation: [
+              { width: 800, height: 800, crop: 'limit', quality: 'auto:good' },
+              { format: 'webp' }
+            ]
+          });
+
+          uploadedImages.push({
+            url: result.secure_url,
+            public_id: result.public_id,
+            isMain: uploadedImages.length === 0 // First image is main
+          });
+        } catch (uploadError) {
+          console.error('❌ Image upload error:', uploadError);
+          return res.status(500).json({
+            success: false,
+            message: `Image upload failed: ${uploadError.message}`
+          });
+        }
+      }
+    }
+
+    // 🏷️ PARSE ADDITIONAL DATA
+    let parsedFeatures = [];
+    let parsedSpecifications = {};
+    let parsedTags = [];
+    let parsedCertifications = [];
+    let parsedCompliance = [];
+
+    try {
+      if (features) parsedFeatures = JSON.parse(features);
+      if (specifications) parsedSpecifications = JSON.parse(specifications);
+      if (productTags) parsedTags = JSON.parse(productTags);
+      if (certifications) parsedCertifications = JSON.parse(certifications);
+      if (complianceStandards) parsedCompliance = JSON.parse(complianceStandards);
+    } catch (parseError) {
+      console.log('📝 JSON parse warning:', parseError.message);
+    }
+
+    // 🎯 PRECISION: Create product with multi-category support
+    const productData = {
+      // Basic info
+      product_name: product_name.trim(),
+      product_description: product_description.trim(),
+      product_brand: product_brand.trim(),
+      
+      // 🚀 MULTI-CATEGORY ASSIGNMENT
+      primaryCategory,
+      secondaryCategories: parsedSecondaryCategories,
+      allCategories: [primaryCategory, ...parsedSecondaryCategories],
+      
+      // Legacy support
+      category: primaryCategory,
+      
+      // Pricing
+      product_price: parseFloat(product_price),
+      currency: 'KES',
+      
+      // Inventory
+      stock: parseInt(stock),
+      lowStockThreshold: parseInt(lowStockThreshold) || 10,
+      
+      // Sale configuration
+      isOnSale: isOnSale === 'true' || isOnSale === true,
+      salePrice: salePrice ? parseFloat(salePrice) : null,
+      saleStartDate: saleStartDate || null,
+      saleEndDate: saleEndDate || null,
+      
+      // Status & visibility
+      status: status || 'active',
+      isFeatured: isFeatured === 'true' || isFeatured === true,
+      isNewArrival: isNewArrival === 'true' || isNewArrival === true,
+      
+      // 🎯 ENHANCED SEO FIELDS
+      metaTitle: metaTitle || product_name,
+      metaDescription: metaDescription || product_description.substring(0, 160),
+      keywords: keywords || '',
+      slug: slug || product_name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+      focusKeyword: focusKeyword || '',
+      
+      // Images
+      images: uploadedImages,
+      mainImage: uploadedImages.length > 0 ? uploadedImages[0].url : null,
+      product_image: uploadedImages.length > 0 ? uploadedImages[0].url : null,
+      
+      // Additional data
+      features: parsedFeatures,
+      specifications: parsedSpecifications,
+      tags: parsedTags,
+      certifications: parsedCertifications,
+      complianceStandards: parsedCompliance,
+      
+      // Metadata
+      createdBy: req.admin.id,
+      lastModifiedBy: req.admin.id
+    };
+
+    console.log('🎯 CREATING PRODUCT WITH DATA:', {
+      name: productData.product_name,
+      primaryCategory: primaryCat.name,
+      secondaryCategories: industryCats.map(c => c.name),
+      images: uploadedImages.length,
+      seoOptimized: !!(metaTitle && metaDescription)
+    });
+
+    // Create the product
+    const product = new Product(productData);
+    const savedProduct = await product.save();
+
+    // 📊 UPDATE CATEGORY PRODUCT COUNTS
+    await updateCategoryProductCounts([primaryCategory, ...parsedSecondaryCategories]);
+
+    // 🎯 POPULATE AND RETURN
+    const populatedProduct = await Product.findById(savedProduct._id)
+      .populate('primaryCategory', 'name slug type icon')
+      .populate('secondaryCategories', 'name slug type icon')
+      .populate('createdBy', 'name email');
+
+    console.log('✅ PRECISION SUCCESS: Multi-category product created');
+
+    res.status(201).json({
+      success: true,
+      message: '🎯 Product created successfully with multi-category targeting!',
+      data: populatedProduct,
+      stats: {
+        totalCategories: parsedSecondaryCategories.length + 1,
+        seoOptimized: !!(metaTitle && metaDescription),
+        imagesUploaded: uploadedImages.length,
+        discoveryPaths: parsedSecondaryCategories.length + 1
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ PRODUCT CREATION ERROR:', error);
+    
+    // Clean up uploaded images if product creation fails
+    if (req.files && req.files.length > 0) {
+      for (const file of req.files) {
+        try {
+          if (file.filename) {
+            await cloudinary.uploader.destroy(file.filename);
+          }
+        } catch (cleanupError) {
+          console.error('🧹 Image cleanup error:', cleanupError);
+        }
+      }
+    }
+
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to create product',
+      error: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
+  }
+};
+
+// 📊 HELPER: Update category product counts
+const updateCategoryProductCounts = async (categoryIds) => {
+  try {
+    for (const categoryId of categoryIds) {
+      const count = await Product.countDocuments({
+        allCategories: categoryId,
+        status: 'active'
+      });
+      
+      await Category.findByIdAndUpdate(categoryId, {
+        productCount: count
+      });
+    }
+    console.log('📊 Category product counts updated');
+  } catch (error) {
+    console.error('❌ Error updating category counts:', error);
+  }
+};
+
+// @desc    Get products with multi-category filtering
 // @route   GET /api/admin/products
 // @access  Private (Admin only)
 export const getAdminProducts = async (req, res) => {
   try {
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 20;
-    const skip = (page - 1) * limit;
+    const {
+      page = 1,
+      limit = 20,
+      search = '',
+      category = '',
+      industries = '', // Comma-separated industry IDs
+      status = '',
+      sortBy = 'newest',
+      priceMin = '',
+      priceMax = '',
+      stockMin = '',
+      featured = '',
+      onSale = ''
+    } = req.query;
 
-    // Build query object
-    let query = {};
-
-    // Filter by status
-    if (req.query.status) {
-      query.status = req.query.status;
-    }
-
-    // Filter by category
-    if (req.query.category) {
-      query.category = req.query.category;
-    }
-
-    // Filter by brand
-    if (req.query.brand) {
-      query.product_brand = req.query.brand;
-    }
-
-    // Search in product name and description
-    if (req.query.search) {
+    // Build query with multi-category support
+    const query = {};
+    
+    // Search across multiple fields
+    if (search) {
       query.$or = [
-        { product_name: { $regex: req.query.search, $options: 'i' } },
-        { product_description: { $regex: req.query.search, $options: 'i' } },
-        { product_brand: { $regex: req.query.search, $options: 'i' } }
+        { product_name: { $regex: search, $options: 'i' } },
+        { product_description: { $regex: search, $options: 'i' } },
+        { product_brand: { $regex: search, $options: 'i' } },
+        { keywords: { $regex: search, $options: 'i' } }
       ];
     }
 
-    // Low stock filter
-    if (req.query.lowStock === 'true') {
-      query.$expr = { $lte: ['$stock', '$lowStockThreshold'] };
+    // Filter by primary category (protection type)
+    if (category) {
+      query.primaryCategory = category;
     }
 
-    // Price range
-    if (req.query.minPrice || req.query.maxPrice) {
+    // 🎯 MULTI-CATEGORY FILTERING: Filter by industries
+    if (industries) {
+      const industryIds = industries.split(',').filter(Boolean);
+      query.secondaryCategories = { $in: industryIds };
+    }
+
+    // Status filter
+    if (status) {
+      query.status = status;
+    }
+
+    // Price range filter
+    if (priceMin || priceMax) {
       query.product_price = {};
-      if (req.query.minPrice) {
-        query.product_price.$gte = Number(req.query.minPrice);
-      }
-      if (req.query.maxPrice) {
-        query.product_price.$lte = Number(req.query.maxPrice);
-      }
+      if (priceMin) query.product_price.$gte = parseFloat(priceMin);
+      if (priceMax) query.product_price.$lte = parseFloat(priceMax);
     }
 
-    // Sorting
-    let sortBy = {};
-    switch (req.query.sortBy) {
+    // Stock filter
+    if (stockMin) {
+      query.stock = { $gte: parseInt(stockMin) };
+    }
+
+    // Feature filters
+    if (featured === 'true') {
+      query.isFeatured = true;
+    }
+    
+    if (onSale === 'true') {
+      query.isOnSale = true;
+    }
+
+    // 📊 SORTING with multi-category awareness
+    let sortOptions = {};
+    switch (sortBy) {
       case 'name':
-        sortBy.product_name = 1;
+        sortOptions.product_name = 1;
         break;
       case 'price_low':
-        sortBy.product_price = 1;
+        sortOptions.product_price = 1;
         break;
       case 'price_high':
-        sortBy.product_price = -1;
+        sortOptions.product_price = -1;
         break;
       case 'stock_low':
-        sortBy.stock = 1;
+        sortOptions.stock = 1;
         break;
       case 'stock_high':
-        sortBy.stock = -1;
+        sortOptions.stock = -1;
         break;
       case 'oldest':
-        sortBy.createdAt = 1;
+        sortOptions.createdAt = 1;
+        break;
+      case 'most_categories':
+        // Sort by number of categories (for multi-category products)
+        sortOptions = { $expr: { $size: '$allCategories' } };
         break;
       default:
-        sortBy.createdAt = -1; // Newest first
+        sortOptions.createdAt = -1; // Newest first
     }
 
-    // Execute query
+    // Calculate pagination
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    // Execute query with population
     const products = await Product.find(query)
-      .sort(sortBy)
+      .populate('primaryCategory', 'name slug type icon colors')
+      .populate('secondaryCategories', 'name slug type icon colors')
+      .populate('createdBy', 'name email')
+      .sort(sortOptions)
       .skip(skip)
-      .limit(limit);
+      .limit(parseInt(limit));
 
     const totalProducts = await Product.countDocuments(query);
-    const totalPages = Math.ceil(totalProducts / limit);
+    const totalPages = Math.ceil(totalProducts / parseInt(limit));
 
-    // Get categories for filter options
-    const categories = await Category.find({ type: 'protection_type', status: 'active' })
-      .select('name')
-      .sort({ name: 1 });
+    // 📊 GET FILTER OPTIONS for frontend
+    const filterOptions = await getFilterOptions();
 
-    // Get brands for filter options
-    const brands = await Product.distinct('product_brand', { product_brand: { $ne: null, $ne: '' } });
+    console.log(`📊 Retrieved ${products.length} products (${totalProducts} total)`);
 
     res.status(200).json({
       success: true,
       count: products.length,
       totalProducts,
       totalPages,
-      currentPage: page,
+      currentPage: parseInt(page),
       data: products,
-      filters: {
-        categories: categories.map(cat => cat.name),
-        brands: brands.sort()
+      filters: filterOptions,
+      query: {
+        search,
+        category,
+        industries,
+        status,
+        sortBy,
+        multiCategoryCount: products.filter(p => p.secondaryCategories.length > 1).length
       }
     });
 
   } catch (error) {
-    console.error('Get Admin Products Error:', error);
+    console.error('❌ Get Admin Products Error:', error);
     res.status(500).json({
       success: false,
       message: 'Error fetching products',
@@ -120,12 +439,44 @@ export const getAdminProducts = async (req, res) => {
   }
 };
 
-// @desc    Get single product for admin
+// 🎯 HELPER: Get filter options for admin interface
+const getFilterOptions = async () => {
+  try {
+    const [protectionTypes, industries, brands, statuses] = await Promise.all([
+      Category.find({ type: 'protection_type', status: 'active' })
+        .select('name _id productCount')
+        .sort({ name: 1 }),
+      Category.find({ type: 'industry', status: 'active' })
+        .select('name _id productCount')
+        .sort({ name: 1 }),
+      Product.distinct('product_brand', { product_brand: { $ne: null, $ne: '' } }),
+      Product.aggregate([
+        { $group: { _id: '$status', count: { $sum: 1 } } }
+      ])
+    ]);
+
+    return {
+      protectionTypes,
+      industries,
+      brands: brands.sort(),
+      statuses: statuses.map(s => ({ name: s._id, count: s.count }))
+    };
+  } catch (error) {
+    console.error('❌ Error getting filter options:', error);
+    return { protectionTypes: [], industries: [], brands: [], statuses: [] };
+  }
+};
+
+// @desc    Get single product with full category info
 // @route   GET /api/admin/products/:id
 // @access  Private (Admin only)
-export const getAdminProduct = async (req, res) => {
+export const getAdminProductById = async (req, res) => {
   try {
-    const product = await Product.findById(req.params.id);
+    const product = await Product.findById(req.params.id)
+      .populate('primaryCategory', 'name slug type icon colors description')
+      .populate('secondaryCategories', 'name slug type icon colors description')
+      .populate('createdBy', 'name email')
+      .populate('lastModifiedBy', 'name email');
 
     if (!product) {
       return res.status(404).json({
@@ -134,13 +485,17 @@ export const getAdminProduct = async (req, res) => {
       });
     }
 
+    // 📊 Get category-based analytics
+    const categoryAnalytics = await getCategoryAnalytics(product);
+
     res.status(200).json({
       success: true,
-      data: product
+      data: product,
+      analytics: categoryAnalytics
     });
 
   } catch (error) {
-    console.error('Get Admin Product Error:', error);
+    console.error('❌ Get Product Error:', error);
     res.status(500).json({
       success: false,
       message: 'Error fetching product',
@@ -149,125 +504,55 @@ export const getAdminProduct = async (req, res) => {
   }
 };
 
-// @desc    Create new product
-// @route   POST /api/admin/products
-// @access  Private (Admin only)
-export const createProduct = async (req, res) => {
+// 🎯 HELPER: Get category-based analytics for a product
+const getCategoryAnalytics = async (product) => {
   try {
-    const {
-      product_name,
-      product_description,
-      product_brand,
-      category,
-      product_price,
-      stock,
-      features,
-      specifications,
-      status,
-      isOnSale,
-      isFeatured,
-      metaTitle,
-      metaDescription,
-      keywords
-    } = req.body;
+    // Count products in same categories
+    const similarProducts = await Product.countDocuments({
+      $or: [
+        { primaryCategory: product.primaryCategory._id },
+        { secondaryCategories: { $in: product.secondaryCategories.map(c => c._id) } }
+      ],
+      _id: { $ne: product._id },
+      status: 'active'
+    });
 
-    // Generate slug from product name
-    const slug = product_name
-      .toLowerCase()
-      .replace(/[^a-z0-9\s-]/g, '')
-      .replace(/\s+/g, '-')
-      .replace(/-+/g, '-')
-      .replace(/(^-|-$)/g, '');
+    // Get cross-category performance
+    const categoryPerformance = await Product.aggregate([
+      {
+        $match: {
+          allCategories: { $in: product.allCategories },
+          status: 'active'
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          avgPrice: { $avg: '$product_price' },
+          totalProducts: { $sum: 1 },
+          avgStock: { $avg: '$stock' }
+        }
+      }
+    ]);
 
-    // Create product object
-    const productData = {
-      product_name,
-      product_description,
-      product_brand,
-      category,
-      product_price: Number(product_price),
-      stock: Number(stock) || 0,
-      slug,
-      status: status || 'active',
-      isOnSale: isOnSale === 'true' || isOnSale === true,
-      isFeatured: isFeatured === 'true' || isFeatured === true,
-      metaTitle: metaTitle || product_name,
-      metaDescription: metaDescription || product_description,
-      keywords: keywords ? (Array.isArray(keywords) ? keywords : keywords.split(',').map(k => k.trim())) : []
+    return {
+      similarProducts,
+      categoryPerformance: categoryPerformance[0] || {},
+      multiCategoryAdvantage: product.secondaryCategories.length > 1
     };
-
-    // Add features if provided
-    if (features) {
-      productData.features = Array.isArray(features) ? features : features.split(',').map(f => f.trim());
-    }
-
-    // Add specifications if provided
-    if (specifications) {
-      productData.specifications = typeof specifications === 'object' ? specifications : {};
-    }
-
-    // Handle images from Cloudinary upload
-    if (req.files && req.files.length > 0) {
-      const images = req.files.map(file => ({
-        url: file.path,
-        public_id: file.filename,
-        alt: product_name
-      }));
-      
-      productData.images = images;
-      productData.mainImage = images[0].url;
-      productData.product_image = images[0].url;
-    } else {
-      return res.status(400).json({
-        success: false,
-        message: 'At least one product image is required'
-      });
-    }
-
-    const product = await Product.create(productData);
-
-    res.status(201).json({
-      success: true,
-      message: 'Product created successfully',
-      data: product
-    });
-
   } catch (error) {
-    console.error('Create Product Error:', error);
-
-    // Handle validation errors
-    if (error.name === 'ValidationError') {
-      const messages = Object.values(error.errors).map(err => err.message);
-      return res.status(400).json({
-        success: false,
-        message: 'Validation Error',
-        errors: messages
-      });
-    }
-
-    // Handle duplicate slug error
-    if (error.code === 11000 && error.keyPattern?.slug) {
-      return res.status(400).json({
-        success: false,
-        message: 'Product with similar name already exists'
-      });
-    }
-
-    res.status(500).json({
-      success: false,
-      message: 'Error creating product',
-      error: error.message
-    });
+    console.error('❌ Category analytics error:', error);
+    return {};
   }
 };
 
-// @desc    Update product
+// @desc    Update product with multi-category support
 // @route   PUT /api/admin/products/:id
 // @access  Private (Admin only)
 export const updateProduct = async (req, res) => {
   try {
     const product = await Product.findById(req.params.id);
-
+    
     if (!product) {
       return res.status(404).json({
         success: false,
@@ -275,108 +560,71 @@ export const updateProduct = async (req, res) => {
       });
     }
 
-    const {
-      product_name,
-      product_description,
-      product_brand,
-      category,
-      product_price,
-      stock,
-      features,
-      specifications,
-      status,
-      isOnSale,
-      isFeatured,
-      metaTitle,
-      metaDescription,
-      keywords
-    } = req.body;
-
-    // Update basic fields
-    if (product_name) {
-      product.product_name = product_name;
-      // Regenerate slug if name changed
-      product.slug = product_name
-        .toLowerCase()
-        .replace(/[^a-z0-9\s-]/g, '')
-        .replace(/\s+/g, '-')
-        .replace(/-+/g, '-')
-        .replace(/(^-|-$)/g, '');
-    }
-
-    if (product_description) product.product_description = product_description;
-    if (product_brand) product.product_brand = product_brand;
-    if (category) product.category = category;
-    if (product_price !== undefined) product.product_price = Number(product_price);
-    if (stock !== undefined) product.stock = Number(stock);
-    if (status) product.status = status;
-    if (isOnSale !== undefined) product.isOnSale = isOnSale === 'true' || isOnSale === true;
-    if (isFeatured !== undefined) product.isFeatured = isFeatured === 'true' || isFeatured === true;
-    if (metaTitle) product.metaTitle = metaTitle;
-    if (metaDescription) product.metaDescription = metaDescription;
-
-    // Update features
-    if (features) {
-      product.features = Array.isArray(features) ? features : features.split(',').map(f => f.trim());
-    }
-
-    // Update specifications
-    if (specifications) {
-      product.specifications = typeof specifications === 'object' ? specifications : {};
-    }
-
-    // Update keywords
-    if (keywords) {
-      product.keywords = Array.isArray(keywords) ? keywords : keywords.split(',').map(k => k.trim());
-    }
-
-    // Handle new images if uploaded
-    if (req.files && req.files.length > 0) {
-      // Delete old images from Cloudinary
-      if (product.images && product.images.length > 0) {
-        for (const image of product.images) {
-          if (image.public_id) {
-            try {
-              await deleteFromCloudinary(image.public_id);
-            } catch (deleteError) {
-              console.error('Error deleting old image:', deleteError);
-            }
-          }
-        }
+    // 🎯 HANDLE CATEGORY UPDATES
+    const { primaryCategory, secondaryCategories } = req.body;
+    
+    if (primaryCategory) {
+      const primaryCat = await Category.findById(primaryCategory);
+      if (!primaryCat || primaryCat.type !== 'protection_type') {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid protection type'
+        });
       }
-
-      // Add new images
-      const newImages = req.files.map(file => ({
-        url: file.path,
-        public_id: file.filename,
-        alt: product.product_name
-      }));
-
-      product.images = newImages;
-      product.mainImage = newImages[0].url;
-      product.product_image = newImages[0].url;
     }
 
+    if (secondaryCategories) {
+      let parsedSecondaryCategories = Array.isArray(secondaryCategories) 
+        ? secondaryCategories 
+        : JSON.parse(secondaryCategories);
+      
+      const industryCats = await Category.find({
+        _id: { $in: parsedSecondaryCategories },
+        type: 'industry'
+      });
+
+      if (industryCats.length !== parsedSecondaryCategories.length) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid industry categories'
+        });
+      }
+    }
+
+    // Update fields
+    Object.keys(req.body).forEach(key => {
+      if (req.body[key] !== undefined && req.body[key] !== '') {
+        product[key] = req.body[key];
+      }
+    });
+
+    // Update metadata
+    product.lastModifiedBy = req.admin.id;
+    product.lastModified = new Date();
+
+    // Save with validation
     const updatedProduct = await product.save();
+
+    // Update category counts
+    if (primaryCategory || secondaryCategories) {
+      await updateCategoryProductCounts(updatedProduct.allCategories);
+    }
+
+    // Return populated product
+    const populatedProduct = await Product.findById(updatedProduct._id)
+      .populate('primaryCategory', 'name slug type icon colors')
+      .populate('secondaryCategories', 'name slug type icon colors');
+
+    console.log('✅ PRODUCT UPDATED with multi-category support');
 
     res.status(200).json({
       success: true,
       message: 'Product updated successfully',
-      data: updatedProduct
+      data: populatedProduct
     });
 
   } catch (error) {
-    console.error('Update Product Error:', error);
-
-    if (error.name === 'ValidationError') {
-      const messages = Object.values(error.errors).map(err => err.message);
-      return res.status(400).json({
-        success: false,
-        message: 'Validation Error',
-        errors: messages
-      });
-    }
-
+    console.error('❌ Update Product Error:', error);
     res.status(500).json({
       success: false,
       message: 'Error updating product',
@@ -385,13 +633,13 @@ export const updateProduct = async (req, res) => {
   }
 };
 
-// @desc    Delete product
+// @desc    Delete product and cleanup
 // @route   DELETE /api/admin/products/:id
 // @access  Private (Admin only)
 export const deleteProduct = async (req, res) => {
   try {
     const product = await Product.findById(req.params.id);
-
+    
     if (!product) {
       return res.status(404).json({
         success: false,
@@ -399,20 +647,29 @@ export const deleteProduct = async (req, res) => {
       });
     }
 
-    // Delete images from Cloudinary
+    // 🧹 CLEANUP: Delete images from Cloudinary
     if (product.images && product.images.length > 0) {
       for (const image of product.images) {
-        if (image.public_id) {
-          try {
-            await deleteFromCloudinary(image.public_id);
-          } catch (deleteError) {
-            console.error('Error deleting image:', deleteError);
+        try {
+          if (image.public_id) {
+            await cloudinary.uploader.destroy(image.public_id);
           }
+        } catch (imageError) {
+          console.error('🖼️ Image deletion error:', imageError);
         }
       }
     }
 
+    // Store category IDs before deletion
+    const categoryIds = product.allCategories || [];
+
+    // Delete the product
     await Product.findByIdAndDelete(req.params.id);
+
+    // Update category product counts
+    await updateCategoryProductCounts(categoryIds);
+
+    console.log('🗑️ PRODUCT DELETED with cleanup');
 
     res.status(200).json({
       success: true,
@@ -420,7 +677,7 @@ export const deleteProduct = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Delete Product Error:', error);
+    console.error('❌ Delete Product Error:', error);
     res.status(500).json({
       success: false,
       message: 'Error deleting product',
@@ -429,91 +686,10 @@ export const deleteProduct = async (req, res) => {
   }
 };
 
-// @desc    Bulk update products
-// @route   PUT /api/admin/products/bulk
-// @access  Private (Admin only)
-export const bulkUpdateProducts = async (req, res) => {
-  try {
-    const { productIds, updates } = req.body;
-
-    if (!productIds || !Array.isArray(productIds) || productIds.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'Product IDs array is required'
-      });
-    }
-
-    if (!updates || Object.keys(updates).length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'Updates object is required'
-      });
-    }
-
-    const result = await Product.updateMany(
-      { _id: { $in: productIds } },
-      { $set: updates }
-    );
-
-    res.status(200).json({
-      success: true,
-      message: `${result.modifiedCount} products updated successfully`,
-      data: {
-        matchedCount: result.matchedCount,
-        modifiedCount: result.modifiedCount
-      }
-    });
-
-  } catch (error) {
-    console.error('Bulk Update Products Error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Error updating products',
-      error: error.message
-    });
-  }
-};
-
-// @desc    Duplicate product
-// @route   POST /api/admin/products/:id/duplimcate
-// @access  Private (Admin only)
-export const duplicateProduct = async (req, res) => {
-  try {
-    const originalProduct = await Product.findById(req.params.id);
-
-    if (!originalProduct) {
-      return res.status(404).json({
-        success: false,
-        message: 'Product not found'
-      });
-    }
-
-    // Create duplicate data
-    const duplicateData = originalProduct.toObject();
-    delete duplicateData._id;
-    delete duplicateData.createdAt;
-    delete duplicateData.updatedAt;
-    delete duplicateData.__v;
-
-    // Modify name and slug for duplicate
-    duplicateData.product_name = `${duplicateData.product_name} (Copy)`;
-    duplicateData.slug = `${duplicateData.slug}-copy-${Date.now()}`;
-    duplicateData.status = 'inactive'; // Set as inactive by default
-
-    const duplicateProduct = await Product.create(duplicateData);
-
-    res.status(201).json({
-      success: true,
-      message: 'Product duplicated successfully',
-      data: duplicateProduct
-    });
-
-  } catch (error) {
-    console.error('Duplicate Product Error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Error duplicating product',
-      error: error.message
-    });
-  }
+export {
+  createProduct,
+  getAdminProducts,
+  getAdminProductById,
+  updateProduct,
+  deleteProduct
 };
