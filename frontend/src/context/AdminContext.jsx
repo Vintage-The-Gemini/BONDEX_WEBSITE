@@ -1,4 +1,4 @@
-// frontend/src/context/AdminContext.jsx
+// frontend/src/context/AdminContext.jsx - COMPLETE WORKING VERSION
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
 import adminApi from '../services/adminApi';
 import { cleanInvalidTokens, getTokenInfo } from '../utils/tokenValidator';
@@ -254,15 +254,16 @@ const adminReducer = (state, action) => {
     case ADMIN_ACTION_TYPES.ADD_NOTIFICATION:
       return {
         ...state,
-        notifications: [...state.notifications, action.payload],
+        notifications: [...state.notifications, {
+          id: Date.now(),
+          ...action.payload,
+        }],
       };
       
     case ADMIN_ACTION_TYPES.REMOVE_NOTIFICATION:
       return {
         ...state,
-        notifications: state.notifications.filter(notification => 
-          notification.id !== action.payload
-        ),
+        notifications: state.notifications.filter(notif => notif.id !== action.payload),
       };
       
     // Error cases
@@ -286,25 +287,123 @@ const adminReducer = (state, action) => {
 // Create context
 const AdminContext = createContext();
 
-// Context provider component
+// AdminProvider component
 export const AdminProvider = ({ children }) => {
   const [state, dispatch] = useReducer(adminReducer, initialState);
 
-  // Initialize admin on app load with better token validation
-  useEffect(() => {
-    const initializeAdmin = async () => {
-      console.log('🔄 AdminContext: Starting authentication check...');
+  // =============================================
+  // UTILITY FUNCTIONS
+  // =============================================
+  
+  const addNotification = (notification) => {
+    const notificationWithId = {
+      id: Date.now(),
+      type: 'info',
+      ...notification,
+    };
+    
+    dispatch({
+      type: ADMIN_ACTION_TYPES.ADD_NOTIFICATION,
+      payload: notificationWithId,
+    });
+    
+    // Auto-remove after 5 seconds
+    setTimeout(() => {
+      removeNotification(notificationWithId.id);
+    }, 5000);
+  };
+  
+  const removeNotification = (id) => {
+    dispatch({
+      type: ADMIN_ACTION_TYPES.REMOVE_NOTIFICATION,
+      payload: id,
+    });
+  };
+
+  // Clear authentication manually
+  const clearAuth = () => {
+    localStorage.removeItem('adminToken');
+    localStorage.removeItem('adminUser');
+    dispatch({ type: ADMIN_ACTION_TYPES.LOGOUT });
+    addNotification({
+      type: 'warning',
+      message: 'Session expired. Please login again.',
+    });
+  };
+
+  // =============================================
+  // AUTHENTICATION ACTIONS
+  // =============================================
+
+  const login = async (credentials) => {
+    try {
+      dispatch({ type: ADMIN_ACTION_TYPES.LOGIN_START });
       
+      const response = await adminApi.login(credentials);
+      
+      if (response.success) {
+        const { admin, token } = response.data;
+        
+        // Store in localStorage
+        localStorage.setItem('adminToken', token);
+        localStorage.setItem('adminUser', JSON.stringify(admin));
+        
+        dispatch({
+          type: ADMIN_ACTION_TYPES.LOGIN_SUCCESS,
+          payload: { admin, token },
+        });
+        
+        addNotification({
+          type: 'success',
+          message: `Welcome back, ${admin.name}!`,
+        });
+        
+        return { success: true };
+      } else {
+        throw new Error(response.message || 'Login failed');
+      }
+    } catch (error) {
+      dispatch({
+        type: ADMIN_ACTION_TYPES.LOGIN_FAILURE,
+        payload: error.message,
+      });
+      
+      addNotification({
+        type: 'error',
+        message: error.message || 'Login failed',
+      });
+      
+      return { success: false, error: error.message };
+    }
+  };
+
+  const logout = async () => {
+    try {
+      await adminApi.logout();
+    } catch (error) {
+      console.error('Logout error:', error);
+    } finally {
+      localStorage.removeItem('adminToken');
+      localStorage.removeItem('adminUser');
+      dispatch({ type: ADMIN_ACTION_TYPES.LOGOUT });
+      
+      addNotification({
+        type: 'info',
+        message: 'Logged out successfully',
+      });
+    }
+  };
+
+  // Check authentication on app start
+  useEffect(() => {
+    const checkAuth = async () => {
       try {
         dispatch({ type: ADMIN_ACTION_TYPES.AUTH_CHECK_START });
         
-        // First, check and clean any invalid tokens
-        const tokensWereCleaned = cleanInvalidTokens();
-        if (tokensWereCleaned) {
-          console.log('🧹 Expired tokens were cleaned from localStorage');
-        }
+        // Clean any invalid tokens first
+        cleanInvalidTokens();
         
-        // Get current token info for debugging
+        // Get token info for debugging
         const tokenInfo = getTokenInfo();
         console.log('🔍 Current token info:', tokenInfo);
         
@@ -344,121 +443,14 @@ export const AdminProvider = ({ children }) => {
       } catch (error) {
         console.error('❌ AdminContext: Authentication initialization error:', error);
         dispatch({ 
-          type: ADMIN_ACTION_TYPES.AUTH_CHECK_FAILURE, 
+          type: ADMIN_ACTION_TYPES.AUTH_CHECK_FAILURE,
           payload: error.message 
         });
       }
     };
 
-    initializeAdmin();
+    checkAuth();
   }, []);
-
-  // =============================================
-  // NOTIFICATION SYSTEM
-  // =============================================
-
-  const addNotification = (notification) => {
-    const id = Date.now().toString();
-    dispatch({
-      type: ADMIN_ACTION_TYPES.ADD_NOTIFICATION,
-      payload: { ...notification, id }
-    });
-
-    // Auto-remove after 5 seconds
-    setTimeout(() => {
-      dispatch({
-        type: ADMIN_ACTION_TYPES.REMOVE_NOTIFICATION,
-        payload: id
-      });
-    }, 5000);
-  };
-
-  const removeNotification = (id) => {
-    dispatch({
-      type: ADMIN_ACTION_TYPES.REMOVE_NOTIFICATION,
-      payload: id
-    });
-  };
-
-  // =============================================
-  // AUTH ACTIONS
-  // =============================================
-
-  const login = async (credentials) => {
-    try {
-      dispatch({ type: ADMIN_ACTION_TYPES.LOGIN_START });
-      
-      const response = await adminApi.login(credentials);
-      console.log('🔑 Login response received:', response);
-      
-      if (response.success) {
-        const adminData = response.data.user;
-        const token = response.data.token;
-        
-        console.log('✅ Login successful, admin data:', adminData);
-        console.log('🔑 Token:', token);
-        
-        dispatch({
-          type: ADMIN_ACTION_TYPES.LOGIN_SUCCESS,
-          payload: {
-            admin: adminData,
-            token: token,
-          },
-        });
-        
-        addNotification({
-          type: 'success',
-          message: 'Login successful! Welcome back.'
-        });
-        
-        return { success: true, data: response };
-      } else {
-        throw new Error(response.message || 'Login failed');
-      }
-    } catch (error) {
-      console.error('❌ Login error:', error);
-      dispatch({
-        type: ADMIN_ACTION_TYPES.LOGIN_FAILURE,
-        payload: error.message,
-      });
-      
-      addNotification({
-        type: 'error',
-        message: error.message || 'Login failed',
-      });
-      
-      return { success: false, error: error.message };
-    }
-  };
-
-  const logout = async () => {
-    try {
-      await adminApi.logout();
-      dispatch({ type: ADMIN_ACTION_TYPES.LOGOUT });
-      
-      addNotification({
-        type: 'success',
-        message: 'Logged out successfully',
-      });
-    } catch (error) {
-      console.error('Logout error:', error);
-      // Still dispatch logout even if API call fails
-      dispatch({ type: ADMIN_ACTION_TYPES.LOGOUT });
-    }
-  };
-
-  // Force clear authentication (for debugging/manual reset)
-  const clearAuth = () => {
-    console.log('🧹 Manually clearing authentication...');
-    localStorage.removeItem('adminToken');
-    localStorage.removeItem('adminUser');
-    dispatch({ type: ADMIN_ACTION_TYPES.LOGOUT });
-    
-    addNotification({
-      type: 'info',
-      message: 'Authentication cleared. Please login again.',
-    });
-  };
 
   // =============================================
   // DASHBOARD ACTIONS
@@ -529,6 +521,120 @@ export const AdminProvider = ({ children }) => {
       if (error.message.includes('Invalid or expired token')) {
         clearAuth();
       }
+      
+      return { success: false, error: error.message };
+    }
+  };
+
+  // 🆕 CREATE PRODUCT METHOD - MAIN FIX
+  const createProduct = async (formData, images) => {
+    try {
+      console.log('🎯 AdminContext: Creating product...');
+      
+      // Create FormData for file upload
+      const formDataToSend = new FormData();
+      
+      // FIXED: Backend field mapping
+      const backendMapping = {
+        product_name: formData.product_name,
+        product_description: formData.product_description,
+        product_brand: formData.product_brand,
+        
+        // FIXED: Correct backend field names
+        primaryCategory: formData.category,  // Single protection type
+        secondaryCategories: JSON.stringify(formData.industries || []), // Industries array
+        
+        // Pricing & Inventory
+        product_price: formData.product_price,
+        stock: formData.stock,
+        lowStockThreshold: formData.lowStockThreshold || '10',
+        
+        // Sale Configuration
+        isOnSale: formData.isOnSale || false,
+        salePrice: formData.salePrice || '',
+        saleStartDate: formData.saleStartDate || '',
+        saleEndDate: formData.saleEndDate || '',
+        
+        // Status & Features
+        status: formData.status || 'active',
+        isFeatured: formData.isFeatured || false,
+        isNewArrival: formData.isNewArrival || false,
+        
+        // SEO Fields (advanced)
+        metaTitle: formData.metaTitle || '',
+        metaDescription: formData.metaDescription || '',
+        keywords: formData.keywords || '',
+        slug: formData.slug || '',
+        focusKeyword: formData.focusKeyword || ''
+      };
+      
+      // Append all form fields
+      Object.keys(backendMapping).forEach(key => {
+        if (backendMapping[key] !== '' && backendMapping[key] !== null && backendMapping[key] !== undefined) {
+          formDataToSend.append(key, backendMapping[key]);
+        }
+      });
+      
+      // Append images
+      if (images && images.length > 0) {
+        images.forEach((image) => {
+          formDataToSend.append('images', image);
+        });
+      }
+      
+      // Make API call with proper auth
+      const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+      const token = localStorage.getItem('adminToken');
+      
+      if (!token) {
+        throw new Error('No authentication token found');
+      }
+      
+      console.log('🚀 Sending product creation request...');
+      
+      const response = await fetch(`${API_BASE}/admin/products`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        body: formDataToSend
+      });
+      
+      const result = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(result.message || `HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      if (result.success) {
+        // Add to products list
+        dispatch({
+          type: ADMIN_ACTION_TYPES.ADD_PRODUCT,
+          payload: result.data,
+        });
+        
+        addNotification({
+          type: 'success',
+          message: '🎯 Product created successfully with multi-category targeting!',
+        });
+        
+        console.log('✅ Product created successfully:', result.data._id);
+        return { success: true, data: result.data };
+      } else {
+        throw new Error(result.message || 'Failed to create product');
+      }
+      
+    } catch (error) {
+      console.error('❌ Create product error:', error);
+      
+      if (error.message.includes('Invalid or expired token')) {
+        clearAuth();
+      }
+      
+      addNotification({
+        type: 'error',
+        message: error.message || 'Failed to create product',
+      });
       
       return { success: false, error: error.message };
     }
@@ -734,7 +840,7 @@ export const AdminProvider = ({ children }) => {
     // Auth actions
     login,
     logout,
-    clearAuth, // NEW: Manual auth clearing
+    clearAuth,
     
     // Dashboard actions
     loadDashboardStats,
@@ -742,6 +848,7 @@ export const AdminProvider = ({ children }) => {
     // Product actions
     loadProducts,
     loadProduct,
+    createProduct, // 🆕 NEW METHOD ADDED
     updateProduct,
     
     // Category actions
@@ -763,7 +870,7 @@ export const AdminProvider = ({ children }) => {
     formatDate: adminApi.formatDate,
     
     // Debug utilities
-    getTokenInfo, // NEW: For debugging
+    getTokenInfo,
   };
 
   return (

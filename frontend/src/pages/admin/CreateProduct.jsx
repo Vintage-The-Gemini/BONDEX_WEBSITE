@@ -5,7 +5,7 @@ import { useAdmin } from '../../context/AdminContext';
 
 // Component Imports
 import MultiCategorySelector from '../../components/admin/MultiCategorySelector';
-import AdvancedSEO from '../../components/admin/AdvancedSEO';
+import AdvancedSEO from '../../components/admin/AdvancedSEO'; // ✅ CORRECT IMPORT
 import ProductBasicInfo from '../../components/admin/ProductBasicInfo';
 import ProductPricingInventory from '../../components/admin/ProductPricingInventory';
 import ProductImages from '../../components/admin/ProductImages';
@@ -25,7 +25,7 @@ import {
 
 const CreateProduct = () => {
   const navigate = useNavigate();
-  const { categories, loadCategories, addNotification } = useAdmin();
+  const { categories, loadCategories, addNotification, createProduct } = useAdmin(); // 🆕 ADDED createProduct
 
   // Form State - Fixed to match backend validation
   const [formData, setFormData] = useState({
@@ -35,8 +35,8 @@ const CreateProduct = () => {
     product_brand: '',
     
     // FIXED: Match backend field names
-    category: '', // Protection type (backend expects 'category')
-    industries: [], // Industries (backend expects 'industries')
+    category: '', // Protection type (backend expects 'primaryCategory')
+    industries: [], // Industries (backend expects 'secondaryCategories')
     
     // Pricing & Inventory
     product_price: '',
@@ -54,13 +54,11 @@ const CreateProduct = () => {
     isFeatured: false,
     isNewArrival: false,
     
-    // SEO FIELDS
+    // 🆕 SIMPLIFIED SEO FIELDS
     metaTitle: '',
     metaDescription: '',
     keywords: '',
-    slug: '',
-    focusKeyword: '',
-    seoScore: 0
+    slug: ''
   });
 
   // Images and Media
@@ -83,41 +81,52 @@ const CreateProduct = () => {
   const [showPreview, setShowPreview] = useState(false);
   const [validationErrors, setValidationErrors] = useState({});
 
-  const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+  // 🔍 DEBUG: Log what we're passing to ProductImages
+  useEffect(() => {
+    console.log('🔍 CreateProduct - Images state:', images?.length || 0);
+    console.log('🔍 CreateProduct - ImagePreviews state:', imagePreviews?.length || 0);
+    console.log('🔍 CreateProduct - setImages function:', typeof setImages);
+    console.log('🔍 CreateProduct - setImagePreviews function:', typeof setImagePreviews);
+  }, [images, imagePreviews]);
 
   // Load categories on mount
   useEffect(() => {
     loadCategories();
   }, []);
 
-  // Validation function
+  // 🔍 DEBUG: Log categories when they change
+  useEffect(() => {
+    console.log('🔍 Categories in CreateProduct:', categories?.length || 0, categories);
+  }, [categories]);
+
+  // 🆕 SIMPLIFIED VALIDATION FUNCTION
   const validateForm = () => {
     const errors = {};
     
     // Basic product info
-    if (!formData.product_name.trim()) {
+    if (!formData.product_name?.trim()) {
       errors.product_name = 'Product name is required';
     } else if (formData.product_name.length < 3) {
       errors.product_name = 'Product name must be at least 3 characters';
     }
     
-    if (!formData.product_description.trim()) {
+    if (!formData.product_description?.trim()) {
       errors.product_description = 'Product description is required';
-    } else if (formData.product_description.length < 50) {
-      errors.product_description = 'Description must be at least 50 characters for SEO';
+    } else if (formData.product_description.length < 20) {
+      errors.product_description = 'Description must be at least 20 characters';
     }
     
-    if (!formData.product_brand.trim()) {
+    if (!formData.product_brand?.trim()) {
       errors.product_brand = 'Product brand is required';
     }
     
-    // Category validation - FIXED
+    // FIXED: Category validation
     if (!formData.category) {
       errors.category = 'Protection type selection is required';
     }
     
     if (!formData.industries || formData.industries.length === 0) {
-      errors.industries = 'At least one industry/sector must be selected';
+      errors.industries = 'At least one industry must be selected';
     }
     
     // Pricing validation
@@ -139,17 +148,17 @@ const CreateProduct = () => {
     }
     
     // Image validation
-    if (images.length === 0) {
+    if (!images || images.length === 0) {
       errors.images = 'At least one product image is required';
     }
     
-    // SEO validation
-    if (!formData.metaTitle || formData.metaTitle.length < 30) {
-      errors.metaTitle = 'Meta title should be at least 30 characters';
+    // 🆕 SIMPLIFIED SEO validation (removed complex scoring)
+    if (!formData.metaTitle || formData.metaTitle.length < 20) {
+      errors.metaTitle = 'Meta title should be at least 20 characters';
     }
     
-    if (!formData.metaDescription || formData.metaDescription.length < 120) {
-      errors.metaDescription = 'Meta description should be at least 120 characters';
+    if (!formData.metaDescription || formData.metaDescription.length < 50) {
+      errors.metaDescription = 'Meta description should be at least 50 characters';
     }
     
     setValidationErrors(errors);
@@ -168,6 +177,23 @@ const CreateProduct = () => {
         return newErrors;
       });
     }
+    
+    // 🆕 AUTO-GENERATE SLUG from product name
+    if (field === 'product_name' && value) {
+      const slug = value
+        .toLowerCase()
+        .replace(/[^a-z0-9\s-]/g, '')
+        .replace(/\s+/g, '-')
+        .replace(/-+/g, '-')
+        .substring(0, 50);
+      setFormData(prev => ({ ...prev, slug }));
+    }
+    
+    // 🆕 AUTO-GENERATE META TITLE from product name + brand
+    if ((field === 'product_name' || field === 'product_brand') && formData.product_name && formData.product_brand) {
+      const metaTitle = `${formData.product_brand} ${formData.product_name} - Safety Equipment Kenya`;
+      setFormData(prev => ({ ...prev, metaTitle }));
+    }
   };
 
   // Handle input changes
@@ -177,7 +203,7 @@ const CreateProduct = () => {
     handleFormDataChange(name, newValue);
   };
 
-  // Submit form - FIXED
+  // 🆕 FIXED SUBMIT FUNCTION - Using AdminContext
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -194,73 +220,29 @@ const CreateProduct = () => {
     try {
       console.log('🎯 Creating product with data:', formData);
       
-      // Create FormData for file upload
-      const formDataToSend = new FormData();
-      
-      // Append all form fields with proper names
-      Object.keys(formData).forEach(key => {
-        if (formData[key] !== '' && formData[key] !== null && formData[key] !== undefined) {
-          if (Array.isArray(formData[key])) {
-            formDataToSend.append(key, JSON.stringify(formData[key]));
-          } else {
-            formDataToSend.append(key, formData[key]);
-          }
-        }
-      });
-      
-      // Append features (filter empty)
-      const validFeatures = features.filter(f => f.trim() !== '');
-      if (validFeatures.length > 0) {
-        formDataToSend.append('features', JSON.stringify(validFeatures));
+      // Validate images
+      if (!images || images.length === 0) {
+        throw new Error('At least one product image is required');
       }
       
-      // Append specifications (filter empty)
-      const validSpecs = specifications.filter(s => s.key.trim() !== '' && s.value.trim() !== '');
-      if (validSpecs.length > 0) {
-        const specsObject = {};
-        validSpecs.forEach(spec => {
-          specsObject[spec.key.trim()] = spec.value.trim();
-        });
-        formDataToSend.append('specifications', JSON.stringify(specsObject));
+      // Validate required fields
+      if (!formData.product_name?.trim()) {
+        throw new Error('Product name is required');
       }
       
-      // Append tags (filter empty)
-      const validTags = tags.filter(t => t.trim() !== '');
-      if (validTags.length > 0) {
-        formDataToSend.append('tags', JSON.stringify(validTags));
+      if (!formData.category) {
+        throw new Error('Protection type (category) is required');
       }
       
-      // Append certifications
-      const validCertifications = certifications.filter(c => c.trim() !== '');
-      if (validCertifications.length > 0) {
-        formDataToSend.append('certifications', JSON.stringify(validCertifications));
+      if (!formData.industries || formData.industries.length === 0) {
+        throw new Error('At least one industry must be selected');
       }
       
-      // Append compliance standards
-      const validCompliance = complianceStandards.filter(c => c.trim() !== '');
-      if (validCompliance.length > 0) {
-        formDataToSend.append('complianceStandards', JSON.stringify(validCompliance));
-      }
-      
-      // Append images
-      images.forEach((image, index) => {
-        formDataToSend.append('images', image);
-      });
-      
-      // FIXED: Use proper API endpoint with auth headers
-      const response = await fetch(`${API_BASE}/admin/products`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
-        },
-        body: formDataToSend
-      });
-      
-      const result = await response.json();
+      // 🆕 FIXED: Use AdminContext createProduct method
+      const result = await createProduct(formData, images);
       
       if (result.success) {
-        setSuccess('Product created successfully!');
-        addNotification('Product created successfully!', 'success');
+        setSuccess('🎯 Product created successfully with multi-category targeting!');
         console.log('✅ Product created:', result.data);
         
         // Navigate to product view after brief delay
@@ -268,14 +250,13 @@ const CreateProduct = () => {
           navigate(`/admin/products/${result.data._id}`);
         }, 1500);
       } else {
-        throw new Error(result.message || 'Failed to create product');
+        throw new Error(result.error || 'Failed to create product');
       }
       
     } catch (error) {
       console.error('❌ Creation error:', error);
       const errorMessage = error.message || 'Failed to create product. Please check your connection and try again.';
       setError(errorMessage);
-      addNotification(errorMessage, 'error');
     } finally {
       setLoading(false);
     }
@@ -314,7 +295,7 @@ const CreateProduct = () => {
               </div>
             </div>
             <p className="text-gray-600 mt-1">
-              Add safety equipment with precision multi-category targeting and advanced SEO optimization
+              Add safety equipment with precision multi-category targeting
             </p>
           </div>
         </div>
@@ -326,61 +307,48 @@ const CreateProduct = () => {
             className="flex items-center gap-2 px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
           >
             {showPreview ? <EyeOff size={16} /> : <Eye size={16} />}
-            {showPreview ? 'Hide' : 'Show'} Preview
-          </button>
-          
-          <button
-            type="button"
-            onClick={handleSaveDraft}
-            disabled={loading}
-            className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors disabled:opacity-50"
-          >
-            <Package size={16} />
-            Save Draft
+            {showPreview ? 'Hide Preview' : 'Show Preview'}
           </button>
         </div>
       </div>
 
-      {/* Error/Success Messages */}
+      {/* 🆕 SUCCESS/ERROR MESSAGES */}
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg flex items-center gap-2">
-          <AlertCircle size={16} />
-          {error}
-        </div>
-      )}
-      
-      {success && (
-        <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg flex items-center gap-2">
-          <CheckCircle size={16} />
-          {success}
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="h-5 w-5 text-red-600" />
+            <span className="text-red-800 font-medium">Error</span>
+          </div>
+          <p className="text-red-700 mt-1">{error}</p>
         </div>
       )}
 
-      {/* Form */}
+      {success && (
+        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+          <div className="flex items-center gap-2">
+            <CheckCircle className="h-5 w-5 text-green-600" />
+            <span className="text-green-800 font-medium">Success</span>
+          </div>
+          <p className="text-green-700 mt-1">{success}</p>
+        </div>
+      )}
+
+      {/* Main Form */}
       <form id="product-form" onSubmit={handleSubmit} className="space-y-8">
         
-        {/* Basic Product Information */}
+        {/* Product Basic Information */}
         <ProductBasicInfo
           formData={formData}
           onFormDataChange={handleFormDataChange}
+          handleInputChange={handleInputChange}
           validationErrors={validationErrors}
         />
 
-        {/* Multi-Category Selection - FIXED PROP NAMES */}
+        {/* Multi-Category Selector */}
         <MultiCategorySelector
-          selectedProtectionType={formData.category}
-          selectedIndustries={formData.industries}
-          onProtectionTypeChange={(categoryId) => handleFormDataChange('category', categoryId)}
-          onIndustriesChange={(industries) => handleFormDataChange('industries', industries)}
-          errors={validationErrors}
-        />
-
-        {/* Product Images */}
-        <ProductImages
-          images={images}
-          imagePreviews={imagePreviews}
-          onImagesChange={setImages}
-          onImagePreviewsChange={setImagePreviews}
+          formData={formData}
+          onFormDataChange={handleFormDataChange}
+          categories={categories} // ✅ PASS CATEGORIES FROM ADMIN CONTEXT
           validationErrors={validationErrors}
         />
 
@@ -388,7 +356,16 @@ const CreateProduct = () => {
         <ProductPricingInventory
           formData={formData}
           onFormDataChange={handleFormDataChange}
-          onInputChange={handleInputChange}
+          handleInputChange={handleInputChange}
+          validationErrors={validationErrors}
+        />
+
+        {/* Product Images */}
+        <ProductImages
+          images={images}
+          setImages={setImages}
+          imagePreviews={imagePreviews}
+          setImagePreviews={setImagePreviews}
           validationErrors={validationErrors}
         />
 
@@ -406,7 +383,7 @@ const CreateProduct = () => {
           onComplianceChange={setComplianceStandards}
         />
 
-        {/* Advanced SEO */}
+        {/* ✅ ADVANCED SEO Section (using your existing component) */}
         <AdvancedSEO
           formData={formData}
           onFormDataChange={handleFormDataChange}
@@ -426,7 +403,7 @@ const CreateProduct = () => {
           
           <div className="flex gap-3">
             <button
-              type="submit"
+              type="button"
               disabled={loading}
               onClick={handleSaveDraft}
               className="px-6 py-3 text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-all duration-200 font-medium disabled:opacity-50"
@@ -476,60 +453,71 @@ const CreateProduct = () => {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div>
               {imagePreviews.length > 0 ? (
-                <img
-                  src={imagePreviews[0].url || imagePreviews[0]}
-                  alt="Product preview"
-                  className="w-full h-64 object-cover rounded-lg"
-                />
+                <div className="space-y-2">
+                  <img
+                    src={imagePreviews[0]}
+                    alt={formData.product_name}
+                    className="w-full h-64 object-cover rounded-lg"
+                  />
+                  {imagePreviews.length > 1 && (
+                    <div className="grid grid-cols-4 gap-2">
+                      {imagePreviews.slice(1, 5).map((preview, index) => (
+                        <img
+                          key={index}
+                          src={preview}
+                          alt={`${formData.product_name} ${index + 2}`}
+                          className="w-full h-16 object-cover rounded"
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
               ) : (
                 <div className="w-full h-64 bg-gray-100 rounded-lg flex items-center justify-center">
-                  <Package className="h-12 w-12 text-gray-400" />
-                  <span className="ml-2 text-gray-500">No image uploaded</span>
+                  <span className="text-gray-400">No images uploaded</span>
                 </div>
               )}
             </div>
             
             <div className="space-y-4">
               <div>
-                <h4 className="text-xl font-bold text-gray-900">{formData.product_name || 'Product Name'}</h4>
-                <p className="text-gray-600">{formData.product_brand || 'Brand'}</p>
+                <h3 className="text-xl font-bold text-gray-900">
+                  {formData.product_name || 'Product Name'}
+                </h3>
+                <p className="text-gray-600 text-sm">
+                  by {formData.product_brand || 'Brand Name'}
+                </p>
               </div>
               
-              <div className="text-2xl font-bold text-orange-600">
-                KES {formData.product_price ? parseFloat(formData.product_price).toLocaleString() : '0'}
+              <div className="flex items-center gap-2">
+                <span className="text-2xl font-bold text-orange-500">
+                  KES {formData.product_price ? parseFloat(formData.product_price).toLocaleString() : '0'}
+                </span>
+                {formData.isOnSale && formData.salePrice && (
+                  <span className="text-lg text-gray-500 line-through">
+                    KES {parseFloat(formData.salePrice).toLocaleString()}
+                  </span>
+                )}
               </div>
               
               <p className="text-gray-700">
                 {formData.product_description || 'Product description will appear here...'}
               </p>
               
-              <div className="flex flex-wrap gap-2">
-                {formData.category && (
-                  <span className="px-3 py-1 bg-orange-100 text-orange-800 rounded-full text-sm">
-                    {categories.find(c => c._id === formData.category)?.name || 'Protection Type'}
-                  </span>
-                )}
-                {formData.industries && formData.industries.map((industry, index) => (
-                  <span key={index} className="px-3 py-1 bg-gray-100 text-gray-800 rounded-full text-sm">
-                    {categories.find(c => c._id === industry)?.name || industry}
-                  </span>
-                ))}
-              </div>
-              
-              {/* Preview Features */}
-              {features.filter(f => f.trim()).length > 0 && (
-                <div>
-                  <h5 className="font-semibold text-gray-900 mb-2">Key Features:</h5>
-                  <ul className="text-sm text-gray-600 space-y-1">
-                    {features.filter(f => f.trim()).slice(0, 3).map((feature, index) => (
-                      <li key={index} className="flex items-center gap-2">
-                        <CheckCircle className="h-3 w-3 text-green-500" />
-                        {feature}
-                      </li>
-                    ))}
-                  </ul>
+              <div className="space-y-2">
+                <div className="text-sm">
+                  <span className="font-medium">Category:</span> {formData.category || 'Not selected'}
                 </div>
-              )}
+                <div className="text-sm">
+                  <span className="font-medium">Industries:</span> {formData.industries?.join(', ') || 'None selected'}
+                </div>
+                <div className="text-sm">
+                  <span className="font-medium">Stock:</span> {formData.stock || '0'} units
+                </div>
+                <div className="text-sm">
+                  <span className="font-medium">Status:</span> {formData.status || 'active'}
+                </div>
+              </div>
             </div>
           </div>
         </div>

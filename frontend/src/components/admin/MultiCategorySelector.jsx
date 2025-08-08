@@ -1,4 +1,4 @@
-// frontend/src/components/admin/MultiCategorySelector.jsx
+// frontend/src/components/admin/MultiCategorySelector.jsx - FIXED TO MATCH YOUR CREATEPRODUCT
 import React, { useState, useEffect } from 'react';
 import { 
   CheckCircle, 
@@ -14,110 +14,55 @@ import {
 } from 'lucide-react';
 
 const MultiCategorySelector = ({ 
-  selectedProtectionType, 
-  selectedIndustries = [], 
-  onProtectionTypeChange, 
-  onIndustriesChange,
-  errors = {}
+  formData,
+  onFormDataChange,
+  categories = [],
+  validationErrors = {}
 }) => {
   const [protectionTypes, setProtectionTypes] = useState([]);
   const [industries, setIndustries] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [industrySearch, setIndustrySearch] = useState('');
 
-  // 🎯 SNIPER PRECISION: Load categories with enhanced separation
+  // Process categories when they change
   useEffect(() => {
-    fetchCategories();
-  }, []);
-
-  const fetchCategories = async () => {
-    try {
-      // 🔧 FIX: Use correct API URL matching your working admin context
-      const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-      const response = await fetch(`${API_BASE}/admin/categories`);
-      const data = await response.json();
+    if (categories && categories.length > 0) {
+      console.log('🎯 Processing categories:', categories.length);
       
-      console.log('🎯 API Response:', data);
+      // 🔧 FIX: Match your database types
+      const protection = categories.filter(cat => 
+        cat.type === 'protection_type' && cat.status === 'active' // ✅ Changed to protection_type
+      ).sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
       
-      if (data.success) {
-        // 🚀 PRECISION SEPARATION: Protection types vs Industries  
-        const protection = data.data.filter(cat => 
-          cat.type === 'protection' && cat.status === 'active'
-        ).sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
-        
-        const sectors = data.data.filter(cat => 
-          cat.type === 'industry' && cat.status === 'active'
-        ).sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
-        
-        setProtectionTypes(protection);
-        setIndustries(sectors);
-        
-        console.log('🎯 LOADED WITH PRECISION:');
-        console.log('Protection Types:', protection.length);
-        console.log('Industries/Sectors:', sectors.length);
-        console.log('Sample protection type:', protection[0]);
-      } else {
-        console.error('❌ API returned error:', data.message);
-      }
-    } catch (error) {
-      console.error('❌ Category loading error:', error);
-    } finally {
-      setLoading(false);
+      const sectors = categories.filter(cat => 
+        (cat.type === 'industry' || cat.type === 'sector') && cat.status === 'active' // ✅ Added sector as backup
+      ).sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+      
+      setProtectionTypes(protection);
+      setIndustries(sectors);
+      
+      console.log('🎯 LOADED:');
+      console.log('Protection Types:', protection.length);
+      console.log('Industries/Sectors:', sectors.length);
+      console.log('Sample protection type:', protection[0]?.name, protection[0]?.type);
+      console.log('Sample industry:', sectors[0]?.name, sectors[0]?.type);
+    } else {
+      console.log('⚠️ No categories available');
+      setProtectionTypes([]);
+      setIndustries([]);
     }
-  };
+  }, [categories]);
 
-  // 🎯 PRECISION: Handle protection type selection (single)
+  // Handle protection type selection (single)
   const handleProtectionTypeChange = (typeId) => {
     console.log('🎯 Protection Type Selected:', typeId);
-    onProtectionTypeChange(typeId);
-    
-    // Auto-suggest compatible industries based on protection type
-    if (typeId && selectedIndustries.length === 0) {
-      suggestCompatibleIndustries(typeId);
-    }
+    onFormDataChange('category', typeId);
   };
 
-  // 🚀 SMART SUGGESTION: Auto-suggest industries based on protection type
-  const suggestCompatibleIndustries = (protectionTypeId) => {
-    const protectionType = protectionTypes.find(p => p._id === protectionTypeId);
-    if (!protectionType) return;
-
-    const suggestions = [];
-    const typeName = protectionType.name.toLowerCase();
-
-    // Smart industry suggestions based on protection type
-    if (typeName.includes('foot') || typeName.includes('boot')) {
-      suggestions.push(
-        industries.find(i => i.name.includes('Construction')),
-        industries.find(i => i.name.includes('Manufacturing')),
-        industries.find(i => i.name.includes('Oil'))
-      );
-    } else if (typeName.includes('breathing') || typeName.includes('mask')) {
-      suggestions.push(
-        industries.find(i => i.name.includes('Medical')),
-        industries.find(i => i.name.includes('Manufacturing')),
-        industries.find(i => i.name.includes('Mining'))
-      );
-    } else if (typeName.includes('eye') || typeName.includes('goggle')) {
-      suggestions.push(
-        industries.find(i => i.name.includes('Manufacturing')),
-        industries.find(i => i.name.includes('Construction')),
-        industries.find(i => i.name.includes('Medical'))
-      );
-    }
-
-    // Auto-select the most relevant suggestions
-    const relevantIds = suggestions.filter(Boolean).slice(0, 2).map(s => s._id);
-    if (relevantIds.length > 0) {
-      onIndustriesChange(relevantIds);
-    }
-  };
-
-  // 🎯 PRECISION: Handle industry toggle (multiple selection)
+  // Handle industry toggle (multiple selection)
   const handleIndustryToggle = (industryId) => {
-    const currentIndustries = selectedIndustries || [];
+    const currentIndustries = formData.industries || [];
     const isSelected = currentIndustries.includes(industryId);
     
     let updatedIndustries;
@@ -128,23 +73,28 @@ const MultiCategorySelector = ({
     }
     
     console.log('🎯 Industries updated:', updatedIndustries.length, 'selected');
-    onIndustriesChange(updatedIndustries);
+    onFormDataChange('industries', updatedIndustries);
   };
 
-  // 🔍 Filter industries based on search
-  const filteredIndustries = industries.filter(industry =>
-    industry.name.toLowerCase().includes(industrySearch.toLowerCase()) ||
-    industry.description.toLowerCase().includes(industrySearch.toLowerCase())
+  // Filter functions
+  const filteredProtectionTypes = protectionTypes.filter(type =>
+    type.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (type.description && type.description.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
-  // 📊 Get selection stats
+  const filteredIndustries = industries.filter(industry =>
+    industry.name.toLowerCase().includes(industrySearch.toLowerCase()) ||
+    (industry.description && industry.description.toLowerCase().includes(industrySearch.toLowerCase()))
+  );
+
+  // Get selection stats
   const getSelectionStats = () => {
-    const protectionTypeName = protectionTypes.find(p => p._id === selectedProtectionType)?.name;
+    const protectionTypeName = protectionTypes.find(p => p._id === formData.category)?.name;
     return {
       protectionType: protectionTypeName,
-      industriesCount: selectedIndustries.length,
+      industriesCount: (formData.industries || []).length,
       industries: industries
-        .filter(i => selectedIndustries.includes(i._id))
+        .filter(i => (formData.industries || []).includes(i._id))
         .map(i => i.name)
     };
   };
@@ -165,18 +115,20 @@ const MultiCategorySelector = ({
   const stats = getSelectionStats();
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border p-6">
+    <div className="bg-white rounded-xl shadow-lg border p-8">
       <div className="flex items-center justify-between mb-6">
-        <h2 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
-          <Target className="h-5 w-5 text-blue-600" />
-          Multi-Category Classification
-          <span className="text-sm bg-gradient-to-r from-blue-100 to-purple-100 text-blue-800 px-3 py-1 rounded-full font-medium">
+        <div className="flex items-center gap-3">
+          <Target className="h-6 w-6 text-blue-500" />
+          <h2 className="text-2xl font-bold text-gray-900">Multi-Category Classification</h2>
+          <div className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium">
             🎯 PRECISION TARGETING
-          </span>
-        </h2>
+          </div>
+        </div>
         
-        <div className="text-sm text-gray-600">
-          {selectedIndustries.length} Sectors
+        <div className="text-right">
+          <div className="text-sm text-gray-600">
+            {(formData.industries || []).length} Sectors
+          </div>
         </div>
       </div>
 
@@ -190,7 +142,7 @@ const MultiCategorySelector = ({
             <span className="text-sm font-normal text-gray-600">(Required - Select One)</span>
           </label>
 
-          {/* 🔍 SEARCH: Quick category finder */}
+          {/* Search Protection Types */}
           <div className="relative mb-4">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
             <input
@@ -202,22 +154,19 @@ const MultiCategorySelector = ({
             />
           </div>
           
+          {/* Protection Types Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-            {protectionTypes
-              .filter(type => 
-                type.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                type.description.toLowerCase().includes(searchTerm.toLowerCase())
-              )
-              .map(type => {
-                const isSelected = selectedProtectionType === type._id;
+            {filteredProtectionTypes.length > 0 ? (
+              filteredProtectionTypes.map(type => {
+                const isSelected = formData.category === type._id;
                 
                 return (
                   <label
                     key={type._id}
                     className={`relative flex flex-col p-4 border-2 rounded-xl cursor-pointer transition-all hover:shadow-lg transform hover:scale-[1.02] ${
                       isSelected
-                        ? 'border-blue-500 bg-gradient-to-br from-blue-50 to-blue-100 shadow-md'
-                        : 'border-gray-200 bg-white hover:border-blue-300 hover:bg-blue-50'
+                        ? 'border-blue-500 bg-blue-50 shadow-lg'
+                        : 'border-gray-200 hover:border-gray-300 bg-white hover:bg-gray-50'
                     }`}
                   >
                     <input
@@ -229,73 +178,70 @@ const MultiCategorySelector = ({
                       className="sr-only"
                     />
                     
-                    {/* Selection indicator */}
                     {isSelected && (
-                      <div className="absolute -top-2 -right-2 bg-blue-500 text-white rounded-full p-1">
-                        <CheckCircle className="h-4 w-4" />
-                      </div>
+                      <CheckCircle className="absolute top-2 right-2 h-5 w-5 text-blue-600" />
                     )}
                     
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-2">
-                        <span className="text-2xl">{type.icon}</span>
-                        <span className="font-semibold text-gray-900">{type.name}</span>
+                    <div className="text-center">
+                      <div className="text-3xl mb-3">
+                        {type.icon || '🛡️'}
                       </div>
-                      <p className="text-sm text-gray-600 leading-relaxed">
-                        {type.description}
-                      </p>
-                      {type.productCount > 0 && (
-                        <div className="mt-2">
-                          <span className="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded-full">
-                            {type.productCount} products
-                          </span>
-                        </div>
+                      
+                      <h3 className={`font-semibold text-sm mb-2 ${
+                        isSelected ? 'text-blue-900' : 'text-gray-900'
+                      }`}>
+                        {type.name}
+                      </h3>
+                      
+                      {type.description && (
+                        <p className={`text-xs leading-relaxed ${
+                          isSelected ? 'text-blue-700' : 'text-gray-600'
+                        }`}>
+                          {type.description}
+                        </p>
                       )}
                     </div>
                   </label>
                 );
-              })}
+              })
+            ) : (
+              <div className="col-span-full text-center py-8 text-gray-500">
+                {protectionTypes.length === 0 ? (
+                  <div className="space-y-2">
+                    <AlertCircle className="h-8 w-8 mx-auto text-orange-500" />
+                    <p className="font-medium">No protection types available</p>
+                    <p className="text-sm">Please add protection categories first</p>
+                  </div>
+                ) : (
+                  <p>No protection types match your search</p>
+                )}
+              </div>
+            )}
           </div>
-          
-          {errors.protectionType && (
-            <p className="text-red-500 text-sm mt-3 flex items-center gap-2">
+
+          {/* Validation Error */}
+          {validationErrors.category && (
+            <div className="mt-2 flex items-center gap-2 text-red-600 text-sm">
               <AlertCircle className="h-4 w-4" />
-              {errors.protectionType}
-            </p>
+              {validationErrors.category}
+            </div>
           )}
         </div>
 
         {/* STEP 2: Industries/Sectors Selection (Multiple - REQUIRED) */}
         <div>
-          <div className="flex items-center justify-between mb-4">
-            <label className="text-lg font-semibold text-gray-800 flex items-center gap-2">
-              <Building className="h-5 w-5 text-green-600" />
-              Step 2: Industries/Sectors *
-              <span className="text-sm font-normal text-gray-600">(Select All Applicable)</span>
-            </label>
-            
-            <div className="flex items-center gap-4">
-              <span className={`text-sm font-medium px-3 py-1 rounded-full ${
-                selectedIndustries.length > 0 
-                  ? 'bg-green-100 text-green-800' 
-                  : 'bg-gray-100 text-gray-600'
-              }`}>
-                {selectedIndustries.length} selected
+          <label className="block text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+            <Building className="h-5 w-5 text-green-600" />
+            Step 2: Industries/Sectors *
+            <span className="text-sm font-normal text-gray-600">(Select All Applicable)</span>
+            <div className="ml-auto text-right">
+              <span className="text-sm font-medium text-green-600">
+                {(formData.industries || []).length} selected
               </span>
-              
-              {selectedIndustries.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => onIndustriesChange([])}
-                  className="text-sm text-red-600 hover:text-red-700 font-medium hover:underline"
-                >
-                  Clear All
-                </button>
-              )}
             </div>
-          </div>
+          </label>
 
-          {/* Industry Search */}
+          {/* Search Industries */}
           <div className="relative mb-4">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
             <input
@@ -303,79 +249,119 @@ const MultiCategorySelector = ({
               placeholder="🔍 Search industries and sectors..."
               value={industrySearch}
               onChange={(e) => setIndustrySearch(e.target.value)}
-              className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all"
             />
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 max-h-80 overflow-y-auto">
-            {filteredIndustries.map(industry => {
-              const isSelected = selectedIndustries.includes(industry._id);
-              
-              return (
-                <label
-                  key={industry._id}
-                  className={`relative flex items-center p-4 border-2 rounded-xl cursor-pointer transition-all hover:shadow-lg transform hover:scale-[1.02] ${
-                    isSelected
-                      ? 'border-green-500 bg-gradient-to-br from-green-50 to-green-100 shadow-md'
-                      : 'border-gray-200 bg-white hover:border-green-300 hover:bg-green-50'
-                  }`}
-                >
-                  <input
-                    type="checkbox"
-                    checked={isSelected}
-                    onChange={() => handleIndustryToggle(industry._id)}
-                    className="sr-only"
-                  />
-                  
-                  {/* Selection indicator */}
-                  {isSelected && (
-                    <div className="absolute -top-2 -right-2 bg-green-500 text-white rounded-full p-1">
-                      <CheckCircle className="h-4 w-4" />
-                    </div>
-                  )}
-                  
-                  <div className="flex-1 relative">
-                    <div className="flex items-center gap-3 mb-2">
-                      <span className="text-2xl">{industry.icon}</span>
-                      <span className="font-semibold text-gray-900">{industry.name}</span>
-                    </div>
-                    <p className="text-sm text-gray-600 leading-relaxed">
-                      {industry.description}
-                    </p>
+          {/* Industries Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+            {filteredIndustries.length > 0 ? (
+              filteredIndustries.map(industry => {
+                const isSelected = (formData.industries || []).includes(industry._id);
+                
+                return (
+                  <label
+                    key={industry._id}
+                    className={`flex items-center gap-3 p-4 border-2 rounded-lg cursor-pointer transition-all hover:shadow-md ${
+                      isSelected
+                        ? 'border-green-500 bg-green-50 shadow-md'
+                        : 'border-gray-200 hover:border-gray-300 bg-white hover:bg-gray-50'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={() => handleIndustryToggle(industry._id)}
+                      className="sr-only"
+                    />
                     
-                    {/* Industry stats */}
-                    <div className="mt-3 flex items-center gap-2">
-                      {industry.productCount > 0 && (
-                        <span className="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded-full">
-                          {industry.productCount} products
+                    <div className={`flex-shrink-0 w-6 h-6 border-2 rounded flex items-center justify-center ${
+                      isSelected 
+                        ? 'border-green-500 bg-green-500' 
+                        : 'border-gray-300'
+                    }`}>
+                      {isSelected && <CheckCircle className="h-4 w-4 text-white" />}
+                    </div>
+                    
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-lg">
+                          {industry.icon || '🏭'}
                         </span>
-                      )}
+                        <span className={`font-medium text-sm truncate ${
+                          isSelected ? 'text-green-900' : 'text-gray-900'
+                        }`}>
+                          {industry.name}
+                        </span>
+                      </div>
                       
-                      {isSelected && (
-                        <span className="text-xs bg-green-200 text-green-800 px-2 py-1 rounded-full font-medium">
-                          ✓ Active
-                        </span>
+                      {industry.description && (
+                        <p className={`text-xs mt-1 ${
+                          isSelected ? 'text-green-700' : 'text-gray-600'
+                        }`}>
+                          {industry.description}
+                        </p>
                       )}
                     </div>
+                  </label>
+                );
+              })
+            ) : (
+              <div className="col-span-full text-center py-8 text-gray-500">
+                {industries.length === 0 ? (
+                  <div className="space-y-2">
+                    <AlertCircle className="h-8 w-8 mx-auto text-orange-500" />
+                    <p className="font-medium">No industries available</p>
+                    <p className="text-sm">Please add industry categories first</p>
                   </div>
-                </label>
-              );
-            })}
+                ) : (
+                  <p>No industries match your search</p>
+                )}
+              </div>
+            )}
           </div>
-          
-          {errors.industries && (
-            <p className="text-red-500 text-sm mt-3 flex items-center gap-2">
+
+          {/* Validation Error */}
+          {validationErrors.industries && (
+            <div className="mt-2 flex items-center gap-2 text-red-600 text-sm">
               <AlertCircle className="h-4 w-4" />
-              {errors.industries}
-            </p>
+              {validationErrors.industries}
+            </div>
           )}
         </div>
 
-        {/* 🎯 PRECISION: Classification Preview & Cross-Reference */}
-        {selectedProtectionType && selectedIndustries.length > 0 && (
-          <div className="mt-8 p-6 bg-gradient-to-r from-purple-50 via-blue-50 to-green-50 rounded-xl border-2 border-purple-200 shadow-sm">
-            <h4 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
-              <Target className="h-5 w-5 text-purple-600" />
+        {/* Classification Status */}
+        <div className="bg-gray-50 rounded-lg p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium text-gray-700">Classification Status</span>
+            </div>
+            
+            <div className="flex items-center gap-2">
+              {formData.category && (formData.industries || []).length > 0 ? (
+                <>
+                  <CheckCircle className="h-4 w-4 text-green-500" />
+                  <span className="text-sm font-medium text-green-600">
+                    ✅ Complete both selections
+                  </span>
+                </>
+              ) : (
+                <>
+                  <AlertCircle className="h-4 w-4 text-red-500" />
+                  <span className="text-sm font-medium text-red-600">
+                    ❌ Complete both selections
+                  </span>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Selection Summary */}
+        {formData.category && (formData.industries || []).length > 0 && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <h4 className="font-semibold text-blue-900 mb-3 flex items-center gap-2">
+              <Target className="h-5 w-5 text-blue-600" />
               🎯 Multi-Category Classification Summary
             </h4>
             
@@ -384,13 +370,13 @@ const MultiCategorySelector = ({
               {/* Primary Classification */}
               <div className="space-y-3">
                 <div className="flex items-center gap-3">
-                  <span className="text-sm font-bold text-purple-700">Primary Protection:</span>
+                  <span className="text-sm font-bold text-blue-700">Primary Protection:</span>
                   <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-lg shadow-sm">
                     <span className="text-lg">
-                      {protectionTypes.find(p => p._id === selectedProtectionType)?.icon}
+                      {protectionTypes.find(p => p._id === formData.category)?.icon || '🛡️'}
                     </span>
                     <span className="font-semibold text-gray-900">
-                      {protectionTypes.find(p => p._id === selectedProtectionType)?.name}
+                      {protectionTypes.find(p => p._id === formData.category)?.name}
                     </span>
                   </div>
                 </div>
@@ -398,11 +384,11 @@ const MultiCategorySelector = ({
                 <div className="space-y-2">
                   <span className="text-sm font-bold text-green-700">Target Industries:</span>
                   <div className="flex flex-wrap gap-2">
-                    {selectedIndustries.map(industryId => {
+                    {(formData.industries || []).map(industryId => {
                       const industry = industries.find(i => i._id === industryId);
                       return industry ? (
                         <div key={industryId} className="flex items-center gap-2 bg-white px-3 py-2 rounded-lg shadow-sm">
-                          <span className="text-sm">{industry.icon}</span>
+                          <span className="text-sm">{industry.icon || '🏭'}</span>
                           <span className="text-sm font-medium text-gray-900">{industry.name}</span>
                         </div>
                       ) : null;
@@ -411,7 +397,7 @@ const MultiCategorySelector = ({
                 </div>
               </div>
 
-              {/* 🚀 MULTI-CATEGORY ADVANTAGES */}
+              {/* Multi-Category Advantages */}
               <div className="bg-white p-4 rounded-lg border shadow-sm">
                 <h5 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
                   <Zap className="h-4 w-4 text-yellow-500" />
@@ -421,68 +407,22 @@ const MultiCategorySelector = ({
                 <div className="grid grid-cols-2 gap-4 text-center">
                   <div className="bg-blue-50 p-3 rounded-lg">
                     <div className="text-2xl font-bold text-blue-600">
-                      {selectedIndustries.length + 1}x
+                      {1 + (formData.industries || []).length}
                     </div>
-                    <div className="text-xs text-blue-800">Discovery Rate</div>
+                    <div className="text-xs text-blue-700 font-medium">Discovery Paths</div>
                   </div>
                   
                   <div className="bg-green-50 p-3 rounded-lg">
                     <div className="text-2xl font-bold text-green-600">
-                      {Math.round((selectedIndustries.length + 1) * 1.3)}x
+                      {(formData.industries || []).length}x
                     </div>
-                    <div className="text-xs text-green-800">SEO Reach</div>
+                    <div className="text-xs text-green-700 font-medium">Industry Reach</div>
                   </div>
                 </div>
               </div>
             </div>
           </div>
         )}
-
-        {/* 🎯 SMART SUGGESTIONS based on protection type */}
-        {selectedProtectionType && selectedIndustries.length === 0 && (
-          <div className="p-4 bg-gradient-to-r from-yellow-50 to-yellow-200 rounded-lg">
-            <div className="flex items-center gap-2 mb-2">
-              <Zap className="h-4 w-4 text-yellow-600" />
-              <span className="font-medium text-yellow-800">Smart Suggestions</span>
-            </div>
-            <p className="text-sm text-yellow-700 mb-3">
-              Based on your protection type selection, consider these compatible industries:
-            </p>
-            
-            <div className="flex flex-wrap gap-2">
-              {/* This would show suggested industries based on protection type */}
-              <button
-                type="button"
-                onClick={() => suggestCompatibleIndustries(selectedProtectionType)}
-                className="text-xs bg-yellow-200 text-yellow-800 px-3 py-1 rounded-full hover:bg-yellow-300 transition-colors"
-              >
-                Auto-suggest sectors
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Validation Summary */}
-        <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-          <div className="flex items-center gap-2">
-            <div className={`w-3 h-3 rounded-full ${
-              selectedProtectionType && selectedIndustries.length > 0 
-                ? 'bg-green-500' 
-                : 'bg-red-500'
-            }`}></div>
-            <span className="text-sm font-medium text-gray-700">
-              Classification Status
-            </span>
-          </div>
-          
-          <div className="text-sm">
-            {selectedProtectionType && selectedIndustries.length > 0 ? (
-              <span className="text-green-600 font-semibold">✅ Ready for SEO optimization</span>
-            ) : (
-              <span className="text-red-600 font-semibold">❌ Complete both selections</span>
-            )}
-          </div>
-        </div>
       </div>
     </div>
   );

@@ -1,116 +1,247 @@
-// backend/routes/productRoutes.js
+// backend/routes/productRoutes.js - FIXED VERSION (Public Routes Only)
 import express from 'express';
 import Product from '../models/Product.js';
-import {
-  getProducts,
-  getProduct,
-  createProduct,
-  updateProduct,
-  deleteProduct
-} from '../controllers/productController.js';
-import { protect, adminOnly } from '../middleware/adminAuth.js';
 
 const router = express.Router();
 
 // ============================================
-// PUBLIC PRODUCT ROUTES (No authentication)
+// PUBLIC PRODUCT ROUTES ONLY (No authentication needed)
 // ============================================
 
 // @route   GET /api/products
 // @desc    Get all products with filtering, sorting, pagination
 // @access  Public
-router.get('/', (req, res, next) => {
-  console.log('📦 Public products route hit');
-  getProducts(req, res, next);
+router.get('/', async (req, res) => {
+  try {
+    console.log('📦 Public products route hit');
+    
+    const {
+      page = 1,
+      limit = 12,
+      category,
+      search,
+      minPrice,
+      maxPrice,
+      sort = 'createdAt',
+      order = 'desc',
+      featured,
+      onSale
+    } = req.query;
+
+    // Build filter object
+    let filter = { status: 'active' };
+
+    if (category) {
+      filter.category = category;
+    }
+
+    if (search) {
+      filter.$or = [
+        { product_name: { $regex: search, $options: 'i' } },
+        { product_description: { $regex: search, $options: 'i' } },
+        { product_brand: { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    if (minPrice || maxPrice) {
+      filter.product_price = {};
+      if (minPrice) filter.product_price.$gte = parseFloat(minPrice);
+      if (maxPrice) filter.product_price.$lte = parseFloat(maxPrice);
+    }
+
+    if (featured === 'true') {
+      filter.isFeatured = true;
+    }
+
+    if (onSale === 'true') {
+      filter.isOnSale = true;
+    }
+
+    // Build sort object
+    const sortObj = {};
+    sortObj[sort] = order === 'desc' ? -1 : 1;
+
+    // Calculate pagination
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    // Execute query with error handling
+    const products = await Product.find(filter)
+      .populate('primaryCategory', 'name slug') // 🔧 FIX: Use primaryCategory instead of category
+      .sort(sortObj)
+      .skip(skip)
+      .limit(parseInt(limit))
+      .lean();
+
+    // Get total count for pagination
+    const total = await Product.countDocuments(filter);
+
+    // Format response
+    const formattedProducts = products.map(product => ({
+      ...product,
+      formattedPrice: `KES ${product.product_price.toLocaleString()}`,
+      saleFormattedPrice: product.salePrice ? `KES ${product.salePrice.toLocaleString()}` : null,
+      inStock: product.stock > 0,
+      lowStock: product.stock <= (product.lowStockThreshold || 10)
+    }));
+
+    res.json({
+      success: true,
+      data: formattedProducts,
+      pagination: {
+        current: parseInt(page),
+        total: Math.ceil(total / parseInt(limit)),
+        count: products.length,
+        totalProducts: total,
+        hasNext: parseInt(page) < Math.ceil(total / parseInt(limit)),
+        hasPrev: parseInt(page) > 1
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Error fetching public products:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching products',
+      error: error.message
+    });
+  }
 });
 
 // @route   GET /api/products/search
 // @desc    Search products
 // @access  Public
-router.get('/search', (req, res, next) => {
-  console.log('🔍 Product search route hit');
-  // You can implement searchProducts function later
-  getProducts(req, res, next);
+router.get('/search', async (req, res) => {
+  try {
+    console.log('🔍 Product search route hit');
+    
+    const { q: searchQuery, limit = 10 } = req.query;
+
+    if (!searchQuery) {
+      return res.status(400).json({
+        success: false,
+        message: 'Search query is required'
+      });
+    }
+
+    const products = await Product.find({
+      status: 'active',
+      $or: [
+        { product_name: { $regex: searchQuery, $options: 'i' } },
+        { product_description: { $regex: searchQuery, $options: 'i' } },
+        { product_brand: { $regex: searchQuery, $options: 'i' } },
+        { keywords: { $regex: searchQuery, $options: 'i' } }
+      ]
+    })
+    .populate('primaryCategory', 'name slug') // 🔧 FIX: Use primaryCategory
+    .limit(parseInt(limit))
+    .lean();
+
+    res.json({
+      success: true,
+      data: products,
+      count: products.length
+    });
+
+  } catch (error) {
+    console.error('❌ Error searching products:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error searching products',
+      error: error.message
+    });
+  }
 });
 
 // @route   GET /api/products/featured
 // @desc    Get featured products
 // @access  Public
-router.get('/featured', (req, res, next) => {
-  console.log('⭐ Featured products route hit');
-  req.query.isFeatured = 'true';
-  getProducts(req, res, next);
+router.get('/featured', async (req, res) => {
+  try {
+    console.log('⭐ Featured products route hit');
+    
+    const { limit = 8 } = req.query;
+
+    const products = await Product.find({
+      status: 'active',
+      isFeatured: true
+    })
+    .populate('primaryCategory', 'name slug') // 🔧 FIX: Use primaryCategory
+    .sort({ createdAt: -1 })
+    .limit(parseInt(limit))
+    .lean();
+
+    res.json({
+      success: true,
+      data: products,
+      count: products.length
+    });
+
+  } catch (error) {
+    console.error('❌ Error fetching featured products:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching featured products',
+      error: error.message
+    });
+  }
 });
 
 // @route   GET /api/products/sale
 // @desc    Get products on sale
 // @access  Public
-router.get('/sale', (req, res, next) => {
-  console.log('💰 Sale products route hit');
-  req.query.isOnSale = 'true';
-  getProducts(req, res, next);
+router.get('/sale', async (req, res) => {
+  try {
+    console.log('💰 Sale products route hit');
+    
+    const { limit = 12 } = req.query;
+
+    const products = await Product.find({
+      status: 'active',
+      isOnSale: true,
+      salePrice: { $exists: true, $ne: null }
+    })
+    .populate('primaryCategory', 'name slug') // 🔧 FIX: Use primaryCategory
+    .sort({ createdAt: -1 })
+    .limit(parseInt(limit))
+    .lean();
+
+    res.json({
+      success: true,
+      data: products,
+      count: products.length
+    });
+
+  } catch (error) {
+    console.error('❌ Error fetching sale products:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching sale products',
+      error: error.message
+    });
+  }
 });
 
 // @route   GET /api/products/:id
-// @desc    Get single product by ID
+// @desc    Get single product by ID or slug
 // @access  Public
-router.get('/:id', (req, res, next) => {
-  console.log(`🔍 Single product route hit for ID: ${req.params.id}`);
-  getProduct(req, res, next);
-});
-
-// ============================================
-// ADMIN PRODUCT ROUTES (Authentication required)
-// ============================================
-
-// @route   POST /api/products
-// @desc    Create new product
-// @access  Private (Admin only)
-router.post('/', protect, adminOnly, (req, res, next) => {
-  console.log('➕ Create product route hit (authenticated)');
-  console.log('👤 Admin user:', req.user?.email);
-  createProduct(req, res, next);
-});
-
-// @route   PUT /api/products/:id
-// @desc    Update product
-// @access  Private (Admin only)
-router.put('/:id', protect, adminOnly, (req, res, next) => {
-  console.log(`✏️ Update product route hit for ID: ${req.params.id} (authenticated)`);
-  console.log('👤 Admin user:', req.user?.email);
-  updateProduct(req, res, next);
-});
-
-// @route   DELETE /api/products/:id
-// @desc    Delete product
-// @access  Private (Admin only)
-router.delete('/:id', protect, adminOnly, (req, res, next) => {
-  console.log(`🗑️ Delete product route hit for ID: ${req.params.id} (authenticated)`);
-  console.log('👤 Admin user:', req.user?.email);
-  deleteProduct(req, res, next);
-});
-
-// @route   PATCH /api/products/:id/status
-// @desc    Update product status
-// @access  Private (Admin only)
-router.patch('/:id/status', protect, adminOnly, async (req, res) => {
+router.get('/:id', async (req, res) => {
   try {
-    console.log(`🎯 Update product status route hit for ID: ${req.params.id}`);
+    console.log(`🔍 Single product route hit for: ${req.params.id}`);
     
-    const { status } = req.body;
+    let product;
     
-    if (!['active', 'inactive', 'draft'].includes(status)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid status. Must be active, inactive, or draft'
-      });
+    // Try to find by MongoDB ObjectId first, then by slug
+    if (req.params.id.match(/^[0-9a-fA-F]{24}$/)) {
+      // It's a valid ObjectId
+      product = await Product.findById(req.params.id)
+        .populate('primaryCategory', 'name slug description') // 🔧 FIX: Use primaryCategory
+        .lean();
+    } else {
+      // It's likely a slug
+      product = await Product.findOne({ slug: req.params.id, status: 'active' })
+        .populate('primaryCategory', 'name slug description') // 🔧 FIX: Use primaryCategory
+        .lean();
     }
-
-    const product = await Product.findByIdAndUpdate(
-      req.params.id,
-      { status, updatedAt: new Date() },
-      { new: true, runValidators: true }
-    ).populate('category', 'name slug');
 
     if (!product) {
       return res.status(404).json({
@@ -119,73 +250,91 @@ router.patch('/:id/status', protect, adminOnly, async (req, res) => {
       });
     }
 
-    res.status(200).json({
+    // Get related products from the same category
+    const relatedProducts = await Product.find({
+      primaryCategory: product.primaryCategory._id, // 🔧 FIX: Use primaryCategory
+      _id: { $ne: product._id },
+      status: 'active'
+    })
+    .populate('primaryCategory', 'name slug') // 🔧 FIX: Use primaryCategory
+    .limit(4)
+    .lean();
+
+    // Format the response
+    const formattedProduct = {
+      ...product,
+      formattedPrice: `KES ${product.product_price.toLocaleString()}`,
+      saleFormattedPrice: product.salePrice ? `KES ${product.salePrice.toLocaleString()}` : null,
+      inStock: product.stock > 0,
+      lowStock: product.stock <= (product.lowStockThreshold || 10),
+      relatedProducts
+    };
+
+    console.log(`✅ Found product: ${product.product_name}`);
+
+    res.json({
       success: true,
-      message: `Product status updated to ${status}`,
-      data: product
+      data: formattedProduct
     });
 
   } catch (error) {
-    console.error('Update product status error:', error);
+    console.error('❌ Error fetching product:', error);
+    
+    if (error.name === 'CastError') {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid product ID format'
+      });
+    }
+
     res.status(500).json({
       success: false,
-      message: 'Error updating product status',
+      message: 'Error fetching product',
       error: error.message
     });
   }
 });
 
-// @route   PATCH /api/products/bulk-update
-// @desc    Bulk update products
-// @access  Private (Admin only)
-router.patch('/bulk-update', protect, adminOnly, async (req, res) => {
+// ============================================
+// PRODUCT STATISTICS (Public)
+// ============================================
+
+// @route   GET /api/products/stats/overview
+// @desc    Get public product statistics
+// @access  Public
+router.get('/stats/overview', async (req, res) => {
   try {
-    console.log('📦 Bulk update products route hit');
+    console.log('📊 Product stats route hit');
     
-    const { productIds, updateData } = req.body;
+    const totalProducts = await Product.countDocuments({ status: 'active' });
+    const featuredProducts = await Product.countDocuments({ status: 'active', isFeatured: true });
+    const productsOnSale = await Product.countDocuments({ status: 'active', isOnSale: true });
     
-    if (!Array.isArray(productIds) || productIds.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'Product IDs array is required'
-      });
-    }
+    // Get categories with product counts
+    const categoryStats = await Product.aggregate([
+      { $match: { status: 'active' } },
+      { $group: { _id: '$primaryCategory', count: { $sum: 1 } } }, // 🔧 FIX: Use primaryCategory
+      { $lookup: { from: 'categories', localField: '_id', foreignField: '_id', as: 'category' } },
+      { $unwind: '$category' },
+      { $project: { name: '$category.name', count: 1 } },
+      { $sort: { count: -1 } }
+    ]);
 
-    if (!updateData || Object.keys(updateData).length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'Update data is required'
-      });
-    }
-
-    // Add timestamp to update data
-    updateData.updatedAt = new Date();
-
-    const result = await Product.updateMany(
-      { _id: { $in: productIds } },
-      updateData,
-      { runValidators: true }
-    );
-
-    // Get updated products
-    const updatedProducts = await Product.find({ _id: { $in: productIds } })
-      .populate('category', 'name slug')
-      .sort({ updatedAt: -1 });
-
-    res.status(200).json({
+    res.json({
       success: true,
-      message: `${result.modifiedCount} products updated successfully`,
       data: {
-        modifiedCount: result.modifiedCount,
-        products: updatedProducts
+        totalProducts,
+        featuredProducts,
+        productsOnSale,
+        categoryStats
       }
     });
 
   } catch (error) {
-    console.error('Bulk update products error:', error);
+    console.error('❌ Error fetching product stats:', error);
     res.status(500).json({
       success: false,
-      message: 'Error updating products',
+      message: 'Error fetching product statistics',
       error: error.message
     });
   }
