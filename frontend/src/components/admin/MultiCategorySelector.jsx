@@ -34,18 +34,22 @@ const MultiCategorySelector = ({
 
   const fetchCategories = async () => {
     try {
-      const response = await fetch('/api/categories');
+      // 🔧 FIX: Use correct API URL matching your working admin context
+      const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+      const response = await fetch(`${API_BASE}/admin/categories`);
       const data = await response.json();
       
+      console.log('🎯 API Response:', data);
+      
       if (data.success) {
-        // 🚀 PRECISION SEPARATION: Protection types vs Industries
+        // 🚀 PRECISION SEPARATION: Protection types vs Industries  
         const protection = data.data.filter(cat => 
-          cat.type === 'protection_type' && cat.status === 'active'
-        ).sort((a, b) => a.sortOrder - b.sortOrder);
+          cat.type === 'protection' && cat.status === 'active'
+        ).sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
         
         const sectors = data.data.filter(cat => 
           cat.type === 'industry' && cat.status === 'active'
-        ).sort((a, b) => a.sortOrder - b.sortOrder);
+        ).sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
         
         setProtectionTypes(protection);
         setIndustries(sectors);
@@ -53,6 +57,9 @@ const MultiCategorySelector = ({
         console.log('🎯 LOADED WITH PRECISION:');
         console.log('Protection Types:', protection.length);
         console.log('Industries/Sectors:', sectors.length);
+        console.log('Sample protection type:', protection[0]);
+      } else {
+        console.error('❌ API returned error:', data.message);
       }
     } catch (error) {
       console.error('❌ Category loading error:', error);
@@ -168,18 +175,8 @@ const MultiCategorySelector = ({
           </span>
         </h2>
         
-        {/* Selection Summary */}
-        <div className="flex items-center gap-4">
-          {stats.protectionType && (
-            <span className="text-sm bg-green-100 text-green-800 px-3 py-1 rounded-full font-medium">
-              Protection: {stats.protectionType}
-            </span>
-          )}
-          {stats.industriesCount > 0 && (
-            <span className="text-sm bg-blue-100 text-blue-800 px-3 py-1 rounded-full font-medium">
-              {stats.industriesCount} Sectors
-            </span>
-          )}
+        <div className="text-sm text-gray-600">
+          {selectedIndustries.length} Sectors
         </div>
       </div>
 
@@ -187,69 +184,77 @@ const MultiCategorySelector = ({
         
         {/* STEP 1: Protection Type Selection (Single - REQUIRED) */}
         <div>
-          <div className="flex items-center justify-between mb-4">
-            <label className="text-lg font-semibold text-gray-800 flex items-center gap-2">
-              <Layers className="h-5 w-5 text-blue-600" />
-              Step 1: Protection Type *
-              <span className="text-sm font-normal text-gray-600">(Required - Select One)</span>
-            </label>
-            
-            {selectedProtectionType && (
-              <div className="flex items-center gap-2 text-green-600">
-                <CheckCircle className="h-4 w-4" />
-                <span className="text-sm font-medium">Selected</span>
-              </div>
-            )}
-          </div>
+          <label className="block text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+            <Layers className="h-5 w-5 text-blue-600" />
+            Step 1: Protection Type *
+            <span className="text-sm font-normal text-gray-600">(Required - Select One)</span>
+          </label>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {protectionTypes.map(type => {
-              const isSelected = selectedProtectionType === type._id;
-              
-              return (
-                <label
-                  key={type._id}
-                  className={`relative flex items-center p-4 border-2 rounded-xl cursor-pointer transition-all hover:shadow-lg transform hover:scale-[1.02] ${
-                    isSelected
-                      ? 'border-blue-500 bg-gradient-to-br from-blue-50 to-blue-100 shadow-md'
-                      : 'border-gray-200 bg-white hover:border-blue-300 hover:bg-blue-50'
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="protectionType"
-                    value={type._id}
-                    checked={isSelected}
-                    onChange={() => handleProtectionTypeChange(type._id)}
-                    className="sr-only"
-                  />
-                  
-                  {/* Selection indicator */}
-                  {isSelected && (
-                    <div className="absolute -top-2 -right-2 bg-blue-500 text-white rounded-full p-1">
-                      <CheckCircle className="h-4 w-4" />
-                    </div>
-                  )}
-                  
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-2">
-                      <span className="text-2xl">{type.icon}</span>
-                      <span className="font-semibold text-gray-900">{type.name}</span>
-                    </div>
-                    <p className="text-sm text-gray-600 leading-relaxed">
-                      {type.description}
-                    </p>
-                    {type.productCount > 0 && (
-                      <div className="mt-2">
-                        <span className="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded-full">
-                          {type.productCount} products
-                        </span>
+          {/* 🔍 SEARCH: Quick category finder */}
+          <div className="relative mb-4">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <input
+              type="text"
+              placeholder="🔍 Search protection types..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+            />
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+            {protectionTypes
+              .filter(type => 
+                type.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                type.description.toLowerCase().includes(searchTerm.toLowerCase())
+              )
+              .map(type => {
+                const isSelected = selectedProtectionType === type._id;
+                
+                return (
+                  <label
+                    key={type._id}
+                    className={`relative flex flex-col p-4 border-2 rounded-xl cursor-pointer transition-all hover:shadow-lg transform hover:scale-[1.02] ${
+                      isSelected
+                        ? 'border-blue-500 bg-gradient-to-br from-blue-50 to-blue-100 shadow-md'
+                        : 'border-gray-200 bg-white hover:border-blue-300 hover:bg-blue-50'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="protectionType"
+                      value={type._id}
+                      checked={isSelected}
+                      onChange={() => handleProtectionTypeChange(type._id)}
+                      className="sr-only"
+                    />
+                    
+                    {/* Selection indicator */}
+                    {isSelected && (
+                      <div className="absolute -top-2 -right-2 bg-blue-500 text-white rounded-full p-1">
+                        <CheckCircle className="h-4 w-4" />
                       </div>
                     )}
-                  </div>
-                </label>
-              );
-            })}
+                    
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3 mb-2">
+                        <span className="text-2xl">{type.icon}</span>
+                        <span className="font-semibold text-gray-900">{type.name}</span>
+                      </div>
+                      <p className="text-sm text-gray-600 leading-relaxed">
+                        {type.description}
+                      </p>
+                      {type.productCount > 0 && (
+                        <div className="mt-2">
+                          <span className="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded-full">
+                            {type.productCount} products
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </label>
+                );
+              })}
           </div>
           
           {errors.protectionType && (
@@ -295,7 +300,7 @@ const MultiCategorySelector = ({
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
             <input
               type="text"
-              placeholder="Search industries and sectors..."
+              placeholder="🔍 Search industries and sectors..."
               value={industrySearch}
               onChange={(e) => setIndustrySearch(e.target.value)}
               className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -309,7 +314,7 @@ const MultiCategorySelector = ({
               return (
                 <label
                   key={industry._id}
-                  className={`flex items-center p-4 border-2 rounded-xl cursor-pointer transition-all hover:shadow-lg transform hover:scale-[1.02] ${
+                  className={`relative flex items-center p-4 border-2 rounded-xl cursor-pointer transition-all hover:shadow-lg transform hover:scale-[1.02] ${
                     isSelected
                       ? 'border-green-500 bg-gradient-to-br from-green-50 to-green-100 shadow-md'
                       : 'border-gray-200 bg-white hover:border-green-300 hover:bg-green-50'
@@ -390,106 +395,52 @@ const MultiCategorySelector = ({
                   </div>
                 </div>
                 
-                <div className="flex items-start gap-3">
-                  <span className="text-sm font-bold text-green-700 min-w-fit">
-                    Target Sectors ({selectedIndustries.length}):
-                  </span>
+                <div className="space-y-2">
+                  <span className="text-sm font-bold text-green-700">Target Industries:</span>
                   <div className="flex flex-wrap gap-2">
-                    {industries
-                      .filter(i => selectedIndustries.includes(i._id))
-                      .map(industry => (
-                        <div 
-                          key={industry._id}
-                          className="flex items-center gap-2 bg-white px-3 py-2 rounded-lg shadow-sm"
-                        >
-                          <span>{industry.icon}</span>
-                          <span className="text-sm font-medium text-gray-900">
-                            {industry.name}
-                          </span>
+                    {selectedIndustries.map(industryId => {
+                      const industry = industries.find(i => i._id === industryId);
+                      return industry ? (
+                        <div key={industryId} className="flex items-center gap-2 bg-white px-3 py-2 rounded-lg shadow-sm">
+                          <span className="text-sm">{industry.icon}</span>
+                          <span className="text-sm font-medium text-gray-900">{industry.name}</span>
                         </div>
-                      ))
-                    }
+                      ) : null;
+                    })}
                   </div>
                 </div>
               </div>
 
-              {/* Cross-Category Intelligence */}
-              <div className="bg-white p-4 rounded-lg shadow-sm border">
+              {/* 🚀 MULTI-CATEGORY ADVANTAGES */}
+              <div className="bg-white p-4 rounded-lg border shadow-sm">
                 <h5 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
                   <Zap className="h-4 w-4 text-yellow-500" />
-                  Smart Targeting
+                  🚀 Multi-Category Advantages
                 </h5>
                 
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Market Reach:</span>
-                    <span className="font-semibold text-blue-600">
-                      {selectedIndustries.length === 1 ? 'Specialized' : 
-                       selectedIndustries.length <= 3 ? 'Multi-Sector' : 'Universal'}
-                    </span>
+                <div className="grid grid-cols-2 gap-4 text-center">
+                  <div className="bg-blue-50 p-3 rounded-lg">
+                    <div className="text-2xl font-bold text-blue-600">
+                      {selectedIndustries.length + 1}x
+                    </div>
+                    <div className="text-xs text-blue-800">Discovery Rate</div>
                   </div>
                   
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">SEO Impact:</span>
-                    <span className="font-semibold text-green-600">
-                      {selectedIndustries.length > 0 ? 'Enhanced' : 'Basic'}
-                    </span>
-                  </div>
-                  
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Filter Coverage:</span>
-                    <span className="font-semibold text-purple-600">
-                      {selectedIndustries.length + 1} paths
-                    </span>
+                  <div className="bg-green-50 p-3 rounded-lg">
+                    <div className="text-2xl font-bold text-green-600">
+                      {Math.round((selectedIndustries.length + 1) * 1.3)}x
+                    </div>
+                    <div className="text-xs text-green-800">SEO Reach</div>
                   </div>
                 </div>
-                
-                {/* Quick Action Suggestions */}
-                <div className="mt-4 pt-3 border-t border-gray-200">
-                  <p className="text-xs text-gray-500 mb-2">💡 Optimization Tips:</p>
-                  <div className="space-y-1 text-xs text-gray-600">
-                    {selectedIndustries.length === 1 && (
-                      <p>• Consider adding 1-2 more sectors for broader reach</p>
-                    )}
-                    {selectedIndustries.length > 5 && (
-                      <p>• Too many sectors may dilute targeting</p>
-                    )}
-                    {selectedIndustries.length >= 2 && selectedIndustries.length <= 4 && (
-                      <p>• ✅ Perfect balance for multi-sector products</p>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Advanced Preview */}
-            <div className="mt-4 p-3 bg-white rounded-lg border border-gray-200">
-              <p className="text-sm text-gray-700">
-                <span className="font-semibold">Product Classification:</span>
-                <span className="ml-2">
-                  This product will be discoverable through {selectedIndustries.length + 1} different filter paths:
-                </span>
-              </p>
-              <div className="mt-2 flex flex-wrap gap-2">
-                <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
-                  Protection → {stats.protectionType}
-                </span>
-                {stats.industries.map((industryName, index) => (
-                  <span 
-                    key={index}
-                    className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded"
-                  >
-                    Sector → {industryName}
-                  </span>
-                ))}
               </div>
             </div>
           </div>
         )}
 
-        {/* Smart Suggestions */}
+        {/* 🎯 SMART SUGGESTIONS based on protection type */}
         {selectedProtectionType && selectedIndustries.length === 0 && (
-          <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+          <div className="p-4 bg-gradient-to-r from-yellow-50 to-yellow-200 rounded-lg">
             <div className="flex items-center gap-2 mb-2">
               <Zap className="h-4 w-4 text-yellow-600" />
               <span className="font-medium text-yellow-800">Smart Suggestions</span>
