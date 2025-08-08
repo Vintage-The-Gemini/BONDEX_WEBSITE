@@ -1,529 +1,359 @@
-// frontend/src/pages/admin/CreateProduct.jsx
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useAdmin } from '../../context/AdminContext';
-
-// Component Imports
-import MultiCategorySelector from '../../components/admin/MultiCategorySelector';
-import AdvancedSEO from '../../components/admin/AdvancedSEO'; // ✅ CORRECT IMPORT
-import ProductBasicInfo from '../../components/admin/ProductBasicInfo';
-import ProductPricingInventory from '../../components/admin/ProductPricingInventory';
-import ProductImages from '../../components/admin/ProductImages';
-import ProductDetails from '../../components/admin/ProductDetails';
-
-import {
-  ArrowLeft,
-  Save,
-  Eye,
-  EyeOff,
+// frontend/src/components/admin/ProductImages.jsx - SIMPLIFIED WORKING VERSION
+import React, { useState, useRef } from 'react';
+import { 
+  Upload, 
+  X, 
+  Eye, 
+  Image as ImageIcon,
   AlertCircle,
   CheckCircle,
-  Target,
-  Sparkles,
-  Package
+  Star,
+  Camera,
+  Zap,
+  Plus
 } from 'lucide-react';
 
-const CreateProduct = () => {
-  const navigate = useNavigate();
-  const { categories, loadCategories, addNotification, createProduct } = useAdmin(); // 🆕 ADDED createProduct
+const ProductImages = ({ 
+  images = [], 
+  imagePreviews = [], 
+  onImagesChange, 
+  onImagePreviewsChange,
+  validationErrors = {} 
+}) => {
+  const [dragActive, setDragActive] = useState(false);
+  const [uploadError, setUploadError] = useState('');
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef(null);
 
-  // Form State - Fixed to match backend validation
-  const [formData, setFormData] = useState({
-    // Basic Product Information
-    product_name: '',
-    product_description: '',
-    product_brand: '',
-    
-    // FIXED: Match backend field names
-    category: '', // Protection type (backend expects 'primaryCategory')
-    industries: [], // Industries (backend expects 'secondaryCategories')
-    
-    // Pricing & Inventory
-    product_price: '',
-    stock: '',
-    lowStockThreshold: '10',
-    
-    // Sale Configuration
-    isOnSale: false,
-    salePrice: '',
-    saleStartDate: '',
-    saleEndDate: '',
-    
-    // Status & Features
-    status: 'active',
-    isFeatured: false,
-    isNewArrival: false,
-    
-    // 🆕 SIMPLIFIED SEO FIELDS
-    metaTitle: '',
-    metaDescription: '',
-    keywords: '',
-    slug: ''
+  console.log('🔍 ProductImages props received:', {
+    imagesCount: images?.length || 0,
+    previewsCount: imagePreviews?.length || 0,
+    onImagesChangeType: typeof onImagesChange,
+    onImagePreviewsChangeType: typeof onImagePreviewsChange
   });
 
-  // Images and Media
-  const [images, setImages] = useState([]);
-  const [imagePreviews, setImagePreviews] = useState([]);
-  
-  // Product Details
-  const [features, setFeatures] = useState(['']);
-  const [specifications, setSpecifications] = useState([{ key: '', value: '' }]);
-  const [tags, setTags] = useState(['']);
-  
-  // Certifications and Compliance
-  const [certifications, setCertifications] = useState(['']);
-  const [complianceStandards, setComplianceStandards] = useState(['']);
-
-  // UI State
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
-  const [showPreview, setShowPreview] = useState(false);
-  const [validationErrors, setValidationErrors] = useState({});
-
-  // 🔍 DEBUG: Log what we're passing to ProductImages
-  useEffect(() => {
-    console.log('🔍 CreateProduct - Images state:', images?.length || 0);
-    console.log('🔍 CreateProduct - ImagePreviews state:', imagePreviews?.length || 0);
-    console.log('🔍 CreateProduct - setImages function:', typeof setImages);
-    console.log('🔍 CreateProduct - setImagePreviews function:', typeof setImagePreviews);
-  }, [images, imagePreviews]);
-
-  // Load categories on mount
-  useEffect(() => {
-    loadCategories();
-  }, []);
-
-  // 🔍 DEBUG: Log categories when they change
-  useEffect(() => {
-    console.log('🔍 Categories in CreateProduct:', categories?.length || 0, categories);
-  }, [categories]);
-
-  // 🆕 SIMPLIFIED VALIDATION FUNCTION
-  const validateForm = () => {
-    const errors = {};
-    
-    // Basic product info
-    if (!formData.product_name?.trim()) {
-      errors.product_name = 'Product name is required';
-    } else if (formData.product_name.length < 3) {
-      errors.product_name = 'Product name must be at least 3 characters';
-    }
-    
-    if (!formData.product_description?.trim()) {
-      errors.product_description = 'Product description is required';
-    } else if (formData.product_description.length < 20) {
-      errors.product_description = 'Description must be at least 20 characters';
-    }
-    
-    if (!formData.product_brand?.trim()) {
-      errors.product_brand = 'Product brand is required';
-    }
-    
-    // FIXED: Category validation
-    if (!formData.category) {
-      errors.category = 'Protection type selection is required';
-    }
-    
-    if (!formData.industries || formData.industries.length === 0) {
-      errors.industries = 'At least one industry must be selected';
-    }
-    
-    // Pricing validation
-    if (!formData.product_price || parseFloat(formData.product_price) <= 0) {
-      errors.product_price = 'Valid price is required (in KES)';
-    }
-    
-    if (formData.stock === '' || parseInt(formData.stock) < 0) {
-      errors.stock = 'Valid stock quantity is required';
-    }
-    
-    // Sale validation
-    if (formData.isOnSale) {
-      if (!formData.salePrice || parseFloat(formData.salePrice) <= 0) {
-        errors.salePrice = 'Sale price is required when product is on sale';
-      } else if (parseFloat(formData.salePrice) >= parseFloat(formData.product_price)) {
-        errors.salePrice = 'Sale price must be less than regular price';
-      }
-    }
-    
-    // Image validation
-    if (!images || images.length === 0) {
-      errors.images = 'At least one product image is required';
-    }
-    
-    // 🆕 SIMPLIFIED SEO validation (removed complex scoring)
-    if (!formData.metaTitle || formData.metaTitle.length < 20) {
-      errors.metaTitle = 'Meta title should be at least 20 characters';
-    }
-    
-    if (!formData.metaDescription || formData.metaDescription.length < 50) {
-      errors.metaDescription = 'Meta description should be at least 50 characters';
-    }
-    
-    setValidationErrors(errors);
-    return Object.keys(errors).length === 0;
-  };
-
-  // Handle form data changes
-  const handleFormDataChange = (field, value) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-    
-    // Clear specific validation error when field is updated
-    if (validationErrors[field]) {
-      setValidationErrors(prev => {
-        const newErrors = { ...prev };
-        delete newErrors[field];
-        return newErrors;
+  // 🔧 SIMPLE FIX: Basic file handling without complex async
+  const handleFiles = (files) => {
+    if (!onImagesChange || !onImagePreviewsChange) {
+      console.error('❌ Required functions not provided:', {
+        onImagesChange: typeof onImagesChange,
+        onImagePreviewsChange: typeof onImagePreviewsChange
       });
-    }
-    
-    // 🆕 AUTO-GENERATE SLUG from product name
-    if (field === 'product_name' && value) {
-      const slug = value
-        .toLowerCase()
-        .replace(/[^a-z0-9\s-]/g, '')
-        .replace(/\s+/g, '-')
-        .replace(/-+/g, '-')
-        .substring(0, 50);
-      setFormData(prev => ({ ...prev, slug }));
-    }
-    
-    // 🆕 AUTO-GENERATE META TITLE from product name + brand
-    if ((field === 'product_name' || field === 'product_brand') && formData.product_name && formData.product_brand) {
-      const metaTitle = `${formData.product_brand} ${formData.product_name} - Safety Equipment Kenya`;
-      setFormData(prev => ({ ...prev, metaTitle }));
-    }
-  };
-
-  // Handle input changes
-  const handleInputChange = (e) => {
-    const { name, value, type, checked } = e.target;
-    const newValue = type === 'checkbox' ? checked : value;
-    handleFormDataChange(name, newValue);
-  };
-
-  // 🆕 FIXED SUBMIT FUNCTION - Using AdminContext
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    
-    if (!validateForm()) {
-      setError('Please fix the validation errors before submitting');
-      window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
+
+    setUploadError('');
+    setIsUploading(true);
+
+    const fileArray = Array.from(files);
     
-    setLoading(true);
-    setError('');
-    setSuccess('');
-    
-    try {
-      console.log('🎯 Creating product with data:', formData);
-      
-      // Validate images
-      if (!images || images.length === 0) {
-        throw new Error('At least one product image is required');
+    // Validate file count
+    if (images.length + fileArray.length > 5) {
+      setUploadError(`Maximum 5 images allowed. You can add ${5 - images.length} more.`);
+      setIsUploading(false);
+      return;
+    }
+
+    let processedCount = 0;
+    const newFiles = [];
+    const newPreviews = [];
+
+    fileArray.forEach((file, index) => {
+      // Validate file type
+      if (!file.type.startsWith('image/')) {
+        setUploadError(`File "${file.name}" is not a valid image.`);
+        setIsUploading(false);
+        return;
       }
-      
-      // Validate required fields
-      if (!formData.product_name?.trim()) {
-        throw new Error('Product name is required');
+
+      // Validate file size (5MB max)
+      if (file.size > 5 * 1024 * 1024) {
+        setUploadError(`File "${file.name}" is too large. Maximum size is 5MB.`);
+        setIsUploading(false);
+        return;
       }
-      
-      if (!formData.category) {
-        throw new Error('Protection type (category) is required');
-      }
-      
-      if (!formData.industries || formData.industries.length === 0) {
-        throw new Error('At least one industry must be selected');
-      }
-      
-      // 🆕 FIXED: Use AdminContext createProduct method
-      const result = await createProduct(formData, images);
-      
-      if (result.success) {
-        setSuccess('🎯 Product created successfully with multi-category targeting!');
-        console.log('✅ Product created:', result.data);
-        
-        // Navigate to product view after brief delay
-        setTimeout(() => {
-          navigate(`/admin/products/${result.data._id}`);
-        }, 1500);
-      } else {
-        throw new Error(result.error || 'Failed to create product');
-      }
-      
-    } catch (error) {
-      console.error('❌ Creation error:', error);
-      const errorMessage = error.message || 'Failed to create product. Please check your connection and try again.';
-      setError(errorMessage);
-    } finally {
-      setLoading(false);
+
+      // Create preview
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const preview = {
+          id: Date.now() + index,
+          file: file,
+          url: e.target.result,
+          name: file.name,
+          size: file.size,
+          isMain: images.length === 0 && index === 0
+        };
+
+        newFiles.push(file);
+        newPreviews.push(preview);
+        processedCount++;
+
+        // When all files are processed, update state
+        if (processedCount === fileArray.length) {
+          console.log('🔍 Updating images:', [...images, ...newFiles]);
+          console.log('🔍 Updating previews:', [...imagePreviews, ...newPreviews]);
+          
+          try {
+            onImagesChange([...images, ...newFiles]);
+            onImagePreviewsChange([...imagePreviews, ...newPreviews]);
+            console.log('✅ Successfully updated images and previews');
+          } catch (error) {
+            console.error('❌ Error updating state:', error);
+            setUploadError('Error updating images. Please try again.');
+          }
+          
+          setIsUploading(false);
+        }
+      };
+
+      reader.onerror = () => {
+        setUploadError(`Error reading file: ${file.name}`);
+        setIsUploading(false);
+      };
+
+      reader.readAsDataURL(file);
+    });
+  };
+
+  // Handle drag events
+  const handleDrag = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === "dragenter" || e.type === "dragover") {
+      setDragActive(true);
+    } else if (e.type === "dragleave") {
+      setDragActive(false);
     }
   };
 
-  // Save as draft
-  const handleSaveDraft = async () => {
-    const draftData = { ...formData, status: 'draft' };
-    setFormData(draftData);
+  // Handle drop
+  const handleDrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
     
-    // Auto-submit after brief delay
-    setTimeout(() => {
-      const form = document.getElementById('product-form');
-      if (form) form.requestSubmit();
-    }, 100);
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      handleFiles(e.dataTransfer.files);
+    }
+  };
+
+  // Handle file input change
+  const handleFileInputChange = (e) => {
+    if (e.target.files && e.target.files[0]) {
+      handleFiles(e.target.files);
+    }
+  };
+
+  // Remove image
+  const removeImage = (index) => {
+    if (!onImagesChange || !onImagePreviewsChange) {
+      console.error('❌ Cannot remove image - functions not available');
+      return;
+    }
+
+    const newImages = images.filter((_, i) => i !== index);
+    const newPreviews = imagePreviews.filter((_, i) => i !== index);
+    
+    onImagesChange(newImages);
+    onImagePreviewsChange(newPreviews);
+  };
+
+  // Set main image
+  const setMainImage = (index) => {
+    if (!onImagePreviewsChange) {
+      console.error('❌ Cannot set main image - function not available');
+      return;
+    }
+
+    const newPreviews = imagePreviews.map((preview, i) => ({
+      ...preview,
+      isMain: i === index
+    }));
+    onImagePreviewsChange(newPreviews);
   };
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <button
-            onClick={() => navigate('/admin/products')}
-            className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </button>
-          
-          <div>
-            <div className="flex items-center gap-3">
-              <Target className="h-8 w-8 text-orange-500" />
-              <h1 className="text-3xl font-bold text-gray-900">Create New Product</h1>
-              <div className="px-4 py-2 bg-orange-100 text-orange-800 rounded-full text-sm font-medium">
-                🎯 MULTI-CATEGORY
-              </div>
-            </div>
-            <p className="text-gray-600 mt-1">
-              Add safety equipment with precision multi-category targeting
-            </p>
-          </div>
-        </div>
-        
-        <div className="flex gap-3">
-          <button
-            type="button"
-            onClick={() => setShowPreview(!showPreview)}
-            className="flex items-center gap-2 px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-          >
-            {showPreview ? <EyeOff size={16} /> : <Eye size={16} />}
-            {showPreview ? 'Hide Preview' : 'Show Preview'}
-          </button>
+    <div className="bg-white rounded-xl shadow-lg border p-8">
+      <div className="flex items-center gap-3 mb-6">
+        <ImageIcon className="h-6 w-6 text-purple-500" />
+        <h2 className="text-2xl font-bold text-gray-900">Product Images *</h2>
+        <div className="px-3 py-1 bg-purple-100 text-purple-800 rounded-full text-xs font-medium">
+          📸 CLOUDINARY
         </div>
       </div>
 
-      {/* 🆕 SUCCESS/ERROR MESSAGES */}
-      {error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-          <div className="flex items-center gap-2">
-            <AlertCircle className="h-5 w-5 text-red-600" />
-            <span className="text-red-800 font-medium">Error</span>
-          </div>
-          <p className="text-red-700 mt-1">{error}</p>
-        </div>
-      )}
-
-      {success && (
-        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-          <div className="flex items-center gap-2">
-            <CheckCircle className="h-5 w-5 text-green-600" />
-            <span className="text-green-800 font-medium">Success</span>
-          </div>
-          <p className="text-green-700 mt-1">{success}</p>
-        </div>
-      )}
-
-      {/* Main Form */}
-      <form id="product-form" onSubmit={handleSubmit} className="space-y-8">
-        
-        {/* Product Basic Information */}
-        <ProductBasicInfo
-          formData={formData}
-          onFormDataChange={handleFormDataChange}
-          handleInputChange={handleInputChange}
-          validationErrors={validationErrors}
-        />
-
-        {/* Multi-Category Selector */}
-        <MultiCategorySelector
-          formData={formData}
-          onFormDataChange={handleFormDataChange}
-          categories={categories} // ✅ PASS CATEGORIES FROM ADMIN CONTEXT
-          validationErrors={validationErrors}
-        />
-
-        {/* Pricing & Inventory */}
-        <ProductPricingInventory
-          formData={formData}
-          onFormDataChange={handleFormDataChange}
-          handleInputChange={handleInputChange}
-          validationErrors={validationErrors}
-        />
-
-        {/* Product Images */}
-        <ProductImages
-          images={images}
-          setImages={setImages}
-          imagePreviews={imagePreviews}
-          setImagePreviews={setImagePreviews}
-          validationErrors={validationErrors}
-        />
-
-        {/* Product Details */}
-        <ProductDetails
-          features={features}
-          specifications={specifications}
-          tags={tags}
-          certifications={certifications}
-          complianceStandards={complianceStandards}
-          onFeaturesChange={setFeatures}
-          onSpecificationsChange={setSpecifications}
-          onTagsChange={setTags}
-          onCertificationsChange={setCertifications}
-          onComplianceChange={setComplianceStandards}
-        />
-
-        {/* ✅ ADVANCED SEO Section (using your existing component) */}
-        <AdvancedSEO
-          formData={formData}
-          onFormDataChange={handleFormDataChange}
-          productName={formData.product_name}
-          validationErrors={validationErrors}
-        />
-
-        {/* Submit Buttons */}
-        <div className="flex items-center justify-between pt-6 border-t border-gray-200">
-          <button
-            type="button"
-            onClick={() => navigate('/admin/products')}
-            className="px-6 py-3 text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-all duration-200 font-medium"
-          >
-            Cancel
-          </button>
+      {/* Upload Area */}
+      <div className="mb-6">
+        <div
+          className={`border-2 border-dashed rounded-xl p-8 text-center transition-all cursor-pointer ${
+            dragActive 
+              ? 'border-purple-500 bg-purple-50' 
+              : imagePreviews.length >= 5 
+                ? 'border-gray-300 bg-gray-50 cursor-not-allowed' 
+                : 'border-gray-300 hover:border-purple-400 hover:bg-purple-50'
+          }`}
+          onDragEnter={handleDrag}
+          onDragLeave={handleDrag}
+          onDragOver={handleDrag}
+          onDrop={handleDrop}
+          onClick={() => imagePreviews.length < 5 && fileInputRef.current?.click()}
+        >
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            accept="image/*"
+            onChange={handleFileInputChange}
+            className="hidden"
+            disabled={imagePreviews.length >= 5}
+          />
           
-          <div className="flex gap-3">
-            <button
-              type="button"
-              disabled={loading}
-              onClick={handleSaveDraft}
-              className="px-6 py-3 text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-all duration-200 font-medium disabled:opacity-50"
-            >
-              {loading ? (
-                <>
-                  <Package className="w-4 h-4 animate-spin inline mr-2" />
-                  Saving Draft...
-                </>
-              ) : (
-                <>
-                  <Package className="w-4 h-4 inline mr-2" />
-                  Save Draft
-                </>
-              )}
-            </button>
-            
-            <button
-              type="submit"
-              disabled={loading}
-              className="px-8 py-3 bg-orange-500 text-white rounded-xl hover:bg-orange-600 transition-all duration-200 font-medium disabled:opacity-50 shadow-lg flex items-center gap-2"
-            >
-              {loading ? (
-                <>
-                  <Save className="w-4 h-4 animate-spin" />
-                  Creating Product...
-                </>
-              ) : (
-                <>
-                  <Save className="w-4 h-4" />
-                  Create Product
-                </>
-              )}
-            </button>
-          </div>
-        </div>
-      </form>
-
-      {/* Product Preview */}
-      {showPreview && (
-        <div className="bg-white rounded-xl shadow-lg border p-6">
-          <div className="flex items-center gap-2 mb-4">
-            <Sparkles className="h-5 w-5 text-orange-500" />
-            <h3 className="text-lg font-semibold text-gray-900">Product Preview</h3>
-          </div>
-          
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div>
-              {imagePreviews.length > 0 ? (
-                <div className="space-y-2">
-                  <img
-                    src={imagePreviews[0]}
-                    alt={formData.product_name}
-                    className="w-full h-64 object-cover rounded-lg"
-                  />
-                  {imagePreviews.length > 1 && (
-                    <div className="grid grid-cols-4 gap-2">
-                      {imagePreviews.slice(1, 5).map((preview, index) => (
-                        <img
-                          key={index}
-                          src={preview}
-                          alt={`${formData.product_name} ${index + 2}`}
-                          className="w-full h-16 object-cover rounded"
-                        />
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div className="w-full h-64 bg-gray-100 rounded-lg flex items-center justify-center">
-                  <span className="text-gray-400">No images uploaded</span>
-                </div>
-              )}
+          {isUploading ? (
+            <div className="space-y-3">
+              <Upload className="h-12 w-12 text-purple-500 mx-auto animate-bounce" />
+              <div className="text-purple-600 font-medium">Processing images...</div>
             </div>
-            
-            <div className="space-y-4">
+          ) : imagePreviews.length >= 5 ? (
+            <div className="space-y-3">
+              <CheckCircle className="h-12 w-12 text-green-500 mx-auto" />
+              <div className="text-green-600 font-medium">Maximum images reached (5/5)</div>
+              <p className="text-sm text-gray-500">Remove an image to add more</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="flex justify-center">
+                <Camera className="h-12 w-12 text-gray-400" />
+              </div>
               <div>
-                <h3 className="text-xl font-bold text-gray-900">
-                  {formData.product_name || 'Product Name'}
-                </h3>
-                <p className="text-gray-600 text-sm">
-                  by {formData.product_brand || 'Brand Name'}
+                <div className="text-lg font-medium text-gray-900">
+                  Drop images here or click to browse
+                </div>
+                <p className="text-sm text-gray-500 mt-1">
+                  Upload up to 5 images (JPG, PNG, WebP) • Max 5MB each
                 </p>
               </div>
-              
-              <div className="flex items-center gap-2">
-                <span className="text-2xl font-bold text-orange-500">
-                  KES {formData.product_price ? parseFloat(formData.product_price).toLocaleString() : '0'}
+              <div className="flex items-center gap-2 justify-center">
+                <Zap className="h-4 w-4 text-purple-500" />
+                <span className="text-sm text-purple-600 font-medium">
+                  First image becomes the main product image
                 </span>
-                {formData.isOnSale && formData.salePrice && (
-                  <span className="text-lg text-gray-500 line-through">
-                    KES {parseFloat(formData.salePrice).toLocaleString()}
-                  </span>
-                )}
-              </div>
-              
-              <p className="text-gray-700">
-                {formData.product_description || 'Product description will appear here...'}
-              </p>
-              
-              <div className="space-y-2">
-                <div className="text-sm">
-                  <span className="font-medium">Category:</span> {formData.category || 'Not selected'}
-                </div>
-                <div className="text-sm">
-                  <span className="font-medium">Industries:</span> {formData.industries?.join(', ') || 'None selected'}
-                </div>
-                <div className="text-sm">
-                  <span className="font-medium">Stock:</span> {formData.stock || '0'} units
-                </div>
-                <div className="text-sm">
-                  <span className="font-medium">Status:</span> {formData.status || 'active'}
-                </div>
               </div>
             </div>
+          )}
+        </div>
+
+        {/* Upload Error */}
+        {uploadError && (
+          <div className="mt-3 flex items-center gap-2 text-red-600 text-sm">
+            <AlertCircle className="h-4 w-4 flex-shrink-0" />
+            <span>{uploadError}</span>
           </div>
+        )}
+
+        {/* Validation Error */}
+        {validationErrors.images && (
+          <div className="mt-3 flex items-center gap-2 text-red-600 text-sm">
+            <AlertCircle className="h-4 w-4 flex-shrink-0" />
+            <span>{validationErrors.images}</span>
+          </div>
+        )}
+      </div>
+
+      {/* Image Previews */}
+      {imagePreviews.length > 0 && (
+        <div className="space-y-4">
+          <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+            <Eye className="h-5 w-5" />
+            Image Preview ({imagePreviews.length}/5)
+          </h3>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {imagePreviews.map((preview, index) => (
+              <div
+                key={preview.id}
+                className={`relative group border-2 rounded-lg overflow-hidden transition-all ${
+                  preview.isMain ? 'border-purple-500 ring-2 ring-purple-200' : 'border-gray-200'
+                }`}
+              >
+                {/* Main Image Badge */}
+                {preview.isMain && (
+                  <div className="absolute top-2 left-2 z-10">
+                    <div className="flex items-center gap-1 bg-purple-500 text-white px-2 py-1 rounded-full text-xs font-medium">
+                      <Star className="h-3 w-3 fill-current" />
+                      Main
+                    </div>
+                  </div>
+                )}
+
+                {/* Image */}
+                <div className="aspect-square bg-gray-100">
+                  <img
+                    src={preview.url}
+                    alt={preview.name}
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+
+                {/* Image Actions Overlay */}
+                <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-all duration-200 flex items-center justify-center">
+                  <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex gap-2">
+                    {!preview.isMain && (
+                      <button
+                        onClick={() => setMainImage(index)}
+                        className="bg-white text-gray-900 p-2 rounded-full hover:bg-gray-100 transition-colors"
+                        title="Set as main image"
+                      >
+                        <Star className="h-4 w-4" />
+                      </button>
+                    )}
+                    <button
+                      onClick={() => removeImage(index)}
+                      className="bg-red-500 text-white p-2 rounded-full hover:bg-red-600 transition-colors"
+                      title="Remove image"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Image Info */}
+                <div className="p-3 bg-white">
+                  <div className="text-sm font-medium text-gray-900 truncate">
+                    {preview.name}
+                  </div>
+                  <div className="text-xs text-gray-500 mt-1">
+                    {(preview.size / 1024 / 1024).toFixed(2)} MB
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Add More Images Button */}
+          {imagePreviews.length < 5 && (
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="w-full border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-purple-400 hover:bg-purple-50 transition-colors"
+            >
+              <Plus className="h-6 w-6 text-gray-400 mx-auto mb-2" />
+              <span className="text-sm text-gray-600">
+                Add more images ({5 - imagePreviews.length} remaining)
+              </span>
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Debug Info (remove in production) */}
+      {process.env.NODE_ENV === 'development' && (
+        <div className="mt-4 p-3 bg-gray-100 rounded text-xs text-gray-600">
+          <strong>Debug:</strong> Images: {images.length}, Previews: {imagePreviews.length}, 
+          onImagesChange: {typeof onImagesChange}, onImagePreviewsChange: {typeof onImagePreviewsChange}
         </div>
       )}
     </div>
   );
 };
 
-export default CreateProduct;
+export default ProductImages;
