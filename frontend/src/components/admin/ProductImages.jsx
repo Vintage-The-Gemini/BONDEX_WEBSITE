@@ -1,128 +1,57 @@
-// frontend/src/components/admin/ProductImages.jsx - SIMPLIFIED WORKING VERSION
-import React, { useState, useRef } from 'react';
-import { 
-  Upload, 
-  X, 
-  Eye, 
+// frontend/src/components/admin/ProductImages.jsx
+import React, { useState, useRef, useEffect } from 'react';
+import {
+  Upload,
+  X,
   Image as ImageIcon,
   AlertCircle,
   CheckCircle,
-  Star,
-  Camera,
-  Zap,
-  Plus
+  Eye,
+  Download,
+  Trash2,
+  RotateCcw,
+  ZoomIn
 } from 'lucide-react';
 
 const ProductImages = ({ 
   images = [], 
+  setImages,
   imagePreviews = [], 
-  onImagesChange, 
-  onImagePreviewsChange,
+  setImagePreviews,
   validationErrors = {} 
 }) => {
+  // ✅ FIXED: Use the props directly, no need for onImagesChange/onImagePreviewsChange
   const [dragActive, setDragActive] = useState(false);
-  const [uploadError, setUploadError] = useState('');
-  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState({});
+  const [previewMode, setPreviewMode] = useState(false);
+  const [selectedPreviewIndex, setSelectedPreviewIndex] = useState(0);
   const fileInputRef = useRef(null);
 
-  console.log('🔍 ProductImages props received:', {
-    imagesCount: images?.length || 0,
-    previewsCount: imagePreviews?.length || 0,
-    onImagesChangeType: typeof onImagesChange,
-    onImagePreviewsChangeType: typeof onImagePreviewsChange
-  });
-
-  // 🔧 SIMPLE FIX: Basic file handling without complex async
-  const handleFiles = (files) => {
-    if (!onImagesChange || !onImagePreviewsChange) {
-      console.error('❌ Required functions not provided:', {
-        onImagesChange: typeof onImagesChange,
-        onImagePreviewsChange: typeof onImagePreviewsChange
-      });
-      return;
-    }
-
-    setUploadError('');
-    setIsUploading(true);
-
-    const fileArray = Array.from(files);
-    
-    // Validate file count
-    if (images.length + fileArray.length > 5) {
-      setUploadError(`Maximum 5 images allowed. You can add ${5 - images.length} more.`);
-      setIsUploading(false);
-      return;
-    }
-
-    let processedCount = 0;
-    const newFiles = [];
-    const newPreviews = [];
-
-    fileArray.forEach((file, index) => {
-      // Validate file type
-      if (!file.type.startsWith('image/')) {
-        setUploadError(`File "${file.name}" is not a valid image.`);
-        setIsUploading(false);
-        return;
-      }
-
-      // Validate file size (5MB max)
-      if (file.size > 5 * 1024 * 1024) {
-        setUploadError(`File "${file.name}" is too large. Maximum size is 5MB.`);
-        setIsUploading(false);
-        return;
-      }
-
-      // Create preview
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const preview = {
-          id: Date.now() + index,
-          file: file,
-          url: e.target.result,
-          name: file.name,
-          size: file.size,
-          isMain: images.length === 0 && index === 0
-        };
-
-        newFiles.push(file);
-        newPreviews.push(preview);
-        processedCount++;
-
-        // When all files are processed, update state
-        if (processedCount === fileArray.length) {
-          console.log('🔍 Updating images:', [...images, ...newFiles]);
-          console.log('🔍 Updating previews:', [...imagePreviews, ...newPreviews]);
-          
-          try {
-            onImagesChange([...images, ...newFiles]);
-            onImagePreviewsChange([...imagePreviews, ...newPreviews]);
-            console.log('✅ Successfully updated images and previews');
-          } catch (error) {
-            console.error('❌ Error updating state:', error);
-            setUploadError('Error updating images. Please try again.');
-          }
-          
-          setIsUploading(false);
-        }
-      };
-
-      reader.onerror = () => {
-        setUploadError(`Error reading file: ${file.name}`);
-        setIsUploading(false);
-      };
-
-      reader.readAsDataURL(file);
+  // 🔍 DEBUG: Log props to understand what's being received
+  useEffect(() => {
+    console.log('🔍 ProductImages props received:', {
+      imagesCount: images?.length || 0,
+      previewsCount: imagePreviews?.length || 0,
+      setImagesType: typeof setImages,
+      setImagePreviewsType: typeof setImagePreviews
     });
-  };
+
+    // 🔍 Check if required functions are provided
+    if (typeof setImages !== 'function' || typeof setImagePreviews !== 'function') {
+      console.error('❌ Required functions not provided:', {
+        setImages: typeof setImages,
+        setImagePreviews: typeof setImagePreviews
+      });
+    }
+  }, [images, imagePreviews, setImages, setImagePreviews]);
 
   // Handle drag events
   const handleDrag = (e) => {
     e.preventDefault();
     e.stopPropagation();
-    if (e.type === "dragenter" || e.type === "dragover") {
+    if (e.type === 'dragenter' || e.type === 'dragover') {
       setDragActive(true);
-    } else if (e.type === "dragleave") {
+    } else if (e.type === 'dragleave') {
       setDragActive(false);
     }
   };
@@ -145,59 +74,113 @@ const ProductImages = ({
     }
   };
 
-  // Remove image
-  const removeImage = (index) => {
-    if (!onImagesChange || !onImagePreviewsChange) {
-      console.error('❌ Cannot remove image - functions not available');
+  // Main file handling function
+  const handleFiles = (fileList) => {
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+    const maxSize = 5 * 1024 * 1024; // 5MB
+    const maxFiles = 6; // Maximum 6 images per product
+
+    const files = Array.from(fileList);
+    
+    // Filter valid files
+    const validFiles = files.filter(file => {
+      if (!allowedTypes.includes(file.type)) {
+        console.warn(`File ${file.name} rejected: Invalid type`);
+        return false;
+      }
+      if (file.size > maxSize) {
+        console.warn(`File ${file.name} rejected: Too large`);
+        return false;
+      }
+      return true;
+    });
+
+    // Check if adding these files would exceed the limit
+    const totalFiles = (images?.length || 0) + validFiles.length;
+    if (totalFiles > maxFiles) {
+      console.warn(`Cannot add files: Would exceed limit of ${maxFiles} images`);
       return;
     }
 
-    const newImages = images.filter((_, i) => i !== index);
-    const newPreviews = imagePreviews.filter((_, i) => i !== index);
-    
-    onImagesChange(newImages);
-    onImagePreviewsChange(newPreviews);
+    // Process valid files
+    validFiles.forEach((file, index) => {
+      const fileId = `${Date.now()}-${index}`;
+      
+      // Add to images array
+      if (setImages && typeof setImages === 'function') {
+        setImages(prev => [...(prev || []), { file, id: fileId, name: file.name }]);
+      }
+
+      // Create preview
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        if (setImagePreviews && typeof setImagePreviews === 'function') {
+          setImagePreviews(prev => [...(prev || []), e.target.result]);
+        }
+      };
+      reader.readAsDataURL(file);
+
+      // Simulate upload progress
+      setUploadProgress(prev => ({ ...prev, [fileId]: 0 }));
+      const interval = setInterval(() => {
+        setUploadProgress(prev => {
+          const newProgress = Math.min((prev[fileId] || 0) + 10, 100);
+          if (newProgress === 100) {
+            clearInterval(interval);
+            setTimeout(() => {
+              setUploadProgress(p => {
+                const { [fileId]: removed, ...rest } = p;
+                return rest;
+              });
+            }, 1000);
+          }
+          return { ...prev, [fileId]: newProgress };
+        });
+      }, 100);
+    });
   };
 
-  // Set main image
-  const setMainImage = (index) => {
-    if (!onImagePreviewsChange) {
-      console.error('❌ Cannot set main image - function not available');
-      return;
+  // Remove image
+  const removeImage = (index) => {
+    if (setImages && typeof setImages === 'function') {
+      setImages(prev => prev.filter((_, i) => i !== index));
     }
+    if (setImagePreviews && typeof setImagePreviews === 'function') {
+      setImagePreviews(prev => prev.filter((_, i) => i !== index));
+    }
+  };
 
-    const newPreviews = imagePreviews.map((preview, i) => ({
-      ...preview,
-      isMain: i === index
-    }));
-    onImagePreviewsChange(newPreviews);
+  // Open file dialog
+  const openFileDialog = () => {
+    fileInputRef.current?.click();
   };
 
   return (
-    <div className="bg-white rounded-xl shadow-lg border p-8">
+    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
       <div className="flex items-center gap-3 mb-6">
-        <ImageIcon className="h-6 w-6 text-purple-500" />
-        <h2 className="text-2xl font-bold text-gray-900">Product Images *</h2>
-        <div className="px-3 py-1 bg-purple-100 text-purple-800 rounded-full text-xs font-medium">
-          📸 CLOUDINARY
+        <div className="p-2 bg-orange-100 rounded-lg">
+          <ImageIcon className="h-5 w-5 text-orange-600" />
+        </div>
+        <div>
+          <h3 className="text-lg font-semibold text-gray-900">Product Images</h3>
+          <p className="text-sm text-gray-600">
+            Upload up to 6 high-quality images (JPEG, PNG, WebP - max 5MB each)
+          </p>
         </div>
       </div>
 
       {/* Upload Area */}
-      <div className="mb-6">
+      <div className="space-y-6">
         <div
-          className={`border-2 border-dashed rounded-xl p-8 text-center transition-all cursor-pointer ${
-            dragActive 
-              ? 'border-purple-500 bg-purple-50' 
-              : imagePreviews.length >= 5 
-                ? 'border-gray-300 bg-gray-50 cursor-not-allowed' 
-                : 'border-gray-300 hover:border-purple-400 hover:bg-purple-50'
+          className={`relative border-2 border-dashed rounded-xl p-8 text-center transition-all duration-200 ${
+            dragActive
+              ? 'border-orange-500 bg-orange-50'
+              : 'border-gray-300 hover:border-orange-400 hover:bg-orange-25'
           }`}
           onDragEnter={handleDrag}
           onDragLeave={handleDrag}
           onDragOver={handleDrag}
           onDrop={handleDrop}
-          onClick={() => imagePreviews.length < 5 && fileInputRef.current?.click()}
         >
           <input
             ref={fileInputRef}
@@ -205,153 +188,189 @@ const ProductImages = ({
             multiple
             accept="image/*"
             onChange={handleFileInputChange}
-            className="hidden"
-            disabled={imagePreviews.length >= 5}
+            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
           />
           
-          {isUploading ? (
-            <div className="space-y-3">
-              <Upload className="h-12 w-12 text-purple-500 mx-auto animate-bounce" />
-              <div className="text-purple-600 font-medium">Processing images...</div>
+          <div className="space-y-4">
+            <div className="mx-auto w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center">
+              <Upload className="h-8 w-8 text-gray-400" />
             </div>
-          ) : imagePreviews.length >= 5 ? (
-            <div className="space-y-3">
-              <CheckCircle className="h-12 w-12 text-green-500 mx-auto" />
-              <div className="text-green-600 font-medium">Maximum images reached (5/5)</div>
-              <p className="text-sm text-gray-500">Remove an image to add more</p>
+            
+            <div>
+              <p className="text-lg font-medium text-gray-900">
+                Drop images here or click to upload
+              </p>
+              <p className="text-sm text-gray-500 mt-1">
+                Supports: JPEG, PNG, WebP up to 5MB each
+              </p>
             </div>
-          ) : (
-            <div className="space-y-3">
-              <div className="flex justify-center">
-                <Camera className="h-12 w-12 text-gray-400" />
-              </div>
-              <div>
-                <div className="text-lg font-medium text-gray-900">
-                  Drop images here or click to browse
-                </div>
-                <p className="text-sm text-gray-500 mt-1">
-                  Upload up to 5 images (JPG, PNG, WebP) • Max 5MB each
-                </p>
-              </div>
-              <div className="flex items-center gap-2 justify-center">
-                <Zap className="h-4 w-4 text-purple-500" />
-                <span className="text-sm text-purple-600 font-medium">
-                  First image becomes the main product image
-                </span>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Upload Error */}
-        {uploadError && (
-          <div className="mt-3 flex items-center gap-2 text-red-600 text-sm">
-            <AlertCircle className="h-4 w-4 flex-shrink-0" />
-            <span>{uploadError}</span>
+            
+            <button
+              type="button"
+              onClick={openFileDialog}
+              className="inline-flex items-center px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors"
+            >
+              <Upload className="h-4 w-4 mr-2" />
+              Choose Files
+            </button>
           </div>
-        )}
+        </div>
 
         {/* Validation Error */}
         {validationErrors.images && (
-          <div className="mt-3 flex items-center gap-2 text-red-600 text-sm">
-            <AlertCircle className="h-4 w-4 flex-shrink-0" />
-            <span>{validationErrors.images}</span>
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="h-5 w-5 text-red-600" />
+              <span className="text-red-800 font-medium">Image Error</span>
+            </div>
+            <p className="text-red-700 mt-1">{validationErrors.images}</p>
+          </div>
+        )}
+
+        {/* Image Previews */}
+        {imagePreviews && imagePreviews.length > 0 && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h4 className="text-md font-medium text-gray-900">
+                Uploaded Images ({imagePreviews.length}/6)
+              </h4>
+              {imagePreviews.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setPreviewMode(true)}
+                  className="text-orange-600 hover:text-orange-700 text-sm font-medium flex items-center gap-2"
+                >
+                  <Eye className="h-4 w-4" />
+                  Preview Gallery
+                </button>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+              {imagePreviews.map((preview, index) => (
+                <div
+                  key={index}
+                  className="relative group bg-gray-50 rounded-lg overflow-hidden border border-gray-200"
+                >
+                  <div className="aspect-square">
+                    <img
+                      src={preview}
+                      alt={`Product ${index + 1}`}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+
+                  {/* Upload Progress */}
+                  {images[index] && uploadProgress[images[index].id] !== undefined && (
+                    <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+                      <div className="text-white text-center">
+                        <div className="w-12 h-12 border-4 border-white border-t-transparent rounded-full animate-spin mb-2"></div>
+                        <p className="text-sm">{uploadProgress[images[index].id]}%</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Action Buttons */}
+                  <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="flex gap-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedPreviewIndex(index);
+                          setPreviewMode(true);
+                        }}
+                        className="p-1.5 bg-white rounded-md shadow-sm hover:bg-gray-50 transition-colors"
+                        title="Preview"
+                      >
+                        <ZoomIn className="h-4 w-4 text-gray-600" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => removeImage(index)}
+                        className="p-1.5 bg-white rounded-md shadow-sm hover:bg-red-50 transition-colors"
+                        title="Remove"
+                      >
+                        <Trash2 className="h-4 w-4 text-red-600" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Primary Image Indicator */}
+                  {index === 0 && (
+                    <div className="absolute bottom-2 left-2 bg-orange-500 text-white text-xs px-2 py-1 rounded">
+                      Primary
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* Helper Text */}
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <div className="flex items-start gap-3">
+                <AlertCircle className="h-5 w-5 text-blue-600 mt-0.5" />
+                <div className="text-sm">
+                  <p className="text-blue-800 font-medium">Image Tips:</p>
+                  <ul className="text-blue-700 mt-1 space-y-1">
+                    <li>• First image will be the primary product image</li>
+                    <li>• Use high-resolution images (1200x1200px or larger)</li>
+                    <li>• Show multiple angles and important details</li>
+                    <li>• Ensure good lighting and clear focus</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Preview Modal */}
+        {previewMode && imagePreviews.length > 0 && (
+          <div className="fixed inset-0 bg-black bg-opacity-75 z-50 flex items-center justify-center p-4">
+            <div className="relative max-w-4xl w-full">
+              <button
+                onClick={() => setPreviewMode(false)}
+                className="absolute top-4 right-4 bg-white rounded-full p-2 shadow-lg hover:bg-gray-50 transition-colors z-10"
+              >
+                <X className="h-6 w-6 text-gray-600" />
+              </button>
+
+              <div className="bg-white rounded-lg p-4">
+                <img
+                  src={imagePreviews[selectedPreviewIndex]}
+                  alt={`Product ${selectedPreviewIndex + 1}`}
+                  className="w-full h-auto max-h-96 object-contain rounded"
+                />
+
+                {imagePreviews.length > 1 && (
+                  <div className="flex items-center justify-center gap-4 mt-4">
+                    <button
+                      onClick={() => setSelectedPreviewIndex(prev => 
+                        prev === 0 ? imagePreviews.length - 1 : prev - 1
+                      )}
+                      className="p-2 bg-gray-100 rounded-full hover:bg-gray-200 transition-colors"
+                    >
+                      <ChevronLeft className="h-5 w-5" />
+                    </button>
+                    
+                    <span className="text-sm text-gray-600">
+                      {selectedPreviewIndex + 1} of {imagePreviews.length}
+                    </span>
+                    
+                    <button
+                      onClick={() => setSelectedPreviewIndex(prev => 
+                        prev === imagePreviews.length - 1 ? 0 : prev + 1
+                      )}
+                      className="p-2 bg-gray-100 rounded-full hover:bg-gray-200 transition-colors"
+                    >
+                      <ChevronRight className="h-5 w-5" />
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         )}
       </div>
-
-      {/* Image Previews */}
-      {imagePreviews.length > 0 && (
-        <div className="space-y-4">
-          <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-            <Eye className="h-5 w-5" />
-            Image Preview ({imagePreviews.length}/5)
-          </h3>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {imagePreviews.map((preview, index) => (
-              <div
-                key={preview.id}
-                className={`relative group border-2 rounded-lg overflow-hidden transition-all ${
-                  preview.isMain ? 'border-purple-500 ring-2 ring-purple-200' : 'border-gray-200'
-                }`}
-              >
-                {/* Main Image Badge */}
-                {preview.isMain && (
-                  <div className="absolute top-2 left-2 z-10">
-                    <div className="flex items-center gap-1 bg-purple-500 text-white px-2 py-1 rounded-full text-xs font-medium">
-                      <Star className="h-3 w-3 fill-current" />
-                      Main
-                    </div>
-                  </div>
-                )}
-
-                {/* Image */}
-                <div className="aspect-square bg-gray-100">
-                  <img
-                    src={preview.url}
-                    alt={preview.name}
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-
-                {/* Image Actions Overlay */}
-                <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-all duration-200 flex items-center justify-center">
-                  <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex gap-2">
-                    {!preview.isMain && (
-                      <button
-                        onClick={() => setMainImage(index)}
-                        className="bg-white text-gray-900 p-2 rounded-full hover:bg-gray-100 transition-colors"
-                        title="Set as main image"
-                      >
-                        <Star className="h-4 w-4" />
-                      </button>
-                    )}
-                    <button
-                      onClick={() => removeImage(index)}
-                      className="bg-red-500 text-white p-2 rounded-full hover:bg-red-600 transition-colors"
-                      title="Remove image"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                  </div>
-                </div>
-
-                {/* Image Info */}
-                <div className="p-3 bg-white">
-                  <div className="text-sm font-medium text-gray-900 truncate">
-                    {preview.name}
-                  </div>
-                  <div className="text-xs text-gray-500 mt-1">
-                    {(preview.size / 1024 / 1024).toFixed(2)} MB
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Add More Images Button */}
-          {imagePreviews.length < 5 && (
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              className="w-full border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-purple-400 hover:bg-purple-50 transition-colors"
-            >
-              <Plus className="h-6 w-6 text-gray-400 mx-auto mb-2" />
-              <span className="text-sm text-gray-600">
-                Add more images ({5 - imagePreviews.length} remaining)
-              </span>
-            </button>
-          )}
-        </div>
-      )}
-
-      {/* Debug Info (remove in production) */}
-      {process.env.NODE_ENV === 'development' && (
-        <div className="mt-4 p-3 bg-gray-100 rounded text-xs text-gray-600">
-          <strong>Debug:</strong> Images: {images.length}, Previews: {imagePreviews.length}, 
-          onImagesChange: {typeof onImagesChange}, onImagePreviewsChange: {typeof onImagePreviewsChange}
-        </div>
-      )}
     </div>
   );
 };

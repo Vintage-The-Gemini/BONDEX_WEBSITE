@@ -1,66 +1,24 @@
-// frontend/src/context/AdminContext.jsx - COMPLETE WORKING VERSION
+// frontend/src/context/AdminContext.jsx
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
-import adminApi from '../services/adminApi';
-import { cleanInvalidTokens, getTokenInfo } from '../utils/tokenValidator';
-
-// Initial state
-const initialState = {
-  // Auth state
-  isAuthenticated: false,
-  admin: null,
-  token: null,
-  loading: false,
-  authChecked: false,
-  
-  // Dashboard data
-  dashboardStats: null,
-  
-  // Products
-  products: [],
-  currentProduct: null,
-  productsLoading: false,
-  productsTotalCount: 0,
-  
-  // Categories
-  categories: [],
-  currentCategory: null,
-  categoriesLoading: false,
-  
-  // UI state
-  sidebarOpen: true,
-  notifications: [],
-  
-  // Error handling
-  error: null,
-};
+import * as adminApi from '../utils/adminApi';
 
 // Action types
 const ADMIN_ACTION_TYPES = {
   // Auth actions
-  AUTH_CHECK_START: 'AUTH_CHECK_START',
-  AUTH_CHECK_SUCCESS: 'AUTH_CHECK_SUCCESS',
-  AUTH_CHECK_FAILURE: 'AUTH_CHECK_FAILURE',
-  LOGIN_START: 'LOGIN_START',
   LOGIN_SUCCESS: 'LOGIN_SUCCESS',
-  LOGIN_FAILURE: 'LOGIN_FAILURE',
   LOGOUT: 'LOGOUT',
-  LOAD_ADMIN: 'LOAD_ADMIN',
+  SET_LOADING: 'SET_LOADING',
   
-  // Dashboard actions
-  SET_DASHBOARD_STATS: 'SET_DASHBOARD_STATS',
-  
-  // Product actions
-  SET_PRODUCTS_LOADING: 'SET_PRODUCTS_LOADING',
+  // Products actions
   SET_PRODUCTS: 'SET_PRODUCTS',
-  SET_CURRENT_PRODUCT: 'SET_CURRENT_PRODUCT',
+  SET_PRODUCTS_LOADING: 'SET_PRODUCTS_LOADING',
   ADD_PRODUCT: 'ADD_PRODUCT',
   UPDATE_PRODUCT: 'UPDATE_PRODUCT',
   DELETE_PRODUCT: 'DELETE_PRODUCT',
+  SET_CURRENT_PRODUCT: 'SET_CURRENT_PRODUCT',
   
-  // Category actions
-  SET_CATEGORIES_LOADING: 'SET_CATEGORIES_LOADING',
+  // Categories actions
   SET_CATEGORIES: 'SET_CATEGORIES',
-  SET_CURRENT_CATEGORY: 'SET_CURRENT_CATEGORY',
   ADD_CATEGORY: 'ADD_CATEGORY',
   UPDATE_CATEGORY: 'UPDATE_CATEGORY',
   DELETE_CATEGORY: 'DELETE_CATEGORY',
@@ -70,117 +28,92 @@ const ADMIN_ACTION_TYPES = {
   ADD_NOTIFICATION: 'ADD_NOTIFICATION',
   REMOVE_NOTIFICATION: 'REMOVE_NOTIFICATION',
   
-  // Error handling
+  // Error actions
   SET_ERROR: 'SET_ERROR',
   CLEAR_ERROR: 'CLEAR_ERROR',
 };
 
-// Reducer function
+// Initial state
+const initialState = {
+  // Auth state
+  admin: JSON.parse(localStorage.getItem('adminUser')) || null,
+  token: localStorage.getItem('adminToken') || null,
+  isAuthenticated: !!localStorage.getItem('adminToken'),
+  loading: false,
+  
+  // Products state
+  products: [],
+  currentProduct: null,
+  productsLoading: false,
+  totalProducts: 0,
+  
+  // Categories state
+  categories: [],
+  
+  // UI state
+  sidebarOpen: true,
+  notifications: [],
+  
+  // Error state
+  error: null,
+};
+
+// Reducer
 const adminReducer = (state, action) => {
   switch (action.type) {
     // Auth cases
-    case ADMIN_ACTION_TYPES.AUTH_CHECK_START:
-      return {
-        ...state,
-        loading: true,
-        error: null,
-      };
-      
-    case ADMIN_ACTION_TYPES.AUTH_CHECK_SUCCESS:
-      return {
-        ...state,
-        isAuthenticated: true,
-        admin: action.payload,
-        loading: false,
-        authChecked: true,
-        error: null,
-      };
-      
-    case ADMIN_ACTION_TYPES.AUTH_CHECK_FAILURE:
-      return {
-        ...state,
-        isAuthenticated: false,
-        admin: null,
-        token: null,
-        loading: false,
-        authChecked: true,
-        error: action.payload,
-      };
-    
-    case ADMIN_ACTION_TYPES.LOGIN_START:
-      return {
-        ...state,
-        loading: true,
-        error: null,
-      };
-      
     case ADMIN_ACTION_TYPES.LOGIN_SUCCESS:
       return {
         ...state,
-        isAuthenticated: true,
         admin: action.payload.admin,
         token: action.payload.token,
+        isAuthenticated: true,
         loading: false,
-        authChecked: true,
         error: null,
-      };
-      
-    case ADMIN_ACTION_TYPES.LOGIN_FAILURE:
-      return {
-        ...state,
-        isAuthenticated: false,
-        admin: null,
-        token: null,
-        loading: false,
-        authChecked: true,
-        error: action.payload,
       };
       
     case ADMIN_ACTION_TYPES.LOGOUT:
       return {
-        ...initialState,
-        authChecked: true,
+        ...state,
+        admin: null,
+        token: null,
+        isAuthenticated: false,
+        loading: false,
+        error: null,
       };
       
-    // Dashboard cases
-    case ADMIN_ACTION_TYPES.SET_DASHBOARD_STATS:
+    case ADMIN_ACTION_TYPES.SET_LOADING:
       return {
         ...state,
-        dashboardStats: action.payload,
+        loading: action.payload,
       };
       
-    // Product cases
+    // Products cases
+    case ADMIN_ACTION_TYPES.SET_PRODUCTS:
+      return {
+        ...state,
+        products: action.payload.products || [],
+        totalProducts: action.payload.totalCount || 0,
+        productsLoading: false,
+      };
+      
     case ADMIN_ACTION_TYPES.SET_PRODUCTS_LOADING:
       return {
         ...state,
         productsLoading: action.payload,
       };
       
-    case ADMIN_ACTION_TYPES.SET_PRODUCTS:
-      return {
-        ...state,
-        products: action.payload.products,
-        productsTotalCount: action.payload.totalCount,
-        productsLoading: false,
-      };
-      
-    case ADMIN_ACTION_TYPES.SET_CURRENT_PRODUCT:
-      return {
-        ...state,
-        currentProduct: action.payload,
-      };
-      
     case ADMIN_ACTION_TYPES.ADD_PRODUCT:
       return {
         ...state,
         products: [action.payload, ...state.products],
-        productsTotalCount: state.productsTotalCount + 1,
+        totalProducts: state.totalProducts + 1,
       };
       
     case ADMIN_ACTION_TYPES.UPDATE_PRODUCT:
       return {
         ...state,
-        products: state.products.map(product => 
+        products: state.products.map(product =>
           product._id === action.payload._id ? action.payload : product
         ),
         currentProduct: state.currentProduct?._id === action.payload._id 
@@ -192,42 +125,35 @@ const adminReducer = (state, action) => {
       return {
         ...state,
         products: state.products.filter(product => product._id !== action.payload),
+        totalProducts: Math.max(0, state.totalProducts - 1),
         currentProduct: state.currentProduct?._id === action.payload 
           ? null 
           : state.currentProduct,
-        productsTotalCount: Math.max(0, state.productsTotalCount - 1),
       };
       
-    // Category cases
-    case ADMIN_ACTION_TYPES.SET_CATEGORIES_LOADING:
+    case ADMIN_ACTION_TYPES.SET_CURRENT_PRODUCT:
       return {
         ...state,
-        categoriesLoading: action.payload,
+        currentProduct: action.payload,
       };
       
+    // Categories cases
     case ADMIN_ACTION_TYPES.SET_CATEGORIES:
       return {
         ...state,
         categories: action.payload,
-        categoriesLoading: false,
-      };
-      
-    case ADMIN_ACTION_TYPES.SET_CURRENT_CATEGORY:
-      return {
-        ...state,
-        currentCategory: action.payload,
       };
       
     case ADMIN_ACTION_TYPES.ADD_CATEGORY:
       return {
         ...state,
-        categories: [action.payload, ...state.categories],
+        categories: [...state.categories, action.payload],
       };
       
     case ADMIN_ACTION_TYPES.UPDATE_CATEGORY:
       return {
         ...state,
-        categories: state.categories.map(category => 
+        categories: state.categories.map(category =>
           category._id === action.payload._id ? action.payload : category
         ),
         currentCategory: state.currentCategory?._id === action.payload._id 
@@ -327,154 +253,64 @@ export const AdminProvider = ({ children }) => {
     dispatch({ type: ADMIN_ACTION_TYPES.LOGOUT });
     addNotification({
       type: 'warning',
-      message: 'Session expired. Please login again.',
+      message: 'Session expired. Please login again.'
     });
   };
 
   // =============================================
-  // AUTHENTICATION ACTIONS
+  // AUTHENTICATION FUNCTIONS
   // =============================================
-
-  const login = async (credentials) => {
+  
+  const login = async (email, password) => {
     try {
-      dispatch({ type: ADMIN_ACTION_TYPES.LOGIN_START });
+      dispatch({ type: ADMIN_ACTION_TYPES.SET_LOADING, payload: true });
       
-      const response = await adminApi.login(credentials);
+      const response = await adminApi.loginAdmin({ email, password });
       
       if (response.success) {
-        const { admin, token } = response.data;
-        
-        // Store in localStorage
-        localStorage.setItem('adminToken', token);
-        localStorage.setItem('adminUser', JSON.stringify(admin));
+        localStorage.setItem('adminToken', response.token);
+        localStorage.setItem('adminUser', JSON.stringify(response.admin));
         
         dispatch({
           type: ADMIN_ACTION_TYPES.LOGIN_SUCCESS,
-          payload: { admin, token },
+          payload: { admin: response.admin, token: response.token },
         });
         
         addNotification({
           type: 'success',
-          message: `Welcome back, ${admin.name}!`,
+          message: `Welcome back, ${response.admin.name}!`
         });
         
-        return { success: true };
-      } else {
-        throw new Error(response.message || 'Login failed');
+        return { success: true, admin: response.admin };
       }
     } catch (error) {
-      dispatch({
-        type: ADMIN_ACTION_TYPES.LOGIN_FAILURE,
-        payload: error.message,
-      });
+      console.error('Login error:', error);
+      dispatch({ type: ADMIN_ACTION_TYPES.SET_LOADING, payload: false });
       
+      const errorMessage = error.message || 'Login failed. Please try again.';
       addNotification({
         type: 'error',
-        message: error.message || 'Login failed',
+        message: errorMessage
       });
       
-      return { success: false, error: error.message };
+      return { success: false, error: errorMessage };
     }
   };
 
-  const logout = async () => {
-    try {
-      await adminApi.logout();
-    } catch (error) {
-      console.error('Logout error:', error);
-    } finally {
-      localStorage.removeItem('adminToken');
-      localStorage.removeItem('adminUser');
-      dispatch({ type: ADMIN_ACTION_TYPES.LOGOUT });
-      
-      addNotification({
-        type: 'info',
-        message: 'Logged out successfully',
-      });
-    }
-  };
-
-  // Check authentication on app start
-  useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        dispatch({ type: ADMIN_ACTION_TYPES.AUTH_CHECK_START });
-        
-        // Clean any invalid tokens first
-        cleanInvalidTokens();
-        
-        // Get token info for debugging
-        const tokenInfo = getTokenInfo();
-        console.log('🔍 Current token info:', tokenInfo);
-        
-        // Check if we have valid stored authentication
-        if (adminApi.isAuthenticated() && tokenInfo.isValid) {
-          const storedAdmin = adminApi.getStoredAdmin();
-          console.log('🔐 Found valid stored authentication:', storedAdmin);
-          
-          // Verify the token is still valid with backend by making a test call
-          try {
-            console.log('🔍 Verifying token with backend...');
-            const profileResponse = await adminApi.getProfile();
-            
-            if (profileResponse.success) {
-              console.log('✅ Token verified with backend successfully');
-              dispatch({
-                type: ADMIN_ACTION_TYPES.AUTH_CHECK_SUCCESS,
-                payload: storedAdmin,
-              });
-              return;
-            }
-          } catch (verifyError) {
-            console.log('❌ Token verification failed:', verifyError.message);
-            // Token is invalid, clear it and continue to failure state
-            localStorage.removeItem('adminToken');
-            localStorage.removeItem('adminUser');
-          }
-        }
-        
-        // No valid auth found or token verification failed
-        console.log('🔓 AdminContext: No valid authentication found');
-        dispatch({ 
-          type: ADMIN_ACTION_TYPES.AUTH_CHECK_FAILURE, 
-          payload: null 
-        });
-        
-      } catch (error) {
-        console.error('❌ AdminContext: Authentication initialization error:', error);
-        dispatch({ 
-          type: ADMIN_ACTION_TYPES.AUTH_CHECK_FAILURE,
-          payload: error.message 
-        });
-      }
-    };
-
-    checkAuth();
-  }, []);
-
-  // =============================================
-  // DASHBOARD ACTIONS
-  // =============================================
-
-  const loadDashboardStats = async () => {
-    try {
-      const response = await adminApi.getDashboardStats();
-      if (response.success) {
-        dispatch({
-          type: ADMIN_ACTION_TYPES.SET_DASHBOARD_STATS,
-          payload: response.data,
-        });
-      }
-    } catch (error) {
-      console.error('Dashboard stats error:', error);
-      // Don't show error notification for dashboard stats
-    }
+  const logout = () => {
+    localStorage.removeItem('adminToken');
+    localStorage.removeItem('adminUser');
+    dispatch({ type: ADMIN_ACTION_TYPES.LOGOUT });
+    addNotification({
+      type: 'info',
+      message: 'Logged out successfully'
+    });
   };
 
   // =============================================
-  // PRODUCT ACTIONS
+  // PRODUCTS FUNCTIONS
   // =============================================
-
+  
   const loadProducts = async (params = {}) => {
     try {
       dispatch({ type: ADMIN_ACTION_TYPES.SET_PRODUCTS_LOADING, payload: true });
@@ -526,41 +362,73 @@ export const AdminProvider = ({ children }) => {
     }
   };
 
-  // 🆕 CREATE PRODUCT METHOD - MAIN FIX
+  // 🆕 CREATE PRODUCT METHOD - MAIN FIX WITH CORRECT FIELD MAPPING
   const createProduct = async (formData, images) => {
     try {
       console.log('🎯 AdminContext: Creating product...');
+      console.log('📝 Original formData:', formData);
+      console.log('🖼️ Images received:', images?.length || 0);
+      
+      // ✅ VALIDATE REQUIRED FIELDS FIRST
+      if (!formData.product_name?.trim()) {
+        throw new Error('Product name is required');
+      }
+      
+      if (!formData.product_description?.trim()) {
+        throw new Error('Product description is required');
+      }
+      
+      if (!formData.category) {
+        throw new Error('Protection type (category) is required');
+      }
+      
+      if (!formData.industries || formData.industries.length === 0) {
+        throw new Error('At least one industry must be selected');
+      }
+      
+      if (!images || images.length === 0) {
+        throw new Error('At least one product image is required');
+      }
+      
+      if (!formData.product_price || parseFloat(formData.product_price) <= 0) {
+        throw new Error('Valid product price is required');
+      }
+      
+      if (formData.stock === '' || parseInt(formData.stock) < 0) {
+        throw new Error('Valid stock quantity is required');
+      }
       
       // Create FormData for file upload
       const formDataToSend = new FormData();
       
-      // FIXED: Backend field mapping
+      // ✅ FIXED: Correct field mapping to match backend expectations
       const backendMapping = {
-        product_name: formData.product_name,
-        product_description: formData.product_description,
-        product_brand: formData.product_brand,
+        // Basic Product Information
+        product_name: formData.product_name?.trim(),
+        product_description: formData.product_description?.trim(),
+        product_brand: formData.product_brand?.trim() || '',
         
-        // FIXED: Correct backend field names
-        primaryCategory: formData.category,  // Single protection type
-        secondaryCategories: JSON.stringify(formData.industries || []), // Industries array
+        // ✅ CRITICAL FIX: Map frontend fields to backend fields
+        primaryCategory: formData.category,        // Frontend: category -> Backend: primaryCategory
+        secondaryCategories: JSON.stringify(formData.industries || []), // Frontend: industries -> Backend: secondaryCategories
         
         // Pricing & Inventory
-        product_price: formData.product_price,
-        stock: formData.stock,
-        lowStockThreshold: formData.lowStockThreshold || '10',
+        product_price: parseFloat(formData.product_price) || 0,
+        stock: parseInt(formData.stock) || 0,
+        lowStockThreshold: parseInt(formData.lowStockThreshold) || 10,
         
         // Sale Configuration
-        isOnSale: formData.isOnSale || false,
-        salePrice: formData.salePrice || '',
+        isOnSale: Boolean(formData.isOnSale),
+        salePrice: formData.isOnSale && formData.salePrice ? parseFloat(formData.salePrice) : '',
         saleStartDate: formData.saleStartDate || '',
         saleEndDate: formData.saleEndDate || '',
         
         // Status & Features
         status: formData.status || 'active',
-        isFeatured: formData.isFeatured || false,
-        isNewArrival: formData.isNewArrival || false,
+        isFeatured: Boolean(formData.isFeatured),
+        isNewArrival: Boolean(formData.isNewArrival),
         
-        // SEO Fields (advanced)
+        // SEO Fields
         metaTitle: formData.metaTitle || '',
         metaDescription: formData.metaDescription || '',
         keywords: formData.keywords || '',
@@ -568,21 +436,34 @@ export const AdminProvider = ({ children }) => {
         focusKeyword: formData.focusKeyword || ''
       };
       
-      // Append all form fields
+      console.log('🔄 Backend field mapping:', backendMapping);
+      
+      // ✅ APPEND ONLY NON-EMPTY VALUES
       Object.keys(backendMapping).forEach(key => {
-        if (backendMapping[key] !== '' && backendMapping[key] !== null && backendMapping[key] !== undefined) {
-          formDataToSend.append(key, backendMapping[key]);
+        const value = backendMapping[key];
+        if (value !== '' && value !== null && value !== undefined) {
+          formDataToSend.append(key, value);
+          console.log(`✅ Added field: ${key} = ${value}`);
         }
       });
       
-      // Append images
+      // ✅ APPEND IMAGES - VALIDATE THEY ARE FILE OBJECTS
+      console.log('🔍 Processing images...');
       if (images && images.length > 0) {
-        images.forEach((image) => {
-          formDataToSend.append('images', image);
+        images.forEach((image, index) => {
+          if (image instanceof File) {
+            formDataToSend.append('images', image);
+            console.log(`✅ Added image ${index + 1}: ${image.name} (${(image.size / 1024 / 1024).toFixed(2)}MB)`);
+          } else {
+            console.error(`❌ Image ${index + 1} is not a File object:`, image);
+            throw new Error(`Image ${index + 1} is not a valid file object`);
+          }
         });
+      } else {
+        throw new Error('No images provided for upload');
       }
       
-      // Make API call with proper auth
+      // ✅ MAKE API CALL WITH PROPER AUTH
       const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
       const token = localStorage.getItem('adminToken');
       
@@ -590,36 +471,76 @@ export const AdminProvider = ({ children }) => {
         throw new Error('No authentication token found');
       }
       
-      console.log('🚀 Sending product creation request...');
+      console.log('🚀 Sending product creation request to:', `${API_BASE}/admin/products`);
+      
+      // Log FormData contents for debugging
+      console.log('📦 FormData contents:');
+      for (let [key, value] of formDataToSend.entries()) {
+        if (value instanceof File) {
+          console.log(`  ${key}: File(${value.name}, ${value.size} bytes)`);
+        } else {
+          console.log(`  ${key}: ${value}`);
+        }
+      }
       
       const response = await fetch(`${API_BASE}/admin/products`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`
+          // ⚠️ DON'T set Content-Type for FormData - browser sets it automatically with boundary
         },
         body: formDataToSend
       });
       
+      console.log('📡 Response status:', response.status);
+      console.log('📡 Response headers:', response.headers);
+      
       const result = await response.json();
+      console.log('📡 Response data:', result);
       
       if (!response.ok) {
-        throw new Error(result.message || `HTTP ${response.status}: ${response.statusText}`);
+        // Enhanced error handling
+        let errorMessage = result.message || `HTTP ${response.status}: ${response.statusText}`;
+        
+        // Handle specific validation errors
+        if (response.status === 400 && result.message) {
+          errorMessage = result.message;
+        } else if (response.status === 401) {
+          errorMessage = 'Authentication failed. Please login again.';
+          // Clear invalid token
+          localStorage.removeItem('adminToken');
+          localStorage.removeItem('adminUser');
+        } else if (response.status === 403) {
+          errorMessage = 'You do not have permission to create products.';
+        } else if (response.status === 413) {
+          errorMessage = 'Files are too large. Please reduce image sizes.';
+        } else if (response.status >= 500) {
+          errorMessage = 'Server error. Please try again later.';
+        }
+        
+        throw new Error(errorMessage);
       }
       
       if (result.success) {
-        // Add to products list
+        console.log('✅ Product created successfully:', result.data);
+        
+        // Add to products list in context
         dispatch({
           type: ADMIN_ACTION_TYPES.ADD_PRODUCT,
           payload: result.data,
         });
         
+        // Add success notification
         addNotification({
           type: 'success',
-          message: '🎯 Product created successfully with multi-category targeting!',
+          message: '🎯 Product created successfully with multi-category targeting!'
         });
         
-        console.log('✅ Product created successfully:', result.data._id);
-        return { success: true, data: result.data };
+        return { 
+          success: true, 
+          data: result.data,
+          message: result.message
+        };
       } else {
         throw new Error(result.message || 'Failed to create product');
       }
@@ -627,22 +548,22 @@ export const AdminProvider = ({ children }) => {
     } catch (error) {
       console.error('❌ Create product error:', error);
       
-      if (error.message.includes('Invalid or expired token')) {
-        clearAuth();
-      }
-      
+      // Add error notification
       addNotification({
         type: 'error',
-        message: error.message || 'Failed to create product',
+        message: error.message || 'Failed to create product'
       });
       
-      return { success: false, error: error.message };
+      return { 
+        success: false, 
+        error: error.message || 'Failed to create product' 
+      };
     }
   };
 
-  const updateProduct = async (id, productData) => {
+  const updateProduct = async (id, formData) => {
     try {
-      const response = await adminApi.updateProduct(id, productData);
+      const response = await adminApi.updateAdminProduct(id, formData);
       
       if (response.success) {
         dispatch({
@@ -652,7 +573,7 @@ export const AdminProvider = ({ children }) => {
         
         addNotification({
           type: 'success',
-          message: 'Product updated successfully!',
+          message: 'Product updated successfully!'
         });
         
         return { success: true, data: response.data };
@@ -664,23 +585,56 @@ export const AdminProvider = ({ children }) => {
         clearAuth();
       }
       
+      const errorMessage = error.message || 'Failed to update product';
       addNotification({
         type: 'error',
-        message: error.message || 'Failed to update product',
+        message: errorMessage
       });
       
-      return { success: false, error: error.message };
+      return { success: false, error: errorMessage };
+    }
+  };
+
+  const deleteProduct = async (id) => {
+    try {
+      const response = await adminApi.deleteAdminProduct(id);
+      
+      if (response.success) {
+        dispatch({
+          type: ADMIN_ACTION_TYPES.DELETE_PRODUCT,
+          payload: id,
+        });
+        
+        addNotification({
+          type: 'success',
+          message: 'Product deleted successfully!'
+        });
+        
+        return { success: true };
+      }
+    } catch (error) {
+      console.error('Delete product error:', error);
+      
+      if (error.message.includes('Invalid or expired token')) {
+        clearAuth();
+      }
+      
+      const errorMessage = error.message || 'Failed to delete product';
+      addNotification({
+        type: 'error',
+        message: errorMessage
+      });
+      
+      return { success: false, error: errorMessage };
     }
   };
 
   // =============================================
-  // CATEGORY ACTIONS
+  // CATEGORIES FUNCTIONS
   // =============================================
-
+  
   const loadCategories = async () => {
     try {
-      dispatch({ type: ADMIN_ACTION_TYPES.SET_CATEGORIES_LOADING, payload: true });
-      
       const response = await adminApi.getAdminCategories();
       
       if (response.success) {
@@ -691,43 +645,16 @@ export const AdminProvider = ({ children }) => {
       }
     } catch (error) {
       console.error('Load categories error:', error);
-      // Set empty categories instead of leaving in loading state
-      dispatch({
-        type: ADMIN_ACTION_TYPES.SET_CATEGORIES,
-        payload: [],
-      });
-      
-      // Handle authentication errors
-      if (error.message.includes('Invalid or expired token')) {
-        clearAuth();
-      }
-    }
-  };
-
-  const loadCategory = async (id) => {
-    try {
-      const response = await adminApi.getAdminCategory(id);
-      if (response.success) {
-        dispatch({
-          type: ADMIN_ACTION_TYPES.SET_CURRENT_CATEGORY,
-          payload: response.data,
-        });
-        return { success: true, data: response.data };
-      }
-    } catch (error) {
-      console.error('Load category error:', error);
       
       if (error.message.includes('Invalid or expired token')) {
         clearAuth();
       }
-      
-      return { success: false, error: error.message };
     }
   };
 
   const createCategory = async (categoryData) => {
     try {
-      const response = await adminApi.createCategory(categoryData);
+      const response = await adminApi.createAdminCategory(categoryData);
       
       if (response.success) {
         dispatch({
@@ -737,7 +664,7 @@ export const AdminProvider = ({ children }) => {
         
         addNotification({
           type: 'success',
-          message: 'Category created successfully!',
+          message: 'Category created successfully!'
         });
         
         return { success: true, data: response.data };
@@ -749,18 +676,19 @@ export const AdminProvider = ({ children }) => {
         clearAuth();
       }
       
+      const errorMessage = error.message || 'Failed to create category';
       addNotification({
         type: 'error',
-        message: error.message || 'Failed to create category',
+        message: errorMessage
       });
       
-      return { success: false, error: error.message };
+      return { success: false, error: errorMessage };
     }
   };
 
   const updateCategory = async (id, categoryData) => {
     try {
-      const response = await adminApi.updateCategory(id, categoryData);
+      const response = await adminApi.updateAdminCategory(id, categoryData);
       
       if (response.success) {
         dispatch({
@@ -770,7 +698,7 @@ export const AdminProvider = ({ children }) => {
         
         addNotification({
           type: 'success',
-          message: 'Category updated successfully!',
+          message: 'Category updated successfully!'
         });
         
         return { success: true, data: response.data };
@@ -782,18 +710,19 @@ export const AdminProvider = ({ children }) => {
         clearAuth();
       }
       
+      const errorMessage = error.message || 'Failed to update category';
       addNotification({
         type: 'error',
-        message: error.message || 'Failed to update category',
+        message: errorMessage
       });
       
-      return { success: false, error: error.message };
+      return { success: false, error: errorMessage };
     }
   };
 
   const deleteCategory = async (id) => {
     try {
-      const response = await adminApi.deleteCategory(id);
+      const response = await adminApi.deleteAdminCategory(id);
       
       if (response.success) {
         dispatch({
@@ -803,7 +732,7 @@ export const AdminProvider = ({ children }) => {
         
         addNotification({
           type: 'success',
-          message: 'Category deleted successfully!',
+          message: 'Category deleted successfully!'
         });
         
         return { success: true };
@@ -815,62 +744,54 @@ export const AdminProvider = ({ children }) => {
         clearAuth();
       }
       
+      const errorMessage = error.message || 'Failed to delete category';
       addNotification({
         type: 'error',
-        message: error.message || 'Failed to delete category',
+        message: errorMessage
       });
       
-      return { success: false, error: error.message };
+      return { success: false, error: errorMessage };
     }
   };
 
   // =============================================
-  // UI ACTIONS
+  // UI FUNCTIONS
   // =============================================
-
+  
   const toggleSidebar = () => {
     dispatch({ type: ADMIN_ACTION_TYPES.TOGGLE_SIDEBAR });
   };
 
-  // Context value
+  // =============================================
+  // CONTEXT VALUE
+  // =============================================
+  
   const contextValue = {
     // State
     ...state,
     
-    // Auth actions
+    // Auth functions
     login,
     logout,
     clearAuth,
     
-    // Dashboard actions
-    loadDashboardStats,
-    
-    // Product actions
+    // Products functions
     loadProducts,
     loadProduct,
-    createProduct, // 🆕 NEW METHOD ADDED
+    createProduct,
     updateProduct,
+    deleteProduct,
     
-    // Category actions
+    // Categories functions
     loadCategories,
-    loadCategory,
     createCategory,
     updateCategory,
     deleteCategory,
     
-    // UI actions
+    // UI functions
     toggleSidebar,
-    
-    // Notification actions
     addNotification,
     removeNotification,
-    
-    // Utility functions
-    formatCurrency: adminApi.formatCurrency,
-    formatDate: adminApi.formatDate,
-    
-    // Debug utilities
-    getTokenInfo,
   };
 
   return (

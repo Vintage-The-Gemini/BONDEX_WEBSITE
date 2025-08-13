@@ -5,7 +5,7 @@ import { useAdmin } from '../../context/AdminContext';
 
 // Component Imports
 import MultiCategorySelector from '../../components/admin/MultiCategorySelector';
-import AdvancedSEO from '../../components/admin/AdvancedSEO'; // ✅ CORRECT IMPORT
+import AdvancedSEO from '../../components/admin/AdvancedSEO';
 import ProductBasicInfo from '../../components/admin/ProductBasicInfo';
 import ProductPricingInventory from '../../components/admin/ProductPricingInventory';
 import ProductImages from '../../components/admin/ProductImages';
@@ -25,7 +25,7 @@ import {
 
 const CreateProduct = () => {
   const navigate = useNavigate();
-  const { categories, loadCategories, addNotification, createProduct } = useAdmin(); // 🆕 ADDED createProduct
+  const { categories, loadCategories, addNotification, createProduct } = useAdmin();
 
   // Form State - Fixed to match backend validation
   const [formData, setFormData] = useState({
@@ -106,104 +106,68 @@ const CreateProduct = () => {
     // Basic product info
     if (!formData.product_name?.trim()) {
       errors.product_name = 'Product name is required';
-    } else if (formData.product_name.length < 3) {
-      errors.product_name = 'Product name must be at least 3 characters';
     }
     
     if (!formData.product_description?.trim()) {
       errors.product_description = 'Product description is required';
-    } else if (formData.product_description.length < 20) {
-      errors.product_description = 'Description must be at least 20 characters';
     }
     
     if (!formData.product_brand?.trim()) {
       errors.product_brand = 'Product brand is required';
     }
     
-    // FIXED: Category validation
+    // Categories
     if (!formData.category) {
-      errors.category = 'Protection type selection is required';
+      errors.category = 'Protection type (category) is required';
     }
     
     if (!formData.industries || formData.industries.length === 0) {
       errors.industries = 'At least one industry must be selected';
     }
     
-    // Pricing validation
+    // Pricing
     if (!formData.product_price || parseFloat(formData.product_price) <= 0) {
-      errors.product_price = 'Valid price is required (in KES)';
+      errors.product_price = 'Valid product price is required';
     }
     
-    if (formData.stock === '' || parseInt(formData.stock) < 0) {
+    if (!formData.stock || parseInt(formData.stock) < 0) {
       errors.stock = 'Valid stock quantity is required';
     }
     
-    // Sale validation
-    if (formData.isOnSale) {
-      if (!formData.salePrice || parseFloat(formData.salePrice) <= 0) {
-        errors.salePrice = 'Sale price is required when product is on sale';
-      } else if (parseFloat(formData.salePrice) >= parseFloat(formData.product_price)) {
-        errors.salePrice = 'Sale price must be less than regular price';
-      }
-    }
-    
-    // Image validation
+    // Images
     if (!images || images.length === 0) {
       errors.images = 'At least one product image is required';
     }
-    
-    // 🆕 SIMPLIFIED SEO validation (removed complex scoring)
-    if (!formData.metaTitle || formData.metaTitle.length < 20) {
-      errors.metaTitle = 'Meta title should be at least 20 characters';
-    }
-    
-    if (!formData.metaDescription || formData.metaDescription.length < 50) {
-      errors.metaDescription = 'Meta description should be at least 50 characters';
-    }
-    
+
     setValidationErrors(errors);
     return Object.keys(errors).length === 0;
   };
 
   // Handle form data changes
-  const handleFormDataChange = (field, value) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+  const handleFormDataChange = (name, value) => {
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
     
-    // Clear specific validation error when field is updated
-    if (validationErrors[field]) {
+    // Clear validation error for this field
+    if (validationErrors[name]) {
       setValidationErrors(prev => {
         const newErrors = { ...prev };
-        delete newErrors[field];
+        delete newErrors[name];
         return newErrors;
       });
     }
-    
-    // 🆕 AUTO-GENERATE SLUG from product name
-    if (field === 'product_name' && value) {
-      const slug = value
-        .toLowerCase()
-        .replace(/[^a-z0-9\s-]/g, '')
-        .replace(/\s+/g, '-')
-        .replace(/-+/g, '-')
-        .substring(0, 50);
-      setFormData(prev => ({ ...prev, slug }));
-    }
-    
-    // 🆕 AUTO-GENERATE META TITLE from product name + brand
-    if ((field === 'product_name' || field === 'product_brand') && formData.product_name && formData.product_brand) {
-      const metaTitle = `${formData.product_brand} ${formData.product_name} - Safety Equipment Kenya`;
-      setFormData(prev => ({ ...prev, metaTitle }));
-    }
   };
 
-  // Handle input changes
+  // Handle input changes (for direct input elements)
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
     const newValue = type === 'checkbox' ? checked : value;
     handleFormDataChange(name, newValue);
   };
 
-  // 🆕 FIXED SUBMIT FUNCTION - Using AdminContext
+  // 🆕 FIXED SUBMIT FUNCTION - Proper image handling
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -220,9 +184,34 @@ const CreateProduct = () => {
     try {
       console.log('🎯 Creating product with data:', formData);
       
-      // Validate images
-      if (!images || images.length === 0) {
+      // ✅ FIXED: Extract File objects from images array
+      const imageFiles = images
+        .map(img => {
+          // Handle different image object structures
+          if (img instanceof File) {
+            return img; // Already a File object
+          } else if (img.file instanceof File) {
+            return img.file; // Extract File from wrapper object
+          } else if (img.originalFile instanceof File) {
+            return img.originalFile; // Extract from another wrapper structure
+          }
+          console.warn('Unknown image structure:', img);
+          return null;
+        })
+        .filter(file => file !== null); // Remove any null values
+
+      console.log('🔍 Extracted image files:', imageFiles.length, imageFiles);
+      
+      // Validate that we have actual File objects
+      if (imageFiles.length === 0) {
         throw new Error('At least one product image is required');
+      }
+      
+      // Validate all items are File objects
+      const invalidFiles = imageFiles.filter(file => !(file instanceof File));
+      if (invalidFiles.length > 0) {
+        console.error('❌ Invalid file objects found:', invalidFiles);
+        throw new Error('Invalid image files detected. Please re-upload your images.');
       }
       
       // Validate required fields
@@ -238,16 +227,46 @@ const CreateProduct = () => {
         throw new Error('At least one industry must be selected');
       }
       
-      // 🆕 FIXED: Use AdminContext createProduct method
-      const result = await createProduct(formData, images);
+      // ✅ FIXED: Pass actual File objects to createProduct
+      const result = await createProduct(formData, imageFiles);
       
       if (result.success) {
         setSuccess('🎯 Product created successfully with multi-category targeting!');
         console.log('✅ Product created:', result.data);
         
-        // Navigate to product view after brief delay
+        // Clear form
+        setFormData({
+          product_name: '',
+          product_description: '',
+          product_brand: '',
+          category: '',
+          industries: [],
+          product_price: '',
+          stock: '',
+          lowStockThreshold: '10',
+          isOnSale: false,
+          salePrice: '',
+          saleStartDate: '',
+          saleEndDate: '',
+          status: 'active',
+          isFeatured: false,
+          isNewArrival: false,
+          metaTitle: '',
+          metaDescription: '',
+          keywords: '',
+          slug: ''
+        });
+        setImages([]);
+        setImagePreviews([]);
+        setFeatures(['']);
+        setSpecifications([{ key: '', value: '' }]);
+        setTags(['']);
+        setCertifications(['']);
+        setComplianceStandards(['']);
+        
+        // Navigate to products list after brief delay
         setTimeout(() => {
-          navigate(`/admin/products/${result.data._id}`);
+          navigate('/admin/products');
         }, 1500);
       } else {
         throw new Error(result.error || 'Failed to create product');
@@ -257,25 +276,50 @@ const CreateProduct = () => {
       console.error('❌ Creation error:', error);
       const errorMessage = error.message || 'Failed to create product. Please check your connection and try again.';
       setError(errorMessage);
+      
+      // Add notification
+      addNotification({
+        type: 'error',
+        message: errorMessage
+      });
+      
+      // Scroll to top to show error
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     } finally {
       setLoading(false);
     }
   };
 
-  // Save as draft
+  // Handle save as draft
   const handleSaveDraft = async () => {
-    const draftData = { ...formData, status: 'draft' };
-    setFormData(draftData);
+    const draftData = {
+      ...formData,
+      status: 'draft',
+      images: images,
+      features: features,
+      specifications: specifications,
+      tags: tags,
+      certifications: certifications,
+      complianceStandards: complianceStandards
+    };
     
-    // Auto-submit after brief delay
-    setTimeout(() => {
-      const form = document.getElementById('product-form');
-      if (form) form.requestSubmit();
-    }, 100);
+    try {
+      localStorage.setItem('productDraft', JSON.stringify(draftData));
+      addNotification({
+        type: 'success',
+        message: 'Draft saved successfully!'
+      });
+    } catch (error) {
+      console.error('Error saving draft:', error);
+      addNotification({
+        type: 'error',
+        message: 'Failed to save draft'
+      });
+    }
   };
 
   return (
-    <div className="space-y-6">
+    <div className="max-w-5xl mx-auto p-6 space-y-8">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
@@ -283,28 +327,19 @@ const CreateProduct = () => {
             onClick={() => navigate('/admin/products')}
             className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
           >
-            <ArrowLeft className="w-5 h-5" />
+            <ArrowLeft className="h-5 w-5" />
           </button>
-          
           <div>
-            <div className="flex items-center gap-3">
-              <Target className="h-8 w-8 text-orange-500" />
-              <h1 className="text-3xl font-bold text-gray-900">Create New Product</h1>
-              <div className="px-4 py-2 bg-orange-100 text-orange-800 rounded-full text-sm font-medium">
-                🎯 MULTI-CATEGORY
-              </div>
-            </div>
-            <p className="text-gray-600 mt-1">
-              Add safety equipment with precision multi-category targeting
-            </p>
+            <h1 className="text-2xl font-bold text-gray-900">Create New Product</h1>
+            <p className="text-gray-600">Add a new safety equipment product to your catalog</p>
           </div>
         </div>
         
-        <div className="flex gap-3">
+        <div className="flex items-center gap-3">
           <button
             type="button"
             onClick={() => setShowPreview(!showPreview)}
-            className="flex items-center gap-2 px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+            className="px-4 py-2 text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2"
           >
             {showPreview ? <EyeOff size={16} /> : <Eye size={16} />}
             {showPreview ? 'Hide Preview' : 'Show Preview'}
@@ -348,7 +383,7 @@ const CreateProduct = () => {
         <MultiCategorySelector
           formData={formData}
           onFormDataChange={handleFormDataChange}
-          categories={categories} // ✅ PASS CATEGORIES FROM ADMIN CONTEXT
+          categories={categories}
           validationErrors={validationErrors}
         />
 
@@ -383,7 +418,7 @@ const CreateProduct = () => {
           onComplianceChange={setComplianceStandards}
         />
 
-        {/* ✅ ADVANCED SEO Section (using your existing component) */}
+        {/* ✅ ADVANCED SEO Section */}
         <AdvancedSEO
           formData={formData}
           onFormDataChange={handleFormDataChange}
@@ -491,32 +526,22 @@ const CreateProduct = () => {
               
               <div className="flex items-center gap-2">
                 <span className="text-2xl font-bold text-orange-500">
-                  KES {formData.product_price ? parseFloat(formData.product_price).toLocaleString() : '0'}
+                  KES {formData.product_price ? Number(formData.product_price).toLocaleString() : '0'}
                 </span>
                 {formData.isOnSale && formData.salePrice && (
                   <span className="text-lg text-gray-500 line-through">
-                    KES {parseFloat(formData.salePrice).toLocaleString()}
+                    KES {Number(formData.salePrice).toLocaleString()}
                   </span>
                 )}
               </div>
               
-              <p className="text-gray-700">
+              <p className="text-gray-600 text-sm">
                 {formData.product_description || 'Product description will appear here...'}
               </p>
               
-              <div className="space-y-2">
-                <div className="text-sm">
-                  <span className="font-medium">Category:</span> {formData.category || 'Not selected'}
-                </div>
-                <div className="text-sm">
-                  <span className="font-medium">Industries:</span> {formData.industries?.join(', ') || 'None selected'}
-                </div>
-                <div className="text-sm">
-                  <span className="font-medium">Stock:</span> {formData.stock || '0'} units
-                </div>
-                <div className="text-sm">
-                  <span className="font-medium">Status:</span> {formData.status || 'active'}
-                </div>
+              <div className="flex items-center gap-2 text-sm text-gray-500">
+                <Package className="h-4 w-4" />
+                <span>Stock: {formData.stock || '0'} units</span>
               </div>
             </div>
           </div>
