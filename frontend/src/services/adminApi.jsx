@@ -1,174 +1,117 @@
 // frontend/src/services/adminApi.jsx
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+
+console.log('🔧 AdminAPI initialized with baseURL:', API_BASE_URL);
+
 class AdminApiService {
   constructor() {
-    this.baseURL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-    this.adminToken = localStorage.getItem('adminToken');
-    
-    console.log('🔧 AdminAPI initialized with baseURL:', this.baseURL);
+    this.baseURL = API_BASE_URL;
   }
 
-  // Get authentication headers
-  getAuthHeaders() {
-    const token = localStorage.getItem('adminToken');
-    return {
-      'Content-Type': 'application/json',
-      'Accept': 'application/json',
-      ...(token && { Authorization: `Bearer ${token}` }),
-    };
-  }
+  // =============================================
+  // CORE API METHODS
+  // =============================================
 
-  // Get multipart headers for file uploads
-  getMultipartHeaders() {
-    const token = localStorage.getItem('adminToken');
-    return {
-      ...(token && { Authorization: `Bearer ${token}` }),
-      // Don't set Content-Type for FormData - browser will set it with boundary
-    };
-  }
-
-  // Generic request method with better error handling
   async makeRequest(endpoint, options = {}) {
-    // Ensure endpoint starts with / - declared outside try block
-    const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
-    
-    try {
-      const url = `${this.baseURL}${cleanEndpoint}`;
-      
-      console.log('🌐 Making API request:', {
-        url,
-        method: options.method || 'GET',
-        hasBody: !!options.body
-      });
+    const url = `${this.baseURL}${endpoint}`;
+    const token = localStorage.getItem('adminToken');
 
-      const response = await fetch(url, {
-        headers: options.isMultipart ? this.getMultipartHeaders() : this.getAuthHeaders(),
-        credentials: 'include',
-        ...options,
-      });
+    console.log('🌐 Making API request:', {
+      method: options.method || 'GET',
+      url,
+      hasAuth: !!token,
+      isMultipart: options.isMultipart || false
+    });
+
+    const config = {
+      method: options.method || 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        ...(options.isMultipart ? {} : { 'Content-Type': 'application/json' }),
+        ...options.headers,
+      },
+      ...options,
+    };
+
+    // Don't set Content-Type for FormData (multipart)
+    if (options.isMultipart) {
+      delete config.headers['Content-Type'];
+    }
+
+    try {
+      const response = await fetch(url, config);
 
       console.log('📡 API Response status:', response.status);
       console.log('📡 Content-Type:', response.headers.get('content-type'));
-
-      // Handle non-JSON responses
-      const contentType = response.headers.get('content-type');
-      if (!contentType || !contentType.includes('application/json')) {
-        const textResponse = await response.text();
-        console.error('❌ Expected JSON but got:', textResponse.substring(0, 200));
-        
-        // If it's HTML, the server might be down or misconfigured
-        if (textResponse.includes('<!DOCTYPE') || textResponse.includes('<html')) {
-          throw new Error('Server returned HTML instead of JSON. Backend server may not be running on the correct port.');
-        }
-        
-        throw new Error(`Server returned ${contentType || 'unknown content type'} instead of JSON`);
-      }
 
       const data = await response.json();
       console.log('📦 API Response data:', data);
 
       if (!response.ok) {
-        // Handle authentication errors
+        // ✅ ENHANCED ERROR LOGGING FOR DEBUGGING
+        console.error('🚨 API ERROR DETAILS:');
+        console.error('Status:', response.status);
+        console.error('Status Text:', response.statusText);
+        console.error('Response Data:', data);
+        console.error('Error Message:', data.message);
+        console.error('Error Details:', data.errors);
+        console.error('Validation Details:', data.details);
+        
+        // Handle auth errors
         if (response.status === 401) {
-          console.log('🔐 Authentication failed, clearing tokens');
           localStorage.removeItem('adminToken');
           localStorage.removeItem('adminUser');
-          throw new Error(data.message || 'Authentication required');
+          throw new Error('Authentication failed. Please login again.');
         }
         
-        throw new Error(data.message || `HTTP error! status: ${response.status}`);
+        // Create detailed error message
+        let errorMessage = data.message || `HTTP ${response.status}: ${response.statusText}`;
+        
+        // Add validation details if available
+        if (data.errors && Array.isArray(data.errors)) {
+          errorMessage += '\nValidation Errors:\n' + data.errors.join('\n');
+        }
+        
+        if (data.details) {
+          errorMessage += '\nDetails: ' + JSON.stringify(data.details, null, 2);
+        }
+        
+        throw new Error(errorMessage);
       }
 
       return data;
-      
     } catch (error) {
-      console.error('❌ API Request failed:', {
-        endpoint: cleanEndpoint,
-        error: error.message,
-        options
-      });
-      
-      // Provide user-friendly error messages
-      if (error.message.includes('Failed to fetch')) {
-        throw new Error('Cannot connect to backend server. Please ensure the backend is running on http://localhost:5000');
-      }
-      
+      console.error('❌ API Request failed:', error);
       throw error;
     }
   }
 
   // =============================================
-  // AUTHENTICATION - FIXED
+  // AUTHENTICATION
   // =============================================
 
-  async login(credentials) {
+  async loginAdmin(credentials) {
     try {
-      const data = await this.makeRequest('/admin/login', {
+      return await this.makeRequest('/admin/login', {
         method: 'POST',
         body: JSON.stringify(credentials),
       });
-
-      console.log('🔑 Full login response:', data);
-
-      if (data.success) {
-        // The backend response structure is: { success: true, data: { user: {...}, token: "..." } }
-        const token = data.data?.token || data.token; // Try both locations
-        const adminData = data.data?.user || data.admin || data.data;
-
-        console.log('🔑 Extracted token:', token);
-        console.log('👤 Extracted admin data:', adminData);
-
-        if (token) {
-          localStorage.setItem('adminToken', token);
-          localStorage.setItem('adminUser', JSON.stringify(adminData));
-          this.adminToken = token;
-          console.log('✅ Login successful, token stored in localStorage');
-          console.log('🔑 Stored token:', localStorage.getItem('adminToken'));
-          
-          // Verify token was stored
-          const storedToken = localStorage.getItem('adminToken');
-          if (storedToken !== token) {
-            console.error('❌ Token storage failed!');
-            throw new Error('Failed to store authentication token');
-          }
-        } else {
-          console.error('❌ No token found in response');
-          throw new Error('No authentication token received');
-        }
-      }
-
-      return data;
     } catch (error) {
-      console.error('❌ Login error:', error);
-      throw new Error(error.message || 'Login failed');
+      console.error('Admin login error:', error);
+      throw error;
     }
   }
 
-  // Alias for adminLogin (for backward compatibility)
-  async adminLogin(credentials) {
-    return this.login(credentials);
-  }
-
-  async logout() {
+  async verifyAdminAuth() {
     try {
-      await this.makeRequest('/admin/logout', {
-        method: 'POST',
-      });
+      return await this.makeRequest('/admin/verify');
     } catch (error) {
-      console.error('Logout error:', error);
-      // Continue with cleanup even if request fails
-    } finally {
-      localStorage.removeItem('adminToken');
-      localStorage.removeItem('adminUser');
-      this.adminToken = null;
-      console.log('🔐 Logout complete, tokens cleared');
+      console.error('Admin auth verification error:', error);
+      throw error;
     }
   }
 
-  async getProfile() {
-    return this.makeRequest('/admin/profile');
-  }
-
-  // Check if user is authenticated
+  // Check if admin is authenticated
   isAuthenticated() {
     const token = localStorage.getItem('adminToken');
     const user = localStorage.getItem('adminUser');
@@ -211,7 +154,7 @@ class AdminApiService {
   }
 
   // =============================================
-  // PRODUCT MANAGEMENT (FIXED ENDPOINTS)
+  // PRODUCT MANAGEMENT
   // =============================================
 
   async getAdminProducts(params = {}) {
@@ -234,6 +177,7 @@ class AdminApiService {
     }
   }
 
+  // 🆕 CREATE PRODUCT WITH JSON DATA (No images)
   async createProduct(productData) {
     try {
       return await this.makeRequest('/admin/products', {
@@ -246,6 +190,38 @@ class AdminApiService {
     }
   }
 
+  // 🆕 CREATE PRODUCT WITH IMAGES (FormData) - THE MISSING FUNCTION!
+  async createProductWithImages(formData) {
+    try {
+      console.log('🎯 AdminAPI: Creating product with images...');
+      
+      // Validate FormData
+      if (!(formData instanceof FormData)) {
+        throw new Error('Invalid data format. Expected FormData for image upload.');
+      }
+
+      // Log FormData contents for debugging
+      console.log('📝 FormData contents:');
+      for (let [key, value] of formData.entries()) {
+        if (value instanceof File) {
+          console.log(`  ${key}: File(${value.name}, ${value.size} bytes)`);
+        } else {
+          console.log(`  ${key}: ${value}`);
+        }
+      }
+
+      return await this.makeRequest('/admin/products', {
+        method: 'POST',
+        body: formData,
+        isMultipart: true, // This prevents Content-Type header from being set
+      });
+    } catch (error) {
+      console.error('Error creating product with images:', error);
+      throw error;
+    }
+  }
+
+  // 🆕 UPDATE PRODUCT
   async updateProduct(productId, productData) {
     try {
       return await this.makeRequest(`/admin/products/${productId}`, {
@@ -254,6 +230,26 @@ class AdminApiService {
       });
     } catch (error) {
       console.error('Error updating product:', error);
+      throw error;
+    }
+  }
+
+  // 🆕 UPDATE PRODUCT WITH IMAGES
+  async updateProductWithImages(productId, formData) {
+    try {
+      console.log('🎯 AdminAPI: Updating product with images...');
+      
+      if (!(formData instanceof FormData)) {
+        throw new Error('Invalid data format. Expected FormData for image upload.');
+      }
+
+      return await this.makeRequest(`/admin/products/${productId}`, {
+        method: 'PUT',
+        body: formData,
+        isMultipart: true,
+      });
+    } catch (error) {
+      console.error('Error updating product with images:', error);
       throw error;
     }
   }
@@ -293,37 +289,37 @@ class AdminApiService {
     }
   }
 
-  async createCategory(categoryData) {
+  async createAdminCategory(categoryData) {
     try {
       return await this.makeRequest('/admin/categories', {
         method: 'POST',
         body: JSON.stringify(categoryData),
       });
     } catch (error) {
-      console.error('Error creating category:', error);
+      console.error('Error creating admin category:', error);
       throw error;
     }
   }
 
-  async updateCategory(categoryId, categoryData) {
+  async updateAdminCategory(categoryId, categoryData) {
     try {
       return await this.makeRequest(`/admin/categories/${categoryId}`, {
         method: 'PUT',
         body: JSON.stringify(categoryData),
       });
     } catch (error) {
-      console.error('Error updating category:', error);
+      console.error('Error updating admin category:', error);
       throw error;
     }
   }
 
-  async deleteCategory(categoryId) {
+  async deleteAdminCategory(categoryId) {
     try {
       return await this.makeRequest(`/admin/categories/${categoryId}`, {
         method: 'DELETE',
       });
     } catch (error) {
-      console.error('Error deleting category:', error);
+      console.error('Error deleting admin category:', error);
       throw error;
     }
   }
@@ -364,6 +360,18 @@ class AdminApiService {
     }
   }
 
+  async processRefund(orderId, refundData) {
+    try {
+      return await this.makeRequest(`/admin/orders/${orderId}/refund`, {
+        method: 'POST',
+        body: JSON.stringify(refundData),
+      });
+    } catch (error) {
+      console.error('Error processing refund:', error);
+      throw error;
+    }
+  }
+
   async getOrderStats(params = {}) {
     try {
       const queryString = new URLSearchParams(params).toString();
@@ -378,68 +386,7 @@ class AdminApiService {
   async exportOrders(params = {}) {
     try {
       const queryString = new URLSearchParams(params).toString();
-      const endpoint = `/orders/export${queryString ? `?${queryString}` : ''}`;
-      return await this.makeRequest(endpoint);
-    } catch (error) {
-      console.error('Error exporting orders:', error);
-      throw error;
-    }
-  }
-
-  // =============================================
-  // ORDER MANAGEMENT
-  // =============================================
-
-  async getAdminOrders(params = {}) {
-    try {
-      const queryString = new URLSearchParams(params).toString();
-      const endpoint = `/orders${queryString ? `?${queryString}` : ''}`;
-      return await this.makeRequest(endpoint);
-    } catch (error) {
-      console.error('Error fetching admin orders:', error);
-      throw error;
-    }
-  }
-
-  async getAdminOrder(orderId) {
-    try {
-      return await this.makeRequest(`/orders/${orderId}`);
-    } catch (error) {
-      console.error('Error fetching admin order:', error);
-      throw error;
-    }
-  }
-
-  async updateOrderStatus(orderId, status) {
-    try {
-      return await this.makeRequest(`/orders/${orderId}/status`, {
-        method: 'PATCH',
-        body: JSON.stringify({ 
-          status,
-          note: `Status updated to ${status} by admin`
-        }),
-      });
-    } catch (error) {
-      console.error('Error updating order status:', error);
-      throw error;
-    }
-  }
-
-  async getOrderStats(params = {}) {
-    try {
-      const queryString = new URLSearchParams(params).toString();
-      const endpoint = `/orders/stats${queryString ? `?${queryString}` : ''}`;
-      return await this.makeRequest(endpoint);
-    } catch (error) {
-      console.error('Error fetching order stats:', error);
-      throw error;
-    }
-  }
-
-  async exportOrders(params = {}) {
-    try {
-      const queryString = new URLSearchParams(params).toString();
-      const endpoint = `/orders/export${queryString ? `?${queryString}` : ''}`;
+      const endpoint = `/admin/orders/export${queryString ? `?${queryString}` : ''}`;
       return await this.makeRequest(endpoint);
     } catch (error) {
       console.error('Error exporting orders:', error);
