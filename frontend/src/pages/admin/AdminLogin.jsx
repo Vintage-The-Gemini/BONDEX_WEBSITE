@@ -1,9 +1,11 @@
 // File Path: frontend/src/pages/admin/AdminLogin.jsx
 import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useToast } from '../../components/ui/Toast'
 import axios from 'axios'
 
 const AdminLogin = () => {
+  const { toast } = useToast()
   const [formData, setFormData] = useState({
     email: '',
     password: ''
@@ -40,7 +42,6 @@ const AdminLogin = () => {
       })
 
       console.log('✅ Login successful:', response.data)
-      console.log('🔍 Full response structure:', JSON.stringify(response.data, null, 2))
 
       // Check response structure
       const responseData = response.data
@@ -48,11 +49,9 @@ const AdminLogin = () => {
 
       // Handle different possible response structures
       if (responseData.data && responseData.data.token) {
-        // Structure: { success: true, data: { token: "...", user: {...} } }
         token = responseData.data.token
         admin = responseData.data.user
       } else if (responseData.token) {
-        // Structure: { success: true, token: "...", data: { user: {...} } }
         token = responseData.token
         admin = responseData.data?.user
       } else {
@@ -78,21 +77,31 @@ const AdminLogin = () => {
       console.log('💾 Token stored:', token.substring(0, 20) + '...')
       console.log('👤 User data stored:', admin.email)
       
+      // 🔥 SUCCESS TOAST - Beautiful welcome message
+      toast.success(`🎉 Welcome back, ${admin.name || admin.email.split('@')[0]}!`, 4000)
+      
       // Redirect to admin dashboard
       navigate('/admin/dashboard')
       
     } catch (err) {
       console.error('❌ Login error:', err)
       
+      let errorMessage = 'Login failed. Please try again.'
+      
       if (err.response?.status === 401) {
-        setError('Invalid email or password')
+        errorMessage = 'Invalid email or password'
       } else if (err.response?.status === 400) {
-        setError(err.response.data.message || 'Please fill in all fields')
+        errorMessage = err.response.data.message || 'Please fill in all fields'
       } else if (err.code === 'ECONNREFUSED') {
-        setError('Cannot connect to server. Please make sure the backend is running.')
+        errorMessage = 'Cannot connect to server. Please make sure the backend is running.'
       } else {
-        setError(err.response?.data?.message || 'Login failed. Please try again.')
+        errorMessage = err.response?.data?.message || 'Login failed. Please try again.'
       }
+      
+      setError(errorMessage)
+      // 🔥 ERROR TOAST - Clear error message
+      toast.error(errorMessage, 6000)
+      
     } finally {
       setIsLoading(false)
     }
@@ -114,6 +123,7 @@ const AdminLogin = () => {
         </div>
         
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
+          {/* Keep error display for immediate feedback */}
           {error && (
             <div className="bg-red-50 border border-red-200 rounded-md p-4">
               <div className="flex">
@@ -183,7 +193,7 @@ const AdminLogin = () => {
             <div className="mt-4 p-4 bg-blue-50 rounded-md">
               <h3 className="text-sm font-medium text-blue-800 mb-2">Demo Credentials</h3>
               <p className="text-xs text-blue-700">
-                <strong>Email:</strong> admin@bondexsafety.com<br />
+                <strong>Email:</strong> admin@bondexsafety.co.ke<br />
                 <strong>Password:</strong> admin123
               </p>
             </div>

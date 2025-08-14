@@ -3,6 +3,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react'
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
 import axios from 'axios'
 import { AdminLayout } from './components'
+import { ToastProvider } from './components/ui/Toast'
 
 // Import existing pages
 import HomePage from './pages/customer/HomePage'
@@ -11,7 +12,7 @@ import AdminLogin from './pages/admin/AdminLogin'
 import AdminDashboard from './pages/admin/AdminDashboard'
 import AdminProducts from './pages/admin/AdminProducts'
 
-// Auth Context (keeping existing implementation)
+// Auth Context
 const AuthContext = createContext()
 
 const useAuth = () => {
@@ -82,24 +83,8 @@ const AuthProvider = ({ children }) => {
 
 // Loading Spinner
 const LoadingSpinner = () => (
-  <div style={{
-    minHeight: '100vh',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#f9fafb'
-  }}>
-    <div style={{
-      width: '40px',
-      height: '40px',
-      border: '4px solid #e5e7eb',
-      borderTop: '4px solid #f97316',
-      borderRadius: '50%',
-      animation: 'spin 1s linear infinite'
-    }}></div>
-    <style dangerouslySetInnerHTML={{
-      __html: `@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`
-    }} />
+  <div className="min-h-screen flex items-center justify-center bg-gray-50">
+    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500"></div>
   </div>
 )
 
@@ -114,37 +99,34 @@ const ProtectedRoute = ({ children }) => {
 // Main App
 function App() {
   return (
-    <AuthProvider>
-      <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-        <Routes>
-          {/* Customer Routes */}
-          <Route path="/" element={<HomePage />} />
-          <Route path="/products" element={<ProductsPage />} />
-          
-          {/* Admin Login (No Layout) */}
-          <Route path="/admin/login" element={<AdminLogin />} />
-          
-          {/* Admin Routes with Layout - ONLY EXISTING PAGES */}
-          <Route path="/admin/*" element={
-            <ProtectedRoute>
-              <AdminLayout>
-                <Routes>
-                  <Route index element={<Navigate to="/admin/dashboard" replace />} />
-                  <Route path="dashboard" element={<AdminDashboard />} />
-                  <Route path="products" element={<AdminProducts />} />
-                  {/* Other admin routes will be added as pages are created */}
-                </Routes>
-              </AdminLayout>
-            </ProtectedRoute>
-          } />
-          
-          {/* Fallback Routes */}
-          <Route path="/admin" element={<Navigate to="/admin/dashboard" replace />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </Router>
-    </AuthProvider>
+    <ToastProvider>
+      <AuthProvider>
+        <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+          <Routes>
+            <Route path="/" element={<HomePage />} />
+            <Route path="/products" element={<ProductsPage />} />
+            <Route path="/admin/login" element={<AdminLogin />} />
+            
+            <Route path="/admin/*" element={
+              <ProtectedRoute>
+                <AdminLayout>
+                  <Routes>
+                    <Route index element={<Navigate to="/admin/dashboard" replace />} />
+                    <Route path="dashboard" element={<AdminDashboard />} />
+                    <Route path="products" element={<AdminProducts />} />
+                  </Routes>
+                </AdminLayout>
+              </ProtectedRoute>
+            } />
+            
+            <Route path="/admin" element={<Navigate to="/admin/dashboard" replace />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </Router>
+      </AuthProvider>
+    </ToastProvider>
   )
 }
 
+export { useAuth }
 export default App

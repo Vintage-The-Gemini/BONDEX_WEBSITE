@@ -1,4 +1,4 @@
-// backend/controllers/adminProductController.js
+// File Path: backend/controllers/adminProductController.js
 import Product from '../models/Product.js';
 import Category from '../models/Category.js';
 import cloudinary from '../config/cloudinary.js';
@@ -33,7 +33,7 @@ const generateUniqueSlug = async (name, productId = null) => {
   }
 };
 
-// Helper function to validate and convert category IDs
+// Helper function to validate and convert categories
 const validateAndConvertCategories = async (categoryId, secondaryIds = []) => {
   // Validate primary category
   if (!mongoose.Types.ObjectId.isValid(categoryId)) {
@@ -72,12 +72,22 @@ const validateAndConvertCategories = async (categoryId, secondaryIds = []) => {
 // @desc    Create new product
 // @route   POST /api/admin/products
 // @access  Private (Admin only)
-export const createAdminProduct = async (req, res) => {
+export const createProduct = async (req, res) => {
   try {
     console.log('🎯 Creating new product...');
     console.log('👤 Admin user:', req.user?.email);
     console.log('📝 Request body fields:', Object.keys(req.body));
     console.log('📷 Uploaded files:', req.files?.length || 0);
+    
+    // 🔍 DEBUG: Log all received data
+    console.log('📊 FULL REQUEST DATA:');
+    console.log('Body:', JSON.stringify(req.body, null, 2));
+    console.log('Files:', req.files?.map(f => ({ 
+      name: f.originalname, 
+      size: f.size, 
+      path: f.path,
+      filename: f.filename
+    })));
 
     // Extract and validate required fields
     const {
@@ -106,14 +116,12 @@ export const createAdminProduct = async (req, res) => {
       complianceStandards
     } = req.body;
 
-    // 🔍 DEBUG: Log the received data
-    console.log('📊 Received product data:', {
-      product_name,
-      category,
-      industries: typeof industries === 'string' ? JSON.parse(industries || '[]') : industries,
-      product_price,
-      stock
-    });
+    console.log('📋 EXTRACTED FIELDS:');
+    console.log('- product_name:', product_name);
+    console.log('- category:', category);
+    console.log('- industries:', industries);
+    console.log('- metaTitle:', metaTitle);
+    console.log('- metaTitle length:', metaTitle?.length || 0);
 
     // ✅ VALIDATION: Required fields
     if (!product_name?.trim()) {
@@ -130,15 +138,10 @@ export const createAdminProduct = async (req, res) => {
       });
     }
 
-    if (!actualPrimaryCategory) {
+    if (!category) {
       return res.status(400).json({
         success: false,
-        message: 'Primary category (protection type) is required',
-        debug: {
-          receivedPrimaryCategory: primaryCategory,
-          receivedCategory: category,
-          finalValue: actualPrimaryCategory
-        }
+        message: 'Primary category (protection type) is required'
       });
     }
 
@@ -156,7 +159,18 @@ export const createAdminProduct = async (req, res) => {
       });
     }
 
-    // ✅ CHECK FOR EXISTING PRODUCT BY NAME (case insensitive)
+    // 🔧 FIX META TITLE LENGTH - Ensure it's never over 50 characters
+    let finalMetaTitle = metaTitle;
+    if (!finalMetaTitle || finalMetaTitle.length > 50) {
+      // Generate a safe meta title
+      finalMetaTitle = product_name.length > 30 
+        ? `${product_name.substring(0, 30)}... - Bondex`
+        : `${product_name} - Bondex`;
+    }
+    
+    console.log('🏷️ FINAL META TITLE:', finalMetaTitle, '(Length:', finalMetaTitle.length, ')');
+
+    // ✅ CHECK FOR EXISTING PRODUCT BY NAME
     const existingProduct = await Product.findOne({
       product_name: { $regex: new RegExp(`^${product_name.trim()}$`, 'i') }
     });
@@ -164,221 +178,162 @@ export const createAdminProduct = async (req, res) => {
     if (existingProduct) {
       return res.status(400).json({
         success: false,
-        message: `Product with name "${product_name}" already exists. Please use a different name.`,
-        suggestion: `Try: "${product_name} - ${new Date().getFullYear()}" or "${product_name} - ${product_brand || 'New Model'}"`
+        message: `Product with name "${product_name}" already exists.`,
+        suggestion: `Try: "${product_name} - ${new Date().getFullYear()}"`
       });
     }
 
+    // ✅ VALIDATE CATEGORIES
+    const secondaryCategories = industries ? 
+      (typeof industries === 'string' ? JSON.parse(industries) : industries) : 
+      [];
+    
+    console.log('📂 PROCESSING CATEGORIES:');
+    console.log('- Primary (category):', category);
+    console.log('- Secondary (industries):', secondaryCategories);
+    
+    const categoryData = await validateAndConvertCategories(category, secondaryCategories);
+    console.log('✅ Category validation result:', categoryData);
+
     // ✅ GENERATE UNIQUE SLUG
-    const uniqueSlug = await generateUniqueSlug(product_name);
-    console.log('🔗 Generated unique slug:', uniqueSlug);
+    const slug = await generateUniqueSlug(product_name);
+    console.log('🔗 Generated slug:', slug);
 
-    // ✅ VALIDATE AND CONVERT CATEGORIES - FIXED
-    const parsedSecondaryCategories = (() => {
-      if (typeof actualSecondaryCategories === 'string') {
-        try {
-          return JSON.parse(actualSecondaryCategories || '[]');
-        } catch {
-          return actualSecondaryCategories.split(',').filter(Boolean);
-        }
-      }
-      return Array.isArray(actualSecondaryCategories) ? actualSecondaryCategories : [];
-    })();
-
-    const categoryData = await validateAndConvertCategories(actualPrimaryCategory, parsedSecondaryCategories);
-    console.log('📂 Category validation result:', categoryData);
-
-    // ✅ HANDLE IMAGE UPLOADS
-    let uploadedImages = [];
+    // 🔧 FIX IMAGE PROCESSING - Use multer+cloudinary uploaded files properly
+    console.log('📸 PROCESSING IMAGES...');
+    let productImages = [];
+    
     if (req.files && req.files.length > 0) {
-      console.log('📷 Processing image uploads...');
+      console.log(`Found ${req.files.length} uploaded files`);
       
-      for (const file of req.files) {
-        try {
-          console.log(`🔄 Uploading image: ${file.originalname}`);
-          
-          const result = await cloudinary.uploader.upload(file.path, {
-            folder: 'safety-equipment/products',
-            transformation: [
-              { width: 800, height: 800, crop: 'limit', quality: 'auto:good' },
-              { format: 'auto' }
-            ]
-          });
-
-          uploadedImages.push({
-            url: result.secure_url,
-            public_id: result.public_id,
-            alt: `${product_name} - Product Image`,
-            isMain: uploadedImages.length === 0 // First image is main
-          });
-
-          console.log(`✅ Image uploaded: ${result.public_id}`);
-        } catch (uploadError) {
-          console.error(`❌ Image upload failed for ${file.originalname}:`, uploadError);
-          throw new Error(`Failed to upload image: ${file.originalname}`);
-        }
+      for (let i = 0; i < req.files.length; i++) {
+        const file = req.files[i];
+        console.log(`Processing file ${i + 1}:`, {
+          originalname: file.originalname,
+          filename: file.filename,
+          path: file.path,
+          size: file.size
+        });
+        
+        // 🔧 FIX: Use correct field names that match Product model
+        const imageData = {
+          url: file.path,          // Cloudinary URL from multer
+          public_id: file.filename, // 🔧 FIX: Use 'public_id' not 'publicId'
+          alt: `${product_name} - Image ${i + 1}`,
+          isMain: i === 0          // First image is main
+        };
+        
+        console.log('📷 Image data created:', imageData);
+        productImages.push(imageData);
       }
     }
 
-    if (uploadedImages.length === 0) {
+    // ✅ VALIDATE: At least one image is required
+    if (productImages.length === 0) {
       return res.status(400).json({
         success: false,
         message: 'At least one product image is required'
       });
     }
 
-    const parseArrayField = (field, fieldName) => {
+    console.log('✅ Final image array:', productImages);
+
+    // ✅ PARSE ARRAY FIELDS
+    const parseArrayField = (field) => {
       if (!field) return [];
-      if (Array.isArray(field)) return field.filter(item => item?.trim());
-      if (typeof field === 'string') {
-        try {
-          const parsed = JSON.parse(field);
-          return Array.isArray(parsed) ? parsed.filter(item => item?.trim()) : [];
-        } catch {
-          return field.split(',').map(item => item.trim()).filter(Boolean);
-        }
+      if (Array.isArray(field)) return field;
+      try {
+        return JSON.parse(field);
+      } catch {
+        return typeof field === 'string' ? field.split(',').map(item => item.trim()) : [];
       }
-      return [];
     };
 
-    const parseSpecifications = (spec) => {
-      if (!spec) return {};
-      if (typeof spec === 'object' && !Array.isArray(spec)) return spec;
-      if (typeof spec === 'string') {
-        try {
-          const parsed = JSON.parse(spec);
-          if (Array.isArray(parsed)) {
-            // Convert array format [{key, value}] to object
-            return parsed.reduce((acc, item) => {
-              if (item && item.key && item.value) {
-                acc[item.key] = item.value;
-              }
-              return acc;
-            }, {});
-          }
-          return parsed;
-        } catch {
-          // Handle comma-separated format "key:value,key2:value2"
-          return spec.split(',').reduce((acc, item) => {
-            const [key, value] = item.split(':').map(s => s?.trim());
-            if (key && value) {
-              acc[key] = value;
-            }
-            return acc;
-          }, {});
-        }
-      }
-      return {};
-    };
-
-    // ✅ CREATE PRODUCT DATA
+    // ✅ CREATE PRODUCT OBJECT
     const productData = {
-      // Basic Information
       product_name: product_name.trim(),
       product_description: product_description.trim(),
       product_brand: product_brand?.trim() || '',
-      slug: uniqueSlug,
-
-      // Categories (mapped from frontend fields)
+      slug,
       primaryCategory: categoryData.primaryCategory,
       secondaryCategories: categoryData.secondaryCategories,
       allCategories: categoryData.allCategories,
-      category: categoryData.primaryCategory, // Legacy field
-
-      // Pricing & Inventory
       product_price: parseFloat(product_price),
       stock: parseInt(stock),
       lowStockThreshold: parseInt(lowStockThreshold),
-
-      // Sale Configuration
-      isOnSale: isOnSale === 'true' || isOnSale === true,
-      ...(salePrice && { salePrice: parseFloat(salePrice) }),
-      ...(saleStartDate && { saleStartDate: new Date(saleStartDate) }),
-      ...(saleEndDate && { saleEndDate: new Date(saleEndDate) }),
-
-      // Status & Features
+      images: productImages, // 🔧 FIX: Use processed image array
       status,
-      isFeatured: isFeatured === 'true' || isFeatured === true,
-      isNewArrival: isNewArrival === 'true' || isNewArrival === true,
-
-      // Images
-      images: uploadedImages,
-      mainImage: uploadedImages[0]?.url || '',
-      product_image: uploadedImages[0]?.url || '',
-
-      // SEO Fields
-      metaTitle: metaTitle?.trim() || product_name,
-      metaDescription: metaDescription?.trim() || product_description.substring(0, 160),
-      keywords: parseArrayField(keywords, 'keywords'),
-
-      // Product Details
-      features: parseArrayField(features, 'features'),
-      specifications: parseSpecifications(specifications),
-      tags: parseArrayField(tags, 'tags'),
-      certifications: parseArrayField(certifications, 'certifications'),
-      complianceStandards: parseArrayField(complianceStandards, 'complianceStandards'),
-
-      // Metadata
+      isFeatured: isFeatured === true || isFeatured === 'true',
+      isNewArrival: isNewArrival === true || isNewArrival === 'true',
       createdBy: req.user._id,
-      lastUpdatedBy: req.user._id
+      
+      // SEO fields - with fixed meta title
+      metaTitle: finalMetaTitle, // 🔧 FIX: Use safe meta title
+      metaDescription: metaDescription?.trim() || `${product_name} from Bondex Safety Kenya. Professional safety equipment.`,
+      keywords: parseArrayField(keywords),
+      
+      // Optional fields
+      features: parseArrayField(features),
+      specifications: parseArrayField(specifications),
+      tags: parseArrayField(tags),
+      certifications: parseArrayField(certifications),
+      complianceStandards: parseArrayField(complianceStandards),
+      
+      // Sale data
+      isOnSale: isOnSale === true || isOnSale === 'true',
+      ...(isOnSale && salePrice && {
+        salePrice: parseFloat(salePrice),
+        saleStartDate: saleStartDate ? new Date(saleStartDate) : new Date(),
+        saleEndDate: saleEndDate ? new Date(saleEndDate) : null
+      })
     };
 
-    console.log('💾 Creating product with data:', {
-      name: productData.product_name,
-      slug: productData.slug,
-      primaryCategory: productData.primaryCategory,
-      secondaryCategories: productData.secondaryCategories,
-      images: productData.images.length
-    });
+    console.log('💾 FINAL PRODUCT DATA:');
+    console.log('- Name:', productData.product_name);
+    console.log('- Meta Title:', productData.metaTitle, '(Length:', productData.metaTitle.length, ')');
+    console.log('- Images count:', productData.images.length);
+    console.log('- Image details:', productData.images);
 
     // ✅ CREATE PRODUCT
-    const product = new Product(productData);
-    await product.save();
+    const product = await Product.create(productData);
+    console.log('✅ Product created in database with ID:', product._id);
 
-    // ✅ POPULATE REFERENCES FOR RESPONSE
+    // ✅ POPULATE AND RETURN
     const populatedProduct = await Product.findById(product._id)
       .populate('primaryCategory', 'name slug type icon')
       .populate('secondaryCategories', 'name slug type icon')
       .populate('createdBy', 'email firstName lastName');
 
-    console.log('✅ Product created successfully:', populatedProduct.product_name);
+    console.log(`✅ Product created successfully: ${product.product_name}`);
 
     res.status(201).json({
       success: true,
-      message: '🎯 Product created successfully with multi-category targeting!',
+      message: 'Product created successfully',
       data: populatedProduct,
-      stats: {
-        totalCategories: parsedSecondaryCategories.length + 1,
-        seoOptimized: !!(productData.metaTitle && productData.metaDescription),
-        imagesUploaded: uploadedImages.length,
-        discoveryPaths: parsedSecondaryCategories.length + 1
+      debug: {
+        imageCount: productImages.length,
+        metaTitleLength: finalMetaTitle.length,
+        categoryCount: categoryData.allCategories.length
       }
     });
 
   } catch (error) {
     console.error('❌ PRODUCT CREATION ERROR:', error);
-    
-    // Clean up uploaded images if product creation fails
-    if (req.files && req.files.length > 0) {
-      console.log('🧹 Cleaning up uploaded images...');
-      for (const file of req.files) {
-        try {
-          if (file.filename) {
-            await cloudinary.uploader.destroy(file.filename);
-            console.log('🗑️ Cleaned up image:', file.filename);
-          }
-        } catch (cleanupError) {
-          console.error('❌ Image cleanup error:', cleanupError);
-        }
-      }
-    }
+    console.error('Error name:', error.name);
+    console.error('Error message:', error.message);
+    console.error('Error stack:', error.stack);
 
     // Handle specific error types
     if (error.name === 'ValidationError') {
-      const messages = Object.values(error.errors).map(err => err.message);
+      console.error('📋 VALIDATION ERROR DETAILS:');
+      const messages = Object.values(error.errors).map(err => {
+        console.error(`- ${err.path}: ${err.message}`);
+        return err.message;
+      });
+      
       return res.status(400).json({
         success: false,
-        message: 'Database validation error',
+        message: 'Product validation failed',
         errors: messages,
         details: error.errors
       });
@@ -390,12 +345,9 @@ export const createAdminProduct = async (req, res) => {
       
       return res.status(400).json({
         success: false,
-        message: `Product with ${duplicateField} "${duplicateValue}" already exists. Please use a different ${duplicateField}.`,
+        message: `Product with this ${duplicateField} already exists.`,
         field: duplicateField,
-        value: duplicateValue,
-        suggestion: duplicateField === 'product_name' 
-          ? `Try: "${duplicateValue} - ${new Date().getFullYear()}" or add model/version number`
-          : `Try modifying the ${duplicateField}`
+        value: duplicateValue
       });
     }
 
@@ -499,8 +451,7 @@ export const getAdminProduct = async (req, res) => {
     const product = await Product.findById(req.params.id)
       .populate('primaryCategory', 'name slug type icon')
       .populate('secondaryCategories', 'name slug type icon')
-      .populate('createdBy', 'email firstName lastName')
-      .populate('lastUpdatedBy', 'email firstName lastName');
+      .populate('createdBy', 'email firstName lastName');
 
     if (!product) {
       return res.status(404).json({
@@ -516,14 +467,6 @@ export const getAdminProduct = async (req, res) => {
 
   } catch (error) {
     console.error('❌ Error fetching admin product:', error);
-    
-    if (error.name === 'CastError') {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid product ID'
-      });
-    }
-
     res.status(500).json({
       success: false,
       message: 'Error fetching product',
@@ -532,19 +475,15 @@ export const getAdminProduct = async (req, res) => {
   }
 };
 
-// ... (other controller methods remain the same)
-
-// @desc    Update product
+// @desc    Update admin product
 // @route   PUT /api/admin/products/:id
 // @access  Private (Admin only)
 export const updateAdminProduct = async (req, res) => {
   try {
-    console.log('🔄 Updating product:', req.params.id);
-    console.log('👤 Admin user:', req.user?.email);
-    console.log('📝 Update data:', Object.keys(req.body));
-
+    console.log(`🔄 Updating product ID: ${req.params.id}`);
+    console.log('📝 Update data received:', req.body);
+    
     const product = await Product.findById(req.params.id);
-
     if (!product) {
       return res.status(404).json({
         success: false,
@@ -552,75 +491,70 @@ export const updateAdminProduct = async (req, res) => {
       });
     }
 
-    // Handle image uploads if present
-    let uploadedImages = [];
-    if (req.files && req.files.length > 0) {
-      console.log('📷 Processing image uploads for update...');
-      
-      for (const file of req.files) {
-        try {
-          const result = await cloudinary.uploader.upload(file.path, {
-            folder: 'safety-equipment/products',
-            transformation: [
-              { width: 800, height: 800, crop: 'limit', quality: 'auto:good' },
-              { format: 'auto' }
-            ]
-          });
+    const {
+      product_name,
+      product_description,
+      product_brand,
+      category,
+      industries,
+      product_price,
+      stock,
+      lowStockThreshold,
+      status,
+      isFeatured,
+      isNewArrival,
+      sku
+    } = req.body;
 
-          uploadedImages.push({
-            url: result.secure_url,
-            public_id: result.public_id,
-            alt: `${req.body.product_name || product.product_name} - Product Image`,
-            isMain: uploadedImages.length === 0
-          });
-
-          console.log(`✅ Image uploaded: ${result.public_id}`);
-        } catch (uploadError) {
-          console.error(`❌ Image upload failed:`, uploadError);
-          throw new Error(`Failed to upload image: ${file.originalname}`);
-        }
-      }
+    // Validate categories if provided
+    let categoryData = null;
+    if (category) {
+      const secondaryCategories = industries ? 
+        (typeof industries === 'string' ? JSON.parse(industries) : industries) : 
+        [];
+      categoryData = await validateAndConvertCategories(category, secondaryCategories);
+      console.log('📂 Updated category data:', categoryData);
     }
 
-    // Prepare update data
-    const updateData = { ...req.body };
+    // Build update object with only provided fields
+    const updateData = {};
     
-    // Handle categories if provided
-    if (req.body.category) {
-      updateData.primaryCategory = req.body.category;
+    if (product_name) {
+      updateData.product_name = product_name.trim();
+      updateData.slug = await generateUniqueSlug(product_name, product._id);
     }
-    if (req.body.industries) {
-      const parsedSecondaryCategories = typeof req.body.industries === 'string' 
-        ? JSON.parse(req.body.industries || '[]') 
-        : (Array.isArray(req.body.industries) ? req.body.industries : []);
-      updateData.secondaryCategories = parsedSecondaryCategories;
-    }
-
-    // Add uploaded images to existing images
-    if (uploadedImages.length > 0) {
-      updateData.images = [...(product.images || []), ...uploadedImages];
-      updateData.mainImage = uploadedImages[0].url;
-      updateData.product_image = uploadedImages[0].url;
-    }
-
-    // Update slug if name changed
-    if (req.body.product_name && req.body.product_name !== product.product_name) {
-      updateData.slug = await generateUniqueSlug(req.body.product_name, req.params.id);
+    if (product_description) updateData.product_description = product_description.trim();
+    if (product_brand !== undefined) updateData.product_brand = product_brand?.trim() || '';
+    if (product_price !== undefined) updateData.product_price = parseFloat(product_price);
+    if (stock !== undefined) updateData.stock = parseInt(stock);
+    if (lowStockThreshold !== undefined) updateData.lowStockThreshold = parseInt(lowStockThreshold);
+    if (status) updateData.status = status;
+    if (sku !== undefined) updateData.sku = sku?.trim() || '';
+    if (isFeatured !== undefined) updateData.isFeatured = isFeatured === true || isFeatured === 'true';
+    if (isNewArrival !== undefined) updateData.isNewArrival = isNewArrival === true || isNewArrival === 'true';
+    
+    // Category updates
+    if (categoryData) {
+      updateData.primaryCategory = categoryData.primaryCategory;
+      updateData.secondaryCategories = categoryData.secondaryCategories;
+      updateData.allCategories = categoryData.allCategories;
     }
 
+    updateData.updatedAt = new Date();
     updateData.lastUpdatedBy = req.user._id;
+
+    console.log('💾 Final update data:', updateData);
 
     const updatedProduct = await Product.findByIdAndUpdate(
       req.params.id,
       updateData,
-      { 
-        new: true,
-        runValidators: true
-      }
-    ).populate('primaryCategory', 'name slug type icon')
-     .populate('secondaryCategories', 'name slug type icon');
+      { new: true, runValidators: true }
+    )
+    .populate('primaryCategory', 'name slug type icon')
+    .populate('secondaryCategories', 'name slug type icon')
+    .populate('createdBy', 'email firstName lastName');
 
-    console.log('✅ Product updated successfully:', updatedProduct.product_name);
+    console.log(`✅ Product updated: ${updatedProduct.product_name}`);
 
     res.json({
       success: true,
@@ -629,21 +563,15 @@ export const updateAdminProduct = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Update Product Error:', error);
+    console.error('❌ Error updating product:', error);
     
     if (error.name === 'ValidationError') {
       const messages = Object.values(error.errors).map(err => err.message);
       return res.status(400).json({
         success: false,
-        message: 'Validation Error',
-        errors: messages
-      });
-    }
-
-    if (error.name === 'CastError') {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid product ID'
+        message: 'Product validation failed',
+        errors: messages,
+        details: error.errors
       });
     }
 
@@ -655,16 +583,14 @@ export const updateAdminProduct = async (req, res) => {
   }
 };
 
-// @desc    Delete product
+// @desc    Delete admin product
 // @route   DELETE /api/admin/products/:id
 // @access  Private (Admin only)
 export const deleteAdminProduct = async (req, res) => {
   try {
-    console.log('🗑️ Deleting product:', req.params.id);
-    console.log('👤 Admin user:', req.user?.email);
-
+    console.log(`🗑️ Deleting product ID: ${req.params.id}`);
+    
     const product = await Product.findById(req.params.id);
-
     if (!product) {
       return res.status(404).json({
         success: false,
@@ -674,40 +600,30 @@ export const deleteAdminProduct = async (req, res) => {
 
     // Delete images from Cloudinary
     if (product.images && product.images.length > 0) {
-      console.log('🧹 Cleaning up product images...');
+      console.log(`🗑️ Deleting ${product.images.length} images from Cloudinary...`);
       for (const image of product.images) {
         try {
           if (image.public_id) {
             await cloudinary.uploader.destroy(image.public_id);
-            console.log('🗑️ Deleted image:', image.public_id);
+            console.log(`✅ Deleted image: ${image.public_id}`);
           }
         } catch (deleteError) {
-          console.error('❌ Image deletion error:', deleteError);
+          console.error(`❌ Failed to delete image ${image.public_id}:`, deleteError);
         }
       }
     }
 
-    // Delete the product
     await Product.findByIdAndDelete(req.params.id);
-
-    console.log('✅ Product deleted successfully:', product.product_name);
+    
+    console.log(`✅ Product deleted: ${product.product_name}`);
 
     res.json({
       success: true,
-      message: 'Product deleted successfully',
-      data: { id: req.params.id }
+      message: 'Product deleted successfully'
     });
 
   } catch (error) {
-    console.error('❌ Delete Product Error:', error);
-    
-    if (error.name === 'CastError') {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid product ID'
-      });
-    }
-
+    console.error('❌ Error deleting product:', error);
     res.status(500).json({
       success: false,
       message: 'Error deleting product',
@@ -715,10 +631,3 @@ export const deleteAdminProduct = async (req, res) => {
     });
   }
 };
-
-// ✅ EXPORT ALIASES FOR ROUTES (matching what routes expect)
-export { createAdminProduct as createProduct };
-export { getAdminProducts as getProducts }; 
-export { getAdminProduct as getProduct };
-export { updateAdminProduct as updateProduct };
-export { deleteAdminProduct as deleteProduct };

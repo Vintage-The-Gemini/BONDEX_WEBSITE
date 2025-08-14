@@ -1,7 +1,9 @@
 // File Path: frontend/src/components/admin/AddProductForm.jsx
 import React, { useState } from 'react'
+import { useToast } from '../ui/Toast'
 
 const AddProductForm = ({ onClose, onSuccess, categories }) => {
+  const { toast } = useToast()
   const [activeTab, setActiveTab] = useState('basic')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -10,8 +12,8 @@ const AddProductForm = ({ onClose, onSuccess, categories }) => {
     product_name: '',
     product_description: '',
     product_price: '',
-    primaryCategory: '',
-    secondaryCategories: [],
+    category: '', // 🔧 FIXED: Changed from 'primaryCategory' to 'category'
+    industries: [], // 🔧 FIXED: Changed from 'secondaryCategories' to 'industries'
     stock: '',
     sku: '',
     product_brand: '',
@@ -30,29 +32,43 @@ const AddProductForm = ({ onClose, onSuccess, categories }) => {
 
   // Separate categories by type
   const protectionTypes = categories.filter(cat => cat.type === 'protection_type')
-  const industries = categories.filter(cat => cat.type === 'industry')
+  const industriesList = categories.filter(cat => cat.type === 'industry')
 
   const handleInputChange = (e) => {
     const { name, value } = e.target
     setFormData(prev => {
       const updated = { ...prev, [name]: value }
       
-      // Auto-generate SEO content when product name changes
+      // 🔧 FIX: AUTO-GENERATE ALL SEO - No thinking required!
       if (name === 'product_name' && value) {
         const slug = value.toLowerCase()
           .replace(/[^a-z0-9\s]/g, '')
           .replace(/\s+/g, '-')
           .trim()
         
-        const metaTitle = `${value} - Professional Safety Equipment | Bondex Safety`
-        const metaDescription = `Professional ${value.toLowerCase()} from Bondex Safety. High-quality safety equipment for workplace protection. Shop now in Kenya.`
+        // Smart title generation - max 30 chars to be EXTRA safe
+        const metaTitle = value.length > 20 
+          ? `${value.substring(0, 20)}... - Bondex`
+          : `${value} - Bondex`
         
-        setSeoData(prev => ({
-          ...prev,
+        const metaDescription = `${value} from Bondex Safety Kenya. Professional safety equipment for workplace protection. KES pricing available. Shop now!`
+        
+        // Auto-generate keywords from product name
+        const keywords = [
+          value.toLowerCase(),
+          'safety equipment',
+          'PPE Kenya',
+          'workplace safety',
+          'Bondex Safety'
+        ].join(', ')
+        
+        // ALWAYS override SEO - don't preserve old values
+        setSeoData({
           slug,
-          metaTitle: prev.metaTitle || metaTitle,
-          metaDescription: prev.metaDescription || metaDescription
-        }))
+          metaTitle,
+          metaDescription,
+          keywords
+        })
       }
       
       return updated
@@ -67,9 +83,9 @@ const AddProductForm = ({ onClose, onSuccess, categories }) => {
   const handleSecondaryCategories = (categoryId) => {
     setFormData(prev => ({
       ...prev,
-      secondaryCategories: prev.secondaryCategories.includes(categoryId)
-        ? prev.secondaryCategories.filter(id => id !== categoryId)
-        : [...prev.secondaryCategories, categoryId]
+      industries: prev.industries.includes(categoryId) // 🔧 FIXED: Changed to 'industries'
+        ? prev.industries.filter(id => id !== categoryId)
+        : [...prev.industries, categoryId]
     }))
   }
 
@@ -130,37 +146,76 @@ const AddProductForm = ({ onClose, onSuccess, categories }) => {
     setError('')
 
     try {
+      console.log('🚀 Submitting product with data:', formData)
+      
+      // ✅ VALIDATION: Check required fields before sending
+      if (!formData.product_name?.trim()) {
+        setError('Product name is required')
+        return
+      }
+      
+      if (!formData.product_description?.trim()) {
+        setError('Product description is required')
+        return
+      }
+      
+      if (!formData.category) {
+        setError('Primary category (protection type) is required')
+        return
+      }
+      
+      if (!formData.product_price || parseFloat(formData.product_price) <= 0) {
+        setError('Valid product price is required')
+        return
+      }
+
+      // 🔧 FIX: Validate images are uploaded
+      if (imageFiles.length === 0) {
+        setError('At least one product image is required')
+        return
+      }
+
       // Create FormData for file upload
       const formDataToSend = new FormData()
       
-      // Add all form fields
-      Object.keys(formData).forEach(key => {
-        if (key === 'secondaryCategories') {
-          formDataToSend.append(key, JSON.stringify(formData[key]))
-        } else {
-          formDataToSend.append(key, formData[key])
-        }
-      })
+      // 🔧 FIXED: Add form fields with correct names that match backend expectations
+      formDataToSend.append('product_name', formData.product_name.trim())
+      formDataToSend.append('product_description', formData.product_description.trim())
+      formDataToSend.append('product_price', parseFloat(formData.product_price))
+      formDataToSend.append('category', formData.category) // Backend expects 'category'
+      formDataToSend.append('industries', JSON.stringify(formData.industries)) // Backend expects 'industries'
+      formDataToSend.append('stock', parseInt(formData.stock) || 0)
+      formDataToSend.append('lowStockThreshold', 10)
+      formDataToSend.append('status', formData.status)
+      
+      // Optional fields
+      if (formData.sku?.trim()) {
+        formDataToSend.append('sku', formData.sku.trim())
+      }
+      if (formData.product_brand?.trim()) {
+        formDataToSend.append('product_brand', formData.product_brand.trim())
+      }
 
-      // Add SEO data
+      // Add SEO data (all auto-generated, no validation needed)
       Object.keys(seoData).forEach(key => {
-        if (key === 'keywords' && seoData[key]) {
-          const keywordsArray = seoData[key].split(',').map(k => k.trim()).filter(k => k)
-          formDataToSend.append(key, JSON.stringify(keywordsArray))
-        } else {
-          formDataToSend.append(key, seoData[key] || '')
+        if (seoData[key]) {
+          if (key === 'keywords') {
+            formDataToSend.append(key, seoData[key]) // Send as string, not JSON
+          } else {
+            formDataToSend.append(key, seoData[key])
+          }
         }
       })
-
-      // Add price and stock as numbers
-      formDataToSend.set('product_price', parseFloat(formData.product_price))
-      formDataToSend.set('stock', parseInt(formData.stock) || 0)
-      formDataToSend.set('lowStockThreshold', 10)
 
       // Add images
       imageFiles.forEach((file) => {
         formDataToSend.append('images', file)
       })
+
+      console.log('📦 FormData being sent:')
+      for (let pair of formDataToSend.entries()) {
+        console.log(`${pair[0]}:`, pair[1])
+      }
 
       const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/admin/products`, {
         method: 'POST',
@@ -171,16 +226,22 @@ const AddProductForm = ({ onClose, onSuccess, categories }) => {
       })
 
       const result = await response.json()
+      console.log('📥 Server response:', result)
       
       if (result.success) {
-        alert('Product added successfully!')
+        toast.success('🎉 Product added successfully!', 5000)
         onSuccess()
+        onClose()
       } else {
         setError(result.message || 'Failed to add product')
+        toast.error('❌ ' + (result.message || 'Failed to add product'))
+        console.error('❌ Server error:', result)
       }
     } catch (err) {
-      console.error('Failed to add product:', err)
-      setError('Failed to add product. Please try again.')
+      console.error('❌ Failed to add product:', err)
+      const errorMessage = 'Failed to add product. Please try again.'
+      setError(errorMessage)
+      toast.error('❌ ' + errorMessage)
     } finally {
       setLoading(false)
     }
@@ -318,11 +379,12 @@ const AddProductForm = ({ onClose, onSuccess, categories }) => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Description *</label>
                   <textarea
                     name="product_description"
                     value={formData.product_description}
                     onChange={handleInputChange}
+                    required
                     rows="4"
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                     placeholder="Detailed product description, features, specifications..."
@@ -337,8 +399,8 @@ const AddProductForm = ({ onClose, onSuccess, categories }) => {
                   <div className="mb-4">
                     <label className="block text-sm font-medium text-gray-700 mb-2">Primary Category (Protection Type) *</label>
                     <select
-                      name="primaryCategory"
-                      value={formData.primaryCategory}
+                      name="category" // 🔧 FIXED: Changed from 'primaryCategory' to 'category'
+                      value={formData.category}
                       onChange={handleInputChange}
                       required
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
@@ -357,11 +419,11 @@ const AddProductForm = ({ onClose, onSuccess, categories }) => {
                     <label className="block text-sm font-medium text-gray-700 mb-2">Secondary Categories (Industries/Sectors)</label>
                     <p className="text-xs text-gray-500 mb-3">Select all industries where this product is used</p>
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                      {industries.map(category => (
+                      {industriesList.map(category => (
                         <label key={category._id} className="flex items-center space-x-2 cursor-pointer">
                           <input
                             type="checkbox"
-                            checked={formData.secondaryCategories.includes(category._id)}
+                            checked={formData.industries.includes(category._id)} // 🔧 FIXED: Changed to 'industries'
                             onChange={() => handleSecondaryCategories(category._id)}
                             className="rounded border-gray-300 text-orange-500 focus:ring-orange-500"
                           />
@@ -380,7 +442,10 @@ const AddProductForm = ({ onClose, onSuccess, categories }) => {
             {activeTab === 'images' && (
               <div className="space-y-6">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Upload Images</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Upload Images *
+                    <span className="text-red-500 text-xs ml-1">(At least 1 required)</span>
+                  </label>
                   <input
                     type="file"
                     multiple
@@ -393,140 +458,98 @@ const AddProductForm = ({ onClose, onSuccess, categories }) => {
                   </p>
                 </div>
 
-                {/* Image Previews */}
+                {/* Image Preview */}
                 {images.length > 0 && (
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     {images.map((image, index) => (
-                      <div key={index} className="relative">
+                      <div key={index} className="relative group">
                         <img
                           src={image.preview}
-                          alt={`Preview ${index + 1}`}
+                          alt={`Product ${index + 1}`}
                           className="w-full h-32 object-cover rounded-lg border"
                         />
                         <button
                           type="button"
                           onClick={() => removeImage(index)}
-                          className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs hover:bg-red-600"
+                          className="absolute top-2 right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm opacity-0 group-hover:opacity-100 transition-opacity"
                         >
                           ×
                         </button>
                         {index === 0 && (
-                          <span className="absolute bottom-1 left-1 bg-blue-500 text-white text-xs px-2 py-1 rounded">
+                          <div className="absolute bottom-2 left-2 bg-orange-500 text-white text-xs px-2 py-1 rounded">
                             Main
-                          </span>
+                          </div>
                         )}
                       </div>
                     ))}
                   </div>
                 )}
-
-                {images.length === 0 && (
-                  <div className="text-center py-12 border-2 border-dashed border-gray-300 rounded-lg">
-                    <span className="text-6xl">📸</span>
-                    <h3 className="text-lg font-medium text-gray-900 mt-4">No images uploaded</h3>
-                    <p className="text-gray-500">Add product images to showcase your safety equipment</p>
-                  </div>
-                )}
               </div>
             )}
 
-            {/* SEO Tab */}
+            {/* SEO Tab - AUTO-GENERATED */}
             {activeTab === 'seo' && (
               <div className="space-y-6">
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <h4 className="text-lg font-semibold text-gray-900 mb-4">SEO Optimization</h4>
-                  
-                  <div className="grid grid-cols-1 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Meta Title</label>
-                      <input
-                        type="text"
-                        value={seoData.metaTitle}
-                        onChange={(e) => handleSEOChange('metaTitle', e.target.value)}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                        placeholder="SEO title for search engines"
-                        maxLength={60}
-                      />
-                      <p className="text-xs text-gray-500 mt-1">{seoData.metaTitle.length}/60 characters</p>
-                    </div>
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
+                  <p className="text-green-700 text-sm">
+                    ✅ SEO automatically generated! No manual input needed.
+                  </p>
+                </div>
 
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Meta Description</label>
-                      <textarea
-                        value={seoData.metaDescription}
-                        onChange={(e) => handleSEOChange('metaDescription', e.target.value)}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                        placeholder="SEO description for search engines"
-                        rows="3"
-                        maxLength={160}
-                      />
-                      <p className="text-xs text-gray-500 mt-1">{seoData.metaDescription.length}/160 characters</p>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">URL Slug</label>
-                      <div className="flex">
-                        <span className="inline-flex items-center px-3 rounded-l-lg border border-r-0 border-gray-300 bg-gray-50 text-gray-500 text-sm">
-                          bondexsafety.com/products/
-                        </span>
-                        <input
-                          type="text"
-                          value={seoData.slug}
-                          onChange={(e) => handleSEOChange('slug', e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-'))}
-                          className="flex-1 px-4 py-2 border border-gray-300 rounded-r-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                          placeholder="product-url-slug"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Keywords</label>
-                      <input
-                        type="text"
-                        value={seoData.keywords}
-                        onChange={(e) => handleSEOChange('keywords', e.target.value)}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                        placeholder="safety helmet, head protection, construction safety (comma separated)"
-                      />
-                      <p className="text-xs text-gray-500 mt-1">Separate keywords with commas</p>
-                    </div>
-                  </div>
-
-                  {/* Auto-Generate Button */}
-                  <div className="mt-6 pt-4 border-t">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (formData.product_name) {
-                          const slug = formData.product_name.toLowerCase()
-                            .replace(/[^a-z0-9\s]/g, '')
-                            .replace(/\s+/g, '-')
-                            .trim()
-                          
-                          const metaTitle = `${formData.product_name} - Professional Safety Equipment | Bondex Safety`
-                          const metaDescription = `Professional ${formData.product_name.toLowerCase()} from Bondex Safety. High-quality safety equipment for workplace protection. Shop now in Kenya.`
-                          const keywords = `${formData.product_name.toLowerCase()}, safety equipment, PPE, Kenya, workplace safety`
-                          
-                          setSeoData({
-                            metaTitle,
-                            metaDescription,
-                            slug,
-                            keywords
-                          })
-                        }
-                      }}
-                      className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-                    >
-                      🤖 Auto-Generate SEO Content
-                    </button>
-                    <p className="text-xs text-gray-500 mt-2">
-                      Automatically generate optimized SEO content based on product information
+                <div className="grid grid-cols-1 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Meta Title (Auto-Generated)</label>
+                    <input
+                      type="text"
+                      value={seoData.metaTitle}
+                      readOnly
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-600"
+                      placeholder="Will auto-generate when you enter product name"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      ✅ Optimized length: {seoData.metaTitle.length} characters
                     </p>
                   </div>
 
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Meta Description (Auto-Generated)</label>
+                    <textarea
+                      value={seoData.metaDescription}
+                      readOnly
+                      rows="3"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-600"
+                      placeholder="Will auto-generate when you enter product name"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      ✅ Optimized length: {seoData.metaDescription.length} characters
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Keywords (Auto-Generated)</label>
+                    <input
+                      type="text"
+                      value={seoData.keywords}
+                      readOnly
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-600"
+                      placeholder="Will auto-generate when you enter product name"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">URL Slug (Auto-Generated)</label>
+                    <input
+                      type="text"
+                      value={seoData.slug}
+                      readOnly
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-600"
+                      placeholder="Will auto-generate when you enter product name"
+                    />
+                  </div>
+
                   {/* SEO Preview */}
-                  <div className="mt-6 pt-4 border-t">
-                    <h5 className="text-md font-medium text-gray-900 mb-4">Search Engine Preview</h5>
+                  <div className="border-t pt-6">
+                    <h5 className="text-md font-medium text-gray-900 mb-4">🔍 Google Search Preview</h5>
                     
                     <div className="border border-gray-200 rounded-lg p-4 bg-white">
                       <div className="text-blue-600 text-lg hover:underline cursor-pointer">
