@@ -228,13 +228,30 @@ const AddProductForm = ({ onClose, onSuccess, categories }) => {
       const result = await response.json()
       console.log('📥 Server response:', result)
       
+      // 🔍 DETAILED ERROR LOGGING
+      if (!result.success) {
+        console.error('❌ DETAILED ERROR INFO:')
+        console.error('- Message:', result.message)
+        console.error('- Errors:', result.errors)
+        console.error('- Details:', result.details)
+        console.error('- Debug:', result.debug)
+        console.error('- Full response:', JSON.stringify(result, null, 2))
+      }
+      
       if (result.success) {
         toast.success('🎉 Product added successfully!', 5000)
         onSuccess()
         onClose()
       } else {
-        setError(result.message || 'Failed to add product')
-        toast.error('❌ ' + (result.message || 'Failed to add product'))
+        const errorMessage = result.message || 'Failed to add product'
+        setError(errorMessage)
+        
+        // Show detailed error in toast if available
+        const detailedError = result.errors?.length > 0 
+          ? result.errors.join(', ') 
+          : errorMessage
+        
+        toast.error('❌ ' + detailedError)
         console.error('❌ Server error:', result)
       }
     } catch (err) {

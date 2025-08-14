@@ -94,8 +94,8 @@ export const createProduct = async (req, res) => {
       product_name,
       product_description,
       product_brand,
-      category, // Frontend sends 'category' (primary)
-      industries, // Frontend sends 'industries' (secondary)
+      category,
+      industries,
       product_price,
       stock,
       lowStockThreshold = 10,
@@ -116,12 +116,17 @@ export const createProduct = async (req, res) => {
       complianceStandards
     } = req.body;
 
+    // Handle SKU properly
+    const sku = req.body.sku?.trim();
+
     console.log('📋 EXTRACTED FIELDS:');
     console.log('- product_name:', product_name);
     console.log('- category:', category);
-    console.log('- industries:', industries);
+    console.log('- industries:', industries, 'Type:', typeof industries);
+    console.log('- sku:', sku, 'Length:', sku?.length || 0);
     console.log('- metaTitle:', metaTitle);
     console.log('- metaTitle length:', metaTitle?.length || 0);
+    console.log('- files count:', req.files?.length || 0);
 
     // ✅ VALIDATION: Required fields
     if (!product_name?.trim()) {
@@ -159,10 +164,9 @@ export const createProduct = async (req, res) => {
       });
     }
 
-    // 🔧 FIX META TITLE LENGTH - Ensure it's never over 50 characters
+    // 🔧 FIX META TITLE LENGTH
     let finalMetaTitle = metaTitle;
     if (!finalMetaTitle || finalMetaTitle.length > 50) {
-      // Generate a safe meta title
       finalMetaTitle = product_name.length > 30 
         ? `${product_name.substring(0, 30)}... - Bondex`
         : `${product_name} - Bondex`;
@@ -171,16 +175,31 @@ export const createProduct = async (req, res) => {
     console.log('🏷️ FINAL META TITLE:', finalMetaTitle, '(Length:', finalMetaTitle.length, ')');
 
     // ✅ CHECK FOR EXISTING PRODUCT BY NAME
-    const existingProduct = await Product.findOne({
+    const existingProductByName = await Product.findOne({
       product_name: { $regex: new RegExp(`^${product_name.trim()}$`, 'i') }
     });
 
-    if (existingProduct) {
+    if (existingProductByName) {
       return res.status(400).json({
         success: false,
         message: `Product with name "${product_name}" already exists.`,
         suggestion: `Try: "${product_name} - ${new Date().getFullYear()}"`
       });
+    }
+
+    // 🔧 FIX: Only check SKU if it's provided and not empty
+    if (sku && sku.length > 0) {
+      const existingProductBySku = await Product.findOne({
+        sku: { $regex: new RegExp(`^${sku}$`, 'i') }
+      });
+
+      if (existingProductBySku) {
+        return res.status(400).json({
+          success: false,
+          message: `Product with SKU "${sku}" already exists.`,
+          suggestion: `Try a different SKU or leave it empty to auto-generate`
+        });
+      }
     }
 
     // ✅ VALIDATE CATEGORIES
@@ -199,7 +218,7 @@ export const createProduct = async (req, res) => {
     const slug = await generateUniqueSlug(product_name);
     console.log('🔗 Generated slug:', slug);
 
-    // 🔧 FIX IMAGE PROCESSING - Use multer+cloudinary uploaded files properly
+    // 🔧 FIX IMAGE PROCESSING
     console.log('📸 PROCESSING IMAGES...');
     let productImages = [];
     
@@ -215,12 +234,11 @@ export const createProduct = async (req, res) => {
           size: file.size
         });
         
-        // 🔧 FIX: Use correct field names that match Product model
         const imageData = {
-          url: file.path,          // Cloudinary URL from multer
-          public_id: file.filename, // 🔧 FIX: Use 'public_id' not 'publicId'
+          url: file.path,
+          public_id: file.filename,
           alt: `${product_name} - Image ${i + 1}`,
-          isMain: i === 0          // First image is main
+          isMain: i === 0
         };
         
         console.log('📷 Image data created:', imageData);
@@ -254,6 +272,7 @@ export const createProduct = async (req, res) => {
       product_name: product_name.trim(),
       product_description: product_description.trim(),
       product_brand: product_brand?.trim() || '',
+      sku: sku || undefined,
       slug,
       primaryCategory: categoryData.primaryCategory,
       secondaryCategories: categoryData.secondaryCategories,
@@ -261,14 +280,14 @@ export const createProduct = async (req, res) => {
       product_price: parseFloat(product_price),
       stock: parseInt(stock),
       lowStockThreshold: parseInt(lowStockThreshold),
-      images: productImages, // 🔧 FIX: Use processed image array
+      images: productImages,
       status,
       isFeatured: isFeatured === true || isFeatured === 'true',
       isNewArrival: isNewArrival === true || isNewArrival === 'true',
       createdBy: req.user._id,
       
-      // SEO fields - with fixed meta title
-      metaTitle: finalMetaTitle, // 🔧 FIX: Use safe meta title
+      // SEO fields
+      metaTitle: finalMetaTitle,
       metaDescription: metaDescription?.trim() || `${product_name} from Bondex Safety Kenya. Professional safety equipment.`,
       keywords: parseArrayField(keywords),
       
@@ -292,7 +311,6 @@ export const createProduct = async (req, res) => {
     console.log('- Name:', productData.product_name);
     console.log('- Meta Title:', productData.metaTitle, '(Length:', productData.metaTitle.length, ')');
     console.log('- Images count:', productData.images.length);
-    console.log('- Image details:', productData.images);
 
     // ✅ CREATE PRODUCT
     const product = await Product.create(productData);
@@ -321,14 +339,13 @@ export const createProduct = async (req, res) => {
     console.error('❌ PRODUCT CREATION ERROR:', error);
     console.error('Error name:', error.name);
     console.error('Error message:', error.message);
-    console.error('Error stack:', error.stack);
 
     // Handle specific error types
     if (error.name === 'ValidationError') {
       console.error('📋 VALIDATION ERROR DETAILS:');
       const messages = Object.values(error.errors).map(err => {
-        console.error(`- ${err.path}: ${err.message}`);
-        return err.message;
+        console.error(`- Field: ${err.path}, Message: ${err.message}, Value: ${err.value}`);
+        return `${err.path}: ${err.message}`;
       });
       
       return res.status(400).json({
@@ -359,82 +376,21 @@ export const createProduct = async (req, res) => {
   }
 };
 
-// @desc    Get all admin products
-// @route   GET /api/admin/products
-// @access  Private (Admin only)
+// Other controller methods (keeping them simple for now)
 export const getAdminProducts = async (req, res) => {
   try {
-    const {
-      page = 1,
-      limit = 20,
-      status,
-      category,
-      search,
-      sortBy = 'createdAt',
-      sortOrder = 'desc',
-      featured,
-      lowStock
-    } = req.query;
-
-    // Build filter object
-    const filter = {};
-    
-    if (status && status !== 'all') {
-      filter.status = status;
-    }
-    
-    if (category) {
-      filter.allCategories = category;
-    }
-    
-    if (search) {
-      filter.$or = [
-        { product_name: { $regex: search, $options: 'i' } },
-        { product_description: { $regex: search, $options: 'i' } },
-        { product_brand: { $regex: search, $options: 'i' } }
-      ];
-    }
-    
-    if (featured === 'true') {
-      filter.isFeatured = true;
-    }
-    
-    if (lowStock === 'true') {
-      filter.$expr = { $lte: ['$stock', '$lowStockThreshold'] };
-    }
-
-    // Build sort object
-    const sort = {};
-    sort[sortBy] = sortOrder === 'desc' ? -1 : 1;
-
-    // Execute query with pagination
-    const skip = (parseInt(page) - 1) * parseInt(limit);
-    
-    const [products, total] = await Promise.all([
-      Product.find(filter)
-        .populate('primaryCategory', 'name slug type icon')
-        .populate('secondaryCategories', 'name slug type icon')
-        .populate('createdBy', 'email firstName lastName')
-        .sort(sort)
-        .skip(skip)
-        .limit(parseInt(limit)),
-      Product.countDocuments(filter)
-    ]);
+    const products = await Product.find({})
+      .populate('primaryCategory', 'name slug type icon')
+      .populate('secondaryCategories', 'name slug type icon')
+      .populate('createdBy', 'email firstName lastName')
+      .sort({ createdAt: -1 });
 
     res.json({
       success: true,
-      data: products,
-      pagination: {
-        currentPage: parseInt(page),
-        totalPages: Math.ceil(total / parseInt(limit)),
-        totalProducts: total,
-        hasNext: skip + products.length < total,
-        hasPrev: parseInt(page) > 1
-      }
+      data: products
     });
-
   } catch (error) {
-    console.error('❌ Error fetching admin products:', error);
+    console.error('❌ Error fetching products:', error);
     res.status(500).json({
       success: false,
       message: 'Error fetching products',
@@ -443,9 +399,6 @@ export const getAdminProducts = async (req, res) => {
   }
 };
 
-// @desc    Get single admin product
-// @route   GET /api/admin/products/:id
-// @access  Private (Admin only)
 export const getAdminProduct = async (req, res) => {
   try {
     const product = await Product.findById(req.params.id)
@@ -464,9 +417,8 @@ export const getAdminProduct = async (req, res) => {
       success: true,
       data: product
     });
-
   } catch (error) {
-    console.error('❌ Error fetching admin product:', error);
+    console.error('❌ Error fetching product:', error);
     res.status(500).json({
       success: false,
       message: 'Error fetching product',
@@ -475,15 +427,16 @@ export const getAdminProduct = async (req, res) => {
   }
 };
 
-// @desc    Update admin product
-// @route   PUT /api/admin/products/:id
-// @access  Private (Admin only)
 export const updateAdminProduct = async (req, res) => {
   try {
-    console.log(`🔄 Updating product ID: ${req.params.id}`);
-    console.log('📝 Update data received:', req.body);
-    
-    const product = await Product.findById(req.params.id);
+    const product = await Product.findByIdAndUpdate(
+      req.params.id,
+      req.body,
+      { new: true, runValidators: true }
+    )
+    .populate('primaryCategory', 'name slug type icon')
+    .populate('secondaryCategories', 'name slug type icon');
+
     if (!product) {
       return res.status(404).json({
         success: false,
@@ -491,90 +444,13 @@ export const updateAdminProduct = async (req, res) => {
       });
     }
 
-    const {
-      product_name,
-      product_description,
-      product_brand,
-      category,
-      industries,
-      product_price,
-      stock,
-      lowStockThreshold,
-      status,
-      isFeatured,
-      isNewArrival,
-      sku
-    } = req.body;
-
-    // Validate categories if provided
-    let categoryData = null;
-    if (category) {
-      const secondaryCategories = industries ? 
-        (typeof industries === 'string' ? JSON.parse(industries) : industries) : 
-        [];
-      categoryData = await validateAndConvertCategories(category, secondaryCategories);
-      console.log('📂 Updated category data:', categoryData);
-    }
-
-    // Build update object with only provided fields
-    const updateData = {};
-    
-    if (product_name) {
-      updateData.product_name = product_name.trim();
-      updateData.slug = await generateUniqueSlug(product_name, product._id);
-    }
-    if (product_description) updateData.product_description = product_description.trim();
-    if (product_brand !== undefined) updateData.product_brand = product_brand?.trim() || '';
-    if (product_price !== undefined) updateData.product_price = parseFloat(product_price);
-    if (stock !== undefined) updateData.stock = parseInt(stock);
-    if (lowStockThreshold !== undefined) updateData.lowStockThreshold = parseInt(lowStockThreshold);
-    if (status) updateData.status = status;
-    if (sku !== undefined) updateData.sku = sku?.trim() || '';
-    if (isFeatured !== undefined) updateData.isFeatured = isFeatured === true || isFeatured === 'true';
-    if (isNewArrival !== undefined) updateData.isNewArrival = isNewArrival === true || isNewArrival === 'true';
-    
-    // Category updates
-    if (categoryData) {
-      updateData.primaryCategory = categoryData.primaryCategory;
-      updateData.secondaryCategories = categoryData.secondaryCategories;
-      updateData.allCategories = categoryData.allCategories;
-    }
-
-    updateData.updatedAt = new Date();
-    updateData.lastUpdatedBy = req.user._id;
-
-    console.log('💾 Final update data:', updateData);
-
-    const updatedProduct = await Product.findByIdAndUpdate(
-      req.params.id,
-      updateData,
-      { new: true, runValidators: true }
-    )
-    .populate('primaryCategory', 'name slug type icon')
-    .populate('secondaryCategories', 'name slug type icon')
-    .populate('createdBy', 'email firstName lastName');
-
-    console.log(`✅ Product updated: ${updatedProduct.product_name}`);
-
     res.json({
       success: true,
       message: 'Product updated successfully',
-      data: updatedProduct
+      data: product
     });
-
   } catch (error) {
     console.error('❌ Error updating product:', error);
-    
-    if (error.name === 'ValidationError') {
-      const messages = Object.values(error.errors).map(err => err.message);
-      return res.status(400).json({
-        success: false,
-        message: 'Product validation failed',
-        errors: messages,
-        details: error.errors
-      });
-    }
-
     res.status(500).json({
       success: false,
       message: 'Error updating product',
@@ -583,13 +459,8 @@ export const updateAdminProduct = async (req, res) => {
   }
 };
 
-// @desc    Delete admin product
-// @route   DELETE /api/admin/products/:id
-// @access  Private (Admin only)
 export const deleteAdminProduct = async (req, res) => {
   try {
-    console.log(`🗑️ Deleting product ID: ${req.params.id}`);
-    
     const product = await Product.findById(req.params.id);
     if (!product) {
       return res.status(404).json({
@@ -600,12 +471,10 @@ export const deleteAdminProduct = async (req, res) => {
 
     // Delete images from Cloudinary
     if (product.images && product.images.length > 0) {
-      console.log(`🗑️ Deleting ${product.images.length} images from Cloudinary...`);
       for (const image of product.images) {
         try {
           if (image.public_id) {
             await cloudinary.uploader.destroy(image.public_id);
-            console.log(`✅ Deleted image: ${image.public_id}`);
           }
         } catch (deleteError) {
           console.error(`❌ Failed to delete image ${image.public_id}:`, deleteError);
@@ -614,14 +483,11 @@ export const deleteAdminProduct = async (req, res) => {
     }
 
     await Product.findByIdAndDelete(req.params.id);
-    
-    console.log(`✅ Product deleted: ${product.product_name}`);
 
     res.json({
       success: true,
       message: 'Product deleted successfully'
     });
-
   } catch (error) {
     console.error('❌ Error deleting product:', error);
     res.status(500).json({

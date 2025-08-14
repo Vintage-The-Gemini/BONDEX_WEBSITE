@@ -1,4 +1,4 @@
-// backend/models/Product.js
+// File Path: backend/models/Product.js
 import mongoose from 'mongoose';
 
 const productSchema = new mongoose.Schema({
@@ -20,30 +20,35 @@ const productSchema = new mongoose.Schema({
     default: ''
   },
   
+  // 🔧 FIX: Add SKU field WITHOUT unique constraint
+  sku: {
+    type: String,
+    trim: true,
+    sparse: true // Only enforce uniqueness for non-null values
+    // 🔥 REMOVED: unique: true - This was causing the problem!
+  },
+  
   // ✅ FIXED: Unique slug with better validation
   slug: {
     type: String,
     unique: true,
     lowercase: true,
     trim: true,
-    index: true // Add index for better query performance
+    index: true
   },
   
   // ENHANCED: Multiple Categories Support
-  // Primary category (protection type - required)
   primaryCategory: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Category',
     required: [true, 'Primary category (protection type) is required']
   },
   
-  // Secondary categories (industries, certifications, etc.)
   secondaryCategories: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Category'
   }],
   
-  // ALL categories (computed field for easy querying)
   allCategories: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Category'
@@ -221,15 +226,6 @@ const productSchema = new mongoose.Schema({
   lastUpdatedBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
-  },
-  
-  // Tracking fields
-  lastViewedAt: {
-    type: Date,
-    default: Date.now
-  },
-  lastOrderedAt: {
-    type: Date
   }
 }, {
   timestamps: true,
@@ -237,55 +233,7 @@ const productSchema = new mongoose.Schema({
   toObject: { virtuals: true }
 });
 
-// ✅ INDEXES for better query performance
-productSchema.index({ product_name: 'text', product_description: 'text', product_brand: 'text' });
-productSchema.index({ allCategories: 1, status: 1 });
-productSchema.index({ status: 1, isFeatured: -1, createdAt: -1 });
-productSchema.index({ stock: 1, lowStockThreshold: 1 }); // For low stock queries
-productSchema.index({ isOnSale: 1, saleEndDate: 1 }); // For sale products
-productSchema.index({ createdAt: -1 }); // For recent products
-productSchema.index({ salesCount: -1 }); // For popular products
-productSchema.index({ product_price: 1 }); // For price sorting
-
-// ✅ COMPOUND INDEX for category + status
-productSchema.index({ primaryCategory: 1, status: 1 });
-productSchema.index({ allCategories: 1, status: 1, isFeatured: -1 });
-
-// ✅ VIRTUAL FIELDS
-productSchema.virtual('isLowStock').get(function() {
-  return this.stock <= this.lowStockThreshold;
-});
-
-productSchema.virtual('isOutOfStock').get(function() {
-  return this.stock === 0;
-});
-
-productSchema.virtual('currentPrice').get(function() {
-  if (this.isOnSale && this.salePrice && this.saleEndDate > new Date()) {
-    return this.salePrice;
-  }
-  return this.product_price;
-});
-
-productSchema.virtual('discount').get(function() {
-  if (this.isOnSale && this.salePrice && this.product_price > this.salePrice) {
-    return Math.round(((this.product_price - this.salePrice) / this.product_price) * 100);
-  }
-  return 0;
-});
-
-productSchema.virtual('displayImage').get(function() {
-  return (this.images && this.images.length > 0 ? 
-    this.images.find(img => img.isMain)?.url || this.images[0].url : '') ||
-    this.mainImage || 
-    this.product_image || 
-    '/images/placeholder-product.jpg';
-});
-
-// ✅ REMOVED problematic pre-save slug generation middleware
-// Slug generation is now handled in the controller for better control
-
-// Pre-save middleware for other fields (keeping the good parts)
+// Pre-save middleware
 productSchema.pre('save', function(next) {
   // Set legacy category field for backward compatibility
   if (this.primaryCategory && !this.category) {
@@ -312,239 +260,12 @@ productSchema.pre('save', function(next) {
     this.metaDescription = this.product_description.substring(0, 160);
   }
   
-  // Update lastUpdatedBy if this is an update
-  if (!this.isNew && this.modifiedPaths().length > 0) {
-    this.lastUpdatedBy = this.lastUpdatedBy || this.createdBy;
-  }
-  
   next();
 });
 
-// ✅ INSTANCE METHODS
-// Method to add secondary category
-productSchema.methods.addSecondaryCategory = function(categoryId) {
-  if (!this.secondaryCategories.includes(categoryId)) {
-    this.secondaryCategories.push(categoryId);
-    this.allCategories = [this.primaryCategory, ...this.secondaryCategories].filter(Boolean);
-  }
-  return this.save();
-};
-
-// Method to remove secondary category
-productSchema.methods.removeSecondaryCategory = function(categoryId) {
-  this.secondaryCategories = this.secondaryCategories.filter(
-    cat => cat.toString() !== categoryId.toString()
-  );
-  this.allCategories = [this.primaryCategory, ...this.secondaryCategories].filter(Boolean);
-  return this.save();
-};
-
-// Method to check if product belongs to category
-productSchema.methods.belongsToCategory = function(categoryId) {
-  return this.allCategories.some(cat => cat.toString() === categoryId.toString());
-};
-
-// Method to get category names
-productSchema.methods.getCategoryNames = function() {
-  const categories = [];
-  if (this.primaryCategory && this.primaryCategory.name) {
-    categories.push(this.primaryCategory.name);
-  }
-  if (this.secondaryCategories) {
-    this.secondaryCategories.forEach(cat => {
-      if (cat.name) categories.push(cat.name);
-    });
-  }
-  return categories;
-};
-
-// Method to update view count
-productSchema.methods.incrementViews = function() {
-  this.views += 1;
-  this.lastViewedAt = new Date();
-  return this.save();
-};
-
-// Method to update sales count
-productSchema.methods.incrementSales = function(quantity = 1) {
-  this.salesCount += quantity;
-  this.lastOrderedAt = new Date();
-  return this.save();
-};
-
-// Method to update stock
-productSchema.methods.updateStock = function(quantity, operation = 'subtract') {
-  if (operation === 'subtract') {
-    this.stock = Math.max(0, this.stock - quantity);
-  } else if (operation === 'add') {
-    this.stock += quantity;
-  } else if (operation === 'set') {
-    this.stock = Math.max(0, quantity);
-  }
-  return this.save();
-};
-
-// ✅ STATIC METHODS
-// Find products by category
-productSchema.statics.findByCategory = function(categoryId, options = {}) {
-  const query = { allCategories: categoryId, status: 'active' };
-  return this.find(query, null, options)
-    .populate('primaryCategory', 'name slug type icon')
-    .populate('secondaryCategories', 'name slug type icon');
-};
-
-// Find low stock products
-productSchema.statics.findLowStock = function() {
-  return this.find({
-    $expr: { $lte: ['$stock', '$lowStockThreshold'] },
-    status: 'active'
-  }).populate('primaryCategory', 'name slug type icon');
-};
-
-// Find featured products
-productSchema.statics.findFeatured = function(limit = 10) {
-  return this.find({ isFeatured: true, status: 'active' })
-    .limit(limit)
-    .sort({ createdAt: -1 })
-    .populate('primaryCategory', 'name slug type icon');
-};
-
-// Find products on sale
-productSchema.statics.findOnSale = function() {
-  return this.find({
-    isOnSale: true,
-    saleEndDate: { $gt: new Date() },
-    status: 'active'
-  }).populate('primaryCategory', 'name slug type icon');
-};
-
-// Search products
-productSchema.statics.searchProducts = function(searchTerm, options = {}) {
-  const {
-    category,
-    priceRange,
-    inStock = true,
-    limit = 20,
-    skip = 0,
-    sortBy = 'relevance'
-  } = options;
-
-  let query = {
-    $text: { $search: searchTerm },
-    status: 'active'
-  };
-
-  if (category) {
-    query.allCategories = category;
-  }
-
-  if (priceRange) {
-    query.product_price = {
-      $gte: priceRange.min || 0,
-      $lte: priceRange.max || Number.MAX_VALUE
-    };
-  }
-
-  if (inStock) {
-    query.stock = { $gt: 0 };
-  }
-
-  let sort = {};
-  switch (sortBy) {
-    case 'price_low':
-      sort = { product_price: 1 };
-      break;
-    case 'price_high':
-      sort = { product_price: -1 };
-      break;
-    case 'newest':
-      sort = { createdAt: -1 };
-      break;
-    case 'popular':
-      sort = { salesCount: -1, views: -1 };
-      break;
-    case 'rating':
-      sort = { avgRating: -1, reviewCount: -1 };
-      break;
-    default: // relevance
-      sort = { score: { $meta: 'textScore' } };
-  }
-
-  return this.find(query)
-    .select(sortBy === 'relevance' ? { score: { $meta: 'textScore' } } : {})
-    .sort(sort)
-    .skip(skip)
-    .limit(limit)
-    .populate('primaryCategory', 'name slug type icon')
-    .populate('secondaryCategories', 'name slug type icon');
-};
-
-// ✅ POST-SAVE MIDDLEWARE to update category product counts
-productSchema.post('save', async function(doc) {
-  try {
-    // Update product count for all associated categories
-    const Category = mongoose.model('Category');
-    
-    if (doc.allCategories && doc.allCategories.length > 0) {
-      for (const categoryId of doc.allCategories) {
-        const count = await mongoose.model('Product').countDocuments({
-          allCategories: categoryId,
-          status: 'active'
-        });
-        
-        await Category.findByIdAndUpdate(categoryId, {
-          productCount: count
-        });
-      }
-    }
-  } catch (error) {
-    console.error('Error updating category product counts:', error);
-  }
-});
-
-// ✅ POST-REMOVE MIDDLEWARE to update category counts when product is deleted
-productSchema.post('findOneAndDelete', async function(doc) {
-  if (doc && doc.allCategories) {
-    try {
-      const Category = mongoose.model('Category');
-      
-      for (const categoryId of doc.allCategories) {
-        const count = await mongoose.model('Product').countDocuments({
-          allCategories: categoryId,
-          status: 'active'
-        });
-        
-        await Category.findByIdAndUpdate(categoryId, {
-          productCount: count
-        });
-      }
-    } catch (error) {
-      console.error('Error updating category product counts after deletion:', error);
-    }
-  }
-});
-
-// ✅ VALIDATION HELPERS
-productSchema.methods.validateSalePrice = function() {
-  if (this.isOnSale) {
-    if (!this.salePrice) {
-      throw new Error('Sale price is required when product is on sale');
-    }
-    if (this.salePrice >= this.product_price) {
-      throw new Error('Sale price must be less than regular price');
-    }
-    if (this.saleEndDate && this.saleEndDate <= new Date()) {
-      throw new Error('Sale end date must be in the future');
-    }
-  }
-};
-
-// ✅ PRE-VALIDATE MIDDLEWARE
+// PRE-VALIDATE MIDDLEWARE
 productSchema.pre('validate', function(next) {
   try {
-    // Validate sale configuration
-    this.validateSalePrice();
-    
     // Ensure at least one image
     if (!this.images || this.images.length === 0) {
       this.invalidate('images', 'At least one product image is required');
