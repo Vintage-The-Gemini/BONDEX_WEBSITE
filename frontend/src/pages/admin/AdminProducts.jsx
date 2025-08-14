@@ -1,680 +1,372 @@
 // File Path: frontend/src/pages/admin/AdminProducts.jsx
-
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
+import { productsAPI, categoriesAPI } from '../../services/api'
+import AddProductForm from '../../components/admin/AddProductForm'
 
 const AdminProducts = () => {
+  const [products, setProducts] = useState([])
+  const [categories, setCategories] = useState([])
+  const [loading, setLoading] = useState(true)
   const [showAddForm, setShowAddForm] = useState(false)
-  const [selectedCategory, setSelectedCategory] = useState('all')
-  const [searchQuery, setSearchQuery] = useState('')
-  
-  // Mock products data
-  const [products, setProducts] = useState([
-    {
-      id: 1,
-      name: 'Safety Boots Steel Toe',
-      price: 8500,
-      originalPrice: 9500,
-      category: 'foot-protection',
-      stock: 45,
-      status: 'active',
-      image: 'https://images.unsplash.com/photo-1544966503-7cc5ac882d5e?w=300',
-      sku: 'SB-001',
-      description: 'Professional steel toe safety boots with slip-resistant sole'
-    },
-    {
-      id: 2,
-      name: 'Hard Hat with Chin Strap',
-      price: 2800,
-      category: 'head-protection',
-      stock: 23,
-      status: 'active',
-      image: 'https://images.unsplash.com/photo-1558618047-3c8c76ca7d13?w=300',
-      sku: 'HH-002',
-      description: 'ANSI-certified hard hat with adjustable chin strap'
-    },
-    {
-      id: 3,
-      name: 'Cut-Resistant Gloves',
-      price: 1200,
-      category: 'hand-protection',
-      stock: 8,
-      status: 'low-stock',
-      image: 'https://images.unsplash.com/photo-1582560475093-ba66ac3b8fa7?w=300',
-      sku: 'CG-003',
-      description: 'Level 5 cut-resistant gloves with grip coating'
-    },
-    {
-      id: 4,
-      name: 'High-Visibility Vest',
-      price: 1800,
-      originalPrice: 2200,
-      category: 'body-protection',
-      stock: 0,
-      status: 'out-of-stock',
-      image: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=300',
-      sku: 'HV-004',
-      description: 'Class 2 high-visibility safety vest with reflective strips'
+  const [searchTerm, setSearchTerm] = useState('')
+  const [filterCategory, setFilterCategory] = useState('all')
+  const [filterStatus, setFilterStatus] = useState('all')
+
+  useEffect(() => {
+    fetchData()
+  }, [])
+
+  const fetchData = async () => {
+    await Promise.all([fetchProducts(), fetchCategories()])
+  }
+
+  const fetchProducts = async () => {
+    try {
+      setLoading(true)
+      const response = await productsAPI.getAll()
+      if (response.success) {
+        setProducts(response.data || [])
+      }
+    } catch (error) {
+      console.error('Failed to fetch products:', error)
+    } finally {
+      setLoading(false)
     }
-  ])
+  }
 
-  const categories = [
-    { id: 'all', name: 'All Categories' },
-    { id: 'head-protection', name: 'Head Protection' },
-    { id: 'foot-protection', name: 'Foot Protection' },
-    { id: 'hand-protection', name: 'Hand Protection' },
-    { id: 'eye-protection', name: 'Eye Protection' },
-    { id: 'body-protection', name: 'Body Protection' },
-    { id: 'breathing-protection', name: 'Breathing Protection' }
-  ]
+  const fetchCategories = async () => {
+    try {
+      const response = await categoriesAPI.getAll()
+      if (response.success) {
+        setCategories(response.data || [])
+      }
+    } catch (error) {
+      console.error('Failed to fetch categories:', error)
+    }
+  }
 
-  const formatPrice = (amount) => {
+  const formatPrice = (price) => {
     return new Intl.NumberFormat('en-KE', {
       style: 'currency',
       currency: 'KES',
       minimumFractionDigits: 0
-    }).format(amount)
+    }).format(price || 0)
   }
 
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'active':
-        return { bg: '#dcfce7', color: '#166534' }
-      case 'low-stock':
-        return { bg: '#fef3c7', color: '#92400e' }
-      case 'out-of-stock':
-        return { bg: '#fef2f2', color: '#991b1b' }
-      default:
-        return { bg: '#f3f4f6', color: '#374151' }
+  const getStatusBadge = (status, stock) => {
+    if (stock === 0) {
+      return (
+        <span className="px-2 py-1 text-xs font-semibold bg-red-100 text-red-800 rounded-full">
+          Out of Stock
+        </span>
+      )
+    }
+    if (stock < 10) {
+      return (
+        <span className="px-2 py-1 text-xs font-semibold bg-yellow-100 text-yellow-800 rounded-full">
+          Low Stock
+        </span>
+      )
+    }
+    if (status === 'active') {
+      return (
+        <span className="px-2 py-1 text-xs font-semibold bg-green-100 text-green-800 rounded-full">
+          Active
+        </span>
+      )
+    }
+    return (
+      <span className="px-2 py-1 text-xs font-semibold bg-gray-100 text-gray-800 rounded-full">
+        Inactive
+      </span>
+    )
+  }
+
+  const handleDeleteProduct = async (productId) => {
+    if (!window.confirm('Are you sure you want to delete this product?')) return
+    
+    try {
+      const response = await productsAPI.delete(productId)
+      if (response.success) {
+        setProducts(products.filter(p => p._id !== productId))
+        alert('Product deleted successfully!')
+      } else {
+        alert(response.error || 'Failed to delete product')
+      }
+    } catch (error) {
+      console.error('Failed to delete product:', error)
+      alert('Failed to delete product')
     }
   }
 
+  const clearFilters = () => {
+    setSearchTerm('')
+    setFilterCategory('all')
+    setFilterStatus('all')
+  }
+
   const filteredProducts = products.filter(product => {
-    const matchesCategory = selectedCategory === 'all' || product.category === selectedCategory
-    const matchesSearch = product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         product.sku.toLowerCase().includes(searchQuery.toLowerCase())
-    return matchesCategory && matchesSearch
+    const matchesSearch = (
+      product.product_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      product.sku?.toLowerCase().includes(searchTerm.toLowerCase())
+    )
+    
+    const matchesCategory = (
+      filterCategory === 'all' || 
+      product.primaryCategory?._id === filterCategory
+    )
+    
+    const matchesStatus = (
+      filterStatus === 'all' || 
+      (filterStatus === 'low_stock' && product.stock < 10) ||
+      (filterStatus === 'out_of_stock' && product.stock === 0) ||
+      (filterStatus === 'active' && product.status === 'active')
+    )
+    
+    return matchesSearch && matchesCategory && matchesStatus
   })
 
-  const AddProductForm = () => (
-    <div style={{
-      backgroundColor: 'white',
-      borderRadius: '12px',
-      padding: '24px',
-      boxShadow: '0 4px 15px rgba(0,0,0,0.08)',
-      marginBottom: '24px'
-    }}>
-      <div style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: '24px'
-      }}>
-        <h3 style={{ fontSize: '18px', fontWeight: 'bold', color: '#0f172a', margin: 0 }}>
-          Add New Product
-        </h3>
-        <button
-          onClick={() => setShowAddForm(false)}
-          style={{
-            backgroundColor: 'transparent',
-            border: 'none',
-            fontSize: '20px',
-            cursor: 'pointer',
-            color: '#6b7280'
-          }}
-        >
-          ×
-        </button>
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500"></div>
       </div>
+    )
+  }
 
-      <form style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
-        <div>
-          <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '6px' }}>
-            Product Name *
-          </label>
-          <input
-            type="text"
-            placeholder="Enter product name"
-            style={{
-              width: '100%',
-              padding: '10px 12px',
-              border: '1px solid #d1d5db',
-              borderRadius: '6px',
-              fontSize: '14px',
-              outline: 'none'
-            }}
-          />
-        </div>
-
-        <div>
-          <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '6px' }}>
-            SKU *
-          </label>
-          <input
-            type="text"
-            placeholder="e.g., SB-005"
-            style={{
-              width: '100%',
-              padding: '10px 12px',
-              border: '1px solid #d1d5db',
-              borderRadius: '6px',
-              fontSize: '14px',
-              outline: 'none'
-            }}
-          />
-        </div>
-
-        <div>
-          <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '6px' }}>
-            Category *
-          </label>
-          <select style={{
-            width: '100%',
-            padding: '10px 12px',
-            border: '1px solid #d1d5db',
-            borderRadius: '6px',
-            fontSize: '14px',
-            outline: 'none'
-          }}>
-            <option value="">Select category</option>
-            {categories.filter(cat => cat.id !== 'all').map(cat => (
-              <option key={cat.id} value={cat.id}>{cat.name}</option>
-            ))}
-          </select>
-        </div>
-
-        <div>
-          <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '6px' }}>
-            Price (KES) *
-          </label>
-          <input
-            type="number"
-            placeholder="0"
-            style={{
-              width: '100%',
-              padding: '10px 12px',
-              border: '1px solid #d1d5db',
-              borderRadius: '6px',
-              fontSize: '14px',
-              outline: 'none'
-            }}
-          />
-        </div>
-
-        <div>
-          <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '6px' }}>
-            Original Price (KES)
-          </label>
-          <input
-            type="number"
-            placeholder="0"
-            style={{
-              width: '100%',
-              padding: '10px 12px',
-              border: '1px solid #d1d5db',
-              borderRadius: '6px',
-              fontSize: '14px',
-              outline: 'none'
-            }}
-          />
-        </div>
-
-        <div>
-          <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '6px' }}>
-            Stock Quantity *
-          </label>
-          <input
-            type="number"
-            placeholder="0"
-            style={{
-              width: '100%',
-              padding: '10px 12px',
-              border: '1px solid #d1d5db',
-              borderRadius: '6px',
-              fontSize: '14px',
-              outline: 'none'
-            }}
-          />
-        </div>
-
-        <div style={{ gridColumn: '1 / -1' }}>
-          <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '6px' }}>
-            Description
-          </label>
-          <textarea
-            placeholder="Enter product description"
-            rows="3"
-            style={{
-              width: '100%',
-              padding: '10px 12px',
-              border: '1px solid #d1d5db',
-              borderRadius: '6px',
-              fontSize: '14px',
-              outline: 'none',
-              resize: 'vertical'
-            }}
-          />
-        </div>
-
-        <div style={{ gridColumn: '1 / -1' }}>
-          <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '6px' }}>
-            Product Image
-          </label>
-          <div style={{
-            border: '2px dashed #d1d5db',
-            borderRadius: '8px',
-            padding: '24px',
-            textAlign: 'center',
-            backgroundColor: '#f9fafb'
-          }}>
-            <p style={{ margin: '0 0 8px 0', color: '#6b7280' }}>Drag and drop image here or</p>
-            <button type="button" style={{
-              backgroundColor: '#f97316',
-              color: 'white',
-              border: 'none',
-              padding: '8px 16px',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              fontSize: '14px'
-            }}>
-              Choose File
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="bg-white rounded-xl shadow-sm p-6">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Product Management</h1>
+            <p className="text-gray-600 mt-1">Manage your safety equipment inventory</p>
+          </div>
+          
+          <div className="flex flex-wrap gap-3">
+            <button
+              onClick={() => setShowAddForm(true)}
+              className="bg-orange-500 hover:bg-orange-600 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center gap-2"
+            >
+              <span className="text-lg">+</span>
+              Add Product
             </button>
           </div>
         </div>
+      </div>
 
-        <div style={{ gridColumn: '1 / -1', display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
-          <button
-            type="button"
-            onClick={() => setShowAddForm(false)}
-            style={{
-              backgroundColor: 'transparent',
-              color: '#6b7280',
-              border: '1px solid #d1d5db',
-              padding: '10px 20px',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              fontSize: '14px'
-            }}
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            style={{
-              backgroundColor: '#f97316',
-              color: 'white',
-              border: 'none',
-              padding: '10px 20px',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              fontSize: '14px',
-              fontWeight: '500'
-            }}
-          >
-            Add Product
-          </button>
-        </div>
-      </form>
-    </div>
-  )
-
-  return (
-    <div style={{ backgroundColor: '#f9fafb', minHeight: '100vh', padding: '20px' }}>
-      <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
-        
-        {/* Header */}
-        <div style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginBottom: '24px'
-        }}>
-          <div>
-            <h1 style={{ fontSize: '28px', fontWeight: 'bold', color: '#0f172a', margin: '0 0 4px 0' }}>
-              Products Management
-            </h1>
-            <p style={{ color: '#6b7280', margin: 0 }}>
-              Manage your safety equipment catalog
-            </p>
-          </div>
-          <button
-            onClick={() => setShowAddForm(true)}
-            style={{
-              backgroundColor: '#f97316',
-              color: 'white',
-              border: 'none',
-              padding: '12px 24px',
-              borderRadius: '8px',
-              cursor: 'pointer',
-              fontSize: '14px',
-              fontWeight: '500',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px'
-            }}
-          >
-            + Add New Product
-          </button>
-        </div>
-
-        {/* Add Product Form */}
-        {showAddForm && <AddProductForm />}
-
-        {/* Filters and Search */}
-        <div style={{
-          backgroundColor: 'white',
-          borderRadius: '12px',
-          padding: '20px',
-          boxShadow: '0 4px 15px rgba(0,0,0,0.08)',
-          marginBottom: '24px'
-        }}>
-          <div style={{
-            display: 'flex',
-            gap: '20px',
-            alignItems: 'center',
-            flexWrap: 'wrap'
-          }}>
-            {/* Search */}
-            <div style={{ flex: 1, minWidth: '300px' }}>
-              <input
-                type="text"
-                placeholder="Search by name or SKU..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '10px 12px',
-                  border: '1px solid #d1d5db',
-                  borderRadius: '6px',
-                  fontSize: '14px',
-                  outline: 'none'
-                }}
-              />
-            </div>
-
-            {/* Category Filter */}
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div className="bg-white rounded-xl p-6 shadow-sm">
+          <div className="flex items-center justify-between">
             <div>
-              <select
-                value={selectedCategory}
-                onChange={(e) => setSelectedCategory(e.target.value)}
-                style={{
-                  padding: '10px 12px',
-                  border: '1px solid #d1d5db',
-                  borderRadius: '6px',
-                  fontSize: '14px',
-                  outline: 'none',
-                  minWidth: '180px'
-                }}
-              >
-                {categories.map(cat => (
-                  <option key={cat.id} value={cat.id}>{cat.name}</option>
-                ))}
-              </select>
+              <p className="text-sm font-medium text-gray-600">Total Products</p>
+              <p className="text-3xl font-bold text-gray-900 mt-2">{products.length}</p>
             </div>
-
-            {/* Results Count */}
-            <div style={{ fontSize: '14px', color: '#6b7280' }}>
-              {filteredProducts.length} products found
+            <div className="w-12 h-12 bg-blue-500 rounded-lg flex items-center justify-center">
+              <span className="text-2xl">📦</span>
             </div>
           </div>
         </div>
 
-        {/* Products Table */}
-        <div style={{
-          backgroundColor: 'white',
-          borderRadius: '12px',
-          boxShadow: '0 4px 15px rgba(0,0,0,0.08)',
-          overflow: 'hidden'
-        }}>
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead style={{ backgroundColor: '#f9fafb' }}>
+        <div className="bg-white rounded-xl p-6 shadow-sm">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-600">Active Products</p>
+              <p className="text-3xl font-bold text-green-600 mt-2">
+                {products.filter(p => p.status === 'active').length}
+              </p>
+            </div>
+            <div className="w-12 h-12 bg-green-500 rounded-lg flex items-center justify-center">
+              <span className="text-2xl">✅</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl p-6 shadow-sm">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-600">Low Stock</p>
+              <p className="text-3xl font-bold text-yellow-600 mt-2">
+                {products.filter(p => p.stock < 10 && p.stock > 0).length}
+              </p>
+            </div>
+            <div className="w-12 h-12 bg-yellow-500 rounded-lg flex items-center justify-center">
+              <span className="text-2xl">⚠️</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl p-6 shadow-sm">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-600">Out of Stock</p>
+              <p className="text-3xl font-bold text-red-600 mt-2">
+                {products.filter(p => p.stock === 0).length}
+              </p>
+            </div>
+            <div className="w-12 h-12 bg-red-500 rounded-lg flex items-center justify-center">
+              <span className="text-2xl">🚫</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Search and Filters */}
+      <div className="bg-white rounded-xl shadow-sm p-6">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Search Products</label>
+            <input
+              type="text"
+              placeholder="Search by name or SKU..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
+            <select
+              value={filterCategory}
+              onChange={(e) => setFilterCategory(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+            >
+              <option value="all">All Categories</option>
+              {categories.map(category => (
+                <option key={category._id} value={category._id}>{category.name}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
+            <select
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+            >
+              <option value="all">All Status</option>
+              <option value="active">Active</option>
+              <option value="low_stock">Low Stock</option>
+              <option value="out_of_stock">Out of Stock</option>
+            </select>
+          </div>
+
+          <div className="flex items-end">
+            <button
+              onClick={clearFilters}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              Clear Filters
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Products Table */}
+      <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-200">
+          <h3 className="text-lg font-semibold text-gray-900">
+            Products ({filteredProducts.length})
+          </h3>
+        </div>
+
+        {filteredProducts.length === 0 ? (
+          <div className="text-center py-12">
+            <div className="text-gray-400 text-6xl mb-4">📦</div>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">No products found</h3>
+            <p className="text-gray-500 mb-4">
+              {searchTerm || filterCategory !== 'all' || filterStatus !== 'all'
+                ? 'Try adjusting your search or filter criteria'
+                : 'Start by adding your first product'
+              }
+            </p>
+            {!searchTerm && filterCategory === 'all' && filterStatus === 'all' && (
+              <button
+                onClick={() => setShowAddForm(true)}
+                className="bg-orange-500 hover:bg-orange-600 text-white px-6 py-3 rounded-lg font-medium transition-colors"
+              >
+                Add Your First Product
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-gray-50">
                 <tr>
-                  <th style={{ textAlign: 'left', padding: '16px', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>
-                    Product
-                  </th>
-                  <th style={{ textAlign: 'left', padding: '16px', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>
-                    SKU
-                  </th>
-                  <th style={{ textAlign: 'left', padding: '16px', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>
-                    Category
-                  </th>
-                  <th style={{ textAlign: 'left', padding: '16px', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>
-                    Price
-                  </th>
-                  <th style={{ textAlign: 'left', padding: '16px', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>
-                    Stock
-                  </th>
-                  <th style={{ textAlign: 'left', padding: '16px', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>
-                    Status
-                  </th>
-                  <th style={{ textAlign: 'center', padding: '16px', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>
-                    Actions
-                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Product</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Category</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Price</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stock</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
-              <tbody>
-                {filteredProducts.map(product => {
-                  const statusStyle = getStatusColor(product.status)
-                  return (
-                    <tr key={product.id} style={{ borderBottom: '1px solid #f3f4f6' }}>
-                      <td style={{ padding: '16px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                          <img
-                            src={product.image}
-                            alt={product.name}
-                            style={{
-                              width: '60px',
-                              height: '60px',
-                              objectFit: 'cover',
-                              borderRadius: '8px'
-                            }}
-                          />
-                          <div>
-                            <h4 style={{
-                              fontSize: '14px',
-                              fontWeight: '600',
-                              color: '#0f172a',
-                              margin: '0 0 4px 0'
-                            }}>
-                              {product.name}
-                            </h4>
-                            <p style={{
-                              fontSize: '12px',
-                              color: '#6b7280',
-                              margin: 0,
-                              maxWidth: '200px'
-                            }}>
-                              {product.description}
-                            </p>
-                          </div>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {filteredProducts.map((product) => (
+                  <tr key={product._id} className="hover:bg-gray-50 transition-colors">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center">
+                        <img 
+                          src={product.images?.[0]?.web_url || 'https://via.placeholder.com/80'} 
+                          alt={product.product_name} 
+                          className="w-12 h-12 rounded-lg object-cover" 
+                        />
+                        <div className="ml-4">
+                          <div className="text-sm font-medium text-gray-900">{product.product_name}</div>
+                          <div className="text-sm text-gray-500">SKU: {product.sku || 'N/A'}</div>
                         </div>
-                      </td>
-                      <td style={{ padding: '16px', fontSize: '14px', color: '#374151', fontFamily: 'monospace' }}>
-                        {product.sku}
-                      </td>
-                      <td style={{ padding: '16px', fontSize: '14px', color: '#374151', textTransform: 'capitalize' }}>
-                        {product.category.replace('-', ' ')}
-                      </td>
-                      <td style={{ padding: '16px' }}>
-                        <div>
-                          <span style={{ fontSize: '14px', fontWeight: '600', color: '#0f172a' }}>
-                            {formatPrice(product.price)}
-                          </span>
-                          {product.originalPrice && (
-                            <span style={{
-                              fontSize: '12px',
-                              color: '#9ca3af',
-                              textDecoration: 'line-through',
-                              marginLeft: '8px'
-                            }}>
-                              {formatPrice(product.originalPrice)}
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                      <td style={{ padding: '16px' }}>
-                        <span style={{
-                          fontSize: '14px',
-                          fontWeight: '600',
-                          color: product.stock <= 10 ? '#ef4444' : '#0f172a'
-                        }}>
-                          {product.stock}
-                        </span>
-                        {product.stock <= 10 && product.stock > 0 && (
-                          <span style={{
-                            fontSize: '12px',
-                            color: '#ef4444',
-                            display: 'block'
-                          }}>
-                            Low stock
-                          </span>
-                        )}
-                      </td>
-                      <td style={{ padding: '16px' }}>
-                        <span style={{
-                          backgroundColor: statusStyle.bg,
-                          color: statusStyle.color,
-                          padding: '4px 8px',
-                          borderRadius: '12px',
-                          fontSize: '12px',
-                          fontWeight: '500',
-                          textTransform: 'capitalize'
-                        }}>
-                          {product.status.replace('-', ' ')}
-                        </span>
-                      </td>
-                      <td style={{ padding: '16px', textAlign: 'center' }}>
-                        <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
-                          <button style={{
-                            backgroundColor: '#3b82f6',
-                            color: 'white',
-                            border: 'none',
-                            padding: '6px 12px',
-                            borderRadius: '4px',
-                            cursor: 'pointer',
-                            fontSize: '12px'
-                          }}>
-                            Edit
-                          </button>
-                          <button style={{
-                            backgroundColor: '#ef4444',
-                            color: 'white',
-                            border: 'none',
-                            padding: '6px 12px',
-                            borderRadius: '4px',
-                            cursor: 'pointer',
-                            fontSize: '12px'
-                          }}>
-                            Delete
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {product.primaryCategory?.name || 'Uncategorized'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                      {formatPrice(product.product_price)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {product.stock || 0}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {getStatusBadge(product.status, product.stock)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
+                      <button className="text-blue-600 hover:text-blue-900 transition-colors">
+                        Edit
+                      </button>
+                      <button 
+                        onClick={() => handleDeleteProduct(product._id)}
+                        className="text-red-600 hover:text-red-900 transition-colors"
+                      >
+                        Delete
+                      </button>
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
-
-          {/* Empty State */}
-          {filteredProducts.length === 0 && (
-            <div style={{
-              padding: '60px 20px',
-              textAlign: 'center'
-            }}>
-              <h3 style={{ fontSize: '18px', color: '#374151', marginBottom: '8px' }}>
-                No products found
-              </h3>
-              <p style={{ color: '#6b7280', marginBottom: '20px' }}>
-                {searchQuery || selectedCategory !== 'all' 
-                  ? 'Try adjusting your search or filters'
-                  : 'Start by adding your first product'
-                }
-              </p>
-              {!searchQuery && selectedCategory === 'all' && (
-                <button
-                  onClick={() => setShowAddForm(true)}
-                  style={{
-                    backgroundColor: '#f97316',
-                    color: 'white',
-                    border: 'none',
-                    padding: '12px 24px',
-                    borderRadius: '8px',
-                    cursor: 'pointer',
-                    fontSize: '14px',
-                    fontWeight: '500'
-                  }}
-                >
-                  Add Your First Product
-                </button>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Bulk Actions */}
-        {filteredProducts.length > 0 && (
-          <div style={{
-            backgroundColor: 'white',
-            borderRadius: '12px',
-            padding: '20px',
-            boxShadow: '0 4px 15px rgba(0,0,0,0.08)',
-            marginTop: '24px'
-          }}>
-            <h3 style={{ fontSize: '16px', fontWeight: '600', color: '#0f172a', marginBottom: '16px' }}>
-              Bulk Actions
-            </h3>
-            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-              <button style={{
-                backgroundColor: '#22c55e',
-                color: 'white',
-                border: 'none',
-                padding: '10px 16px',
-                borderRadius: '6px',
-                cursor: 'pointer',
-                fontSize: '14px'
-              }}>
-                Export Products
-              </button>
-              <button style={{
-                backgroundColor: '#3b82f6',
-                color: 'white',
-                border: 'none',
-                padding: '10px 16px',
-                borderRadius: '6px',
-                cursor: 'pointer',
-                fontSize: '14px'
-              }}>
-                Import Products
-              </button>
-              <button style={{
-                backgroundColor: '#f59e0b',
-                color: 'white',
-                border: 'none',
-                padding: '10px 16px',
-                borderRadius: '6px',
-                cursor: 'pointer',
-                fontSize: '14px'
-              }}>
-                Update Prices
-              </button>
-              <button style={{
-                backgroundColor: '#8b5cf6',
-                color: 'white',
-                border: 'none',
-                padding: '10px 16px',
-                borderRadius: '6px',
-                cursor: 'pointer',
-                fontSize: '14px'
-              }}>
-                Manage Categories
-              </button>
-            </div>
-          </div>
         )}
       </div>
+
+      {/* Add Product Form */}
+      {showAddForm && (
+        <AddProductForm 
+          onClose={() => setShowAddForm(false)}
+          onSuccess={() => {
+            setShowAddForm(false)
+            fetchProducts()
+          }}
+          categories={categories}
+        />
+      )}
     </div>
   )
 }
 
-export default AdminProducts
+export default AdminProducts        
+           

@@ -1,18 +1,77 @@
 // File Path: frontend/src/pages/admin/AdminDashboard.jsx
-
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
+import { dashboardAPI, ordersAPI } from '../../services/api'
 
 const AdminDashboard = () => {
-  const [activeTab, setActiveTab] = useState('overview')
+  const [dashboardStats, setDashboardStats] = useState({
+    totalProducts: 0,
+    totalOrders: 0,
+    totalCustomers: 0,
+    monthlyRevenue: 0,
+    lowStockItems: 0,
+    pendingOrders: 0
+  })
 
-  // Mock data - in real app this would come from API
-  const dashboardStats = {
-    totalProducts: 156,
-    totalOrders: 89,
-    totalCustomers: 234,
-    monthlyRevenue: 2850000, // KES
-    lowStockItems: 12,
-    pendingOrders: 15
+  const [recentOrders, setRecentOrders] = useState([])
+  const [lowStockProducts, setLowStockProducts] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    fetchDashboardData()
+  }, [])
+
+  const fetchDashboardData = async () => {
+    try {
+      setLoading(true)
+      setError('')
+
+      // Fetch dashboard stats
+      const statsResponse = await dashboardAPI.getStats()
+      if (statsResponse.success) {
+        const stats = statsResponse.data
+        setDashboardStats({
+          totalProducts: stats.totalProducts || 0,
+          totalOrders: stats.totalOrders || 0,
+          totalCustomers: stats.totalCustomers || 0,
+          monthlyRevenue: stats.monthlyRevenue || 0,
+          lowStockItems: stats.alerts?.lowStock || 0,
+          pendingOrders: stats.alerts?.pendingOrders || 0
+        })
+
+        // Set recent orders and low stock products
+        setRecentOrders(stats.recentOrders || [])
+        setLowStockProducts(stats.lowStockProducts || [])
+      } else {
+        throw new Error(statsResponse.error)
+      }
+
+    } catch (err) {
+      console.error('Error fetching dashboard data:', err)
+      setError(err.message || 'Failed to fetch dashboard data')
+      
+      // Fall back to mock data if API fails
+      setDashboardStats({
+        totalProducts: 156,
+        totalOrders: 89,
+        totalCustomers: 234,
+        monthlyRevenue: 2850000,
+        lowStockItems: 12,
+        pendingOrders: 15
+      })
+      
+      setRecentOrders([
+        { id: 'ORD-001', customer: 'SafeBuild Construction', amount: 45000, status: 'pending', date: '2025-08-13' },
+        { id: 'ORD-002', customer: 'Medical Plus Clinic', amount: 12500, status: 'completed', date: '2025-08-12' }
+      ])
+      
+      setLowStockProducts([
+        { name: 'Safety Boots Size 42', stock: 5, category: 'Foot Protection' },
+        { name: 'Hard Hat Yellow', stock: 3, category: 'Head Protection' }
+      ])
+    } finally {
+      setLoading(false)
+    }
   }
 
   const formatPrice = (amount) => {
@@ -23,432 +82,236 @@ const AdminDashboard = () => {
     }).format(amount)
   }
 
-  const recentOrders = [
-    { id: 'ORD-001', customer: 'SafeBuild Construction', amount: 45000, status: 'pending', date: '2024-08-13' },
-    { id: 'ORD-002', customer: 'Medical Plus Clinic', amount: 12500, status: 'completed', date: '2024-08-12' },
-    { id: 'ORD-003', customer: 'Industrial Solutions', amount: 78000, status: 'processing', date: '2024-08-12' },
-    { id: 'ORD-004', customer: 'Mining Corp Kenya', amount: 156000, status: 'completed', date: '2024-08-11' },
-    { id: 'ORD-005', customer: 'Construction Plus', amount: 23400, status: 'pending', date: '2024-08-11' }
-  ]
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'completed':
+        return 'bg-green-100 text-green-800'
+      case 'pending':
+        return 'bg-yellow-100 text-yellow-800'
+      case 'processing':
+        return 'bg-blue-100 text-blue-800'
+      default:
+        return 'bg-gray-100 text-gray-800'
+    }
+  }
 
-  const lowStockProducts = [
-    { name: 'Safety Boots Size 42', stock: 5, category: 'Foot Protection' },
-    { name: 'Hard Hat Yellow', stock: 3, category: 'Head Protection' },
-    { name: 'Cut-Resistant Gloves L', stock: 8, category: 'Hand Protection' },
-    { name: 'High-Vis Vest XL', stock: 2, category: 'Body Protection' }
-  ]
-
-  const StatCard = ({ title, value, subtitle, color = '#f97316', icon }) => (
-    <div style={{
-      backgroundColor: 'white',
-      borderRadius: '12px',
-      padding: '24px',
-      boxShadow: '0 4px 15px rgba(0,0,0,0.08)',
-      border: '1px solid #e5e7eb'
-    }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+  const StatCard = ({ title, value, subtitle, color = 'bg-orange-500', icon }) => (
+    <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
+      <div className="flex items-center justify-between">
         <div>
-          <h3 style={{ 
-            fontSize: '14px', 
-            fontWeight: '500',
-            color: '#6b7280',
-            margin: '0 0 8px 0'
-          }}>
-            {title}
-          </h3>
-          <p style={{ 
-            fontSize: '28px', 
-            fontWeight: 'bold',
-            color: '#0f172a',
-            margin: '0 0 4px 0'
-          }}>
-            {value}
-          </p>
+          <p className="text-sm font-medium text-gray-600">{title}</p>
+          <p className="text-3xl font-bold text-gray-900 mt-2">{value}</p>
           {subtitle && (
-            <p style={{ 
-              fontSize: '12px',
-              color: '#6b7280',
-              margin: 0
-            }}>
-              {subtitle}
-            </p>
+            <p className="text-sm text-gray-500 mt-1">{subtitle}</p>
           )}
         </div>
-        <div style={{
-          backgroundColor: color,
-          borderRadius: '8px',
-          padding: '8px',
-          color: 'white',
-          fontSize: '20px'
-        }}>
+        <div className={`w-12 h-12 ${color} rounded-lg flex items-center justify-center text-white text-2xl`}>
           {icon}
         </div>
       </div>
     </div>
   )
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500"></div>
+      </div>
+    )
+  }
+
   return (
-    <div style={{ backgroundColor: '#f9fafb', minHeight: '100vh' }}>
-      {/* Admin Header */}
-      <div style={{ 
-        backgroundColor: '#0f172a',
-        color: 'white',
-        padding: '20px',
-        boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-      }}>
-        <div style={{ 
-          maxWidth: '1400px', 
-          margin: '0 auto',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center'
-        }}>
-          <div>
-            <h1 style={{ 
-              fontSize: '24px', 
-              fontWeight: 'bold',
-              margin: '0 0 4px 0'
-            }}>
-              Bondex Safety Admin
-            </h1>
-            <p style={{ 
-              fontSize: '14px',
-              opacity: 0.8,
-              margin: 0
-            }}>
-              Manage your safety equipment business
-            </p>
-          </div>
-          <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
-            <span style={{ fontSize: '14px', opacity: 0.8 }}>
-              Welcome, Admin
-            </span>
-            <button style={{
-              backgroundColor: '#f97316',
-              color: 'white',
-              border: 'none',
-              padding: '8px 16px',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              fontSize: '14px'
-            }}>
-              Logout
-            </button>
+    <div className="space-y-6">
+      {/* Error Alert */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+          <div className="flex">
+            <span className="text-red-400 text-xl mr-3">⚠️</span>
+            <div>
+              <h3 className="text-sm font-medium text-red-800">Connection Issue</h3>
+              <p className="text-sm text-red-700 mt-1">
+                {error} - Showing fallback data
+              </p>
+            </div>
           </div>
         </div>
+      )}
+
+      {/* Stats Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+        <StatCard 
+          title="Total Products" 
+          value={dashboardStats.totalProducts.toLocaleString()}
+          subtitle="Active in catalog"
+          icon="📦"
+          color="bg-blue-500"
+        />
+        <StatCard 
+          title="Total Orders" 
+          value={dashboardStats.totalOrders.toLocaleString()}
+          subtitle="This month"
+          icon="🛒"
+          color="bg-green-500"
+        />
+        <StatCard 
+          title="Total Customers" 
+          value={dashboardStats.totalCustomers.toLocaleString()}
+          subtitle="Registered users"
+          icon="👥"
+          color="bg-purple-500"
+        />
+        <StatCard 
+          title="Monthly Revenue" 
+          value={formatPrice(dashboardStats.monthlyRevenue)}
+          subtitle="August 2025"
+          icon="💰"
+          color="bg-orange-500"
+        />
+        <StatCard 
+          title="Low Stock Items" 
+          value={dashboardStats.lowStockItems.toLocaleString()}
+          subtitle="Need restocking"
+          icon="⚠️"
+          color="bg-red-500"
+        />
+        <StatCard 
+          title="Pending Orders" 
+          value={dashboardStats.pendingOrders.toLocaleString()}
+          subtitle="Require attention"
+          icon="⏳"
+          color="bg-yellow-500"
+        />
       </div>
 
-      {/* Navigation Tabs */}
-      <div style={{ 
-        backgroundColor: 'white',
-        borderBottom: '1px solid #e5e7eb'
-      }}>
-        <div style={{ 
-          maxWidth: '1400px', 
-          margin: '0 auto',
-          display: 'flex',
-          gap: '0'
-        }}>
-          {[
-            { id: 'overview', name: 'Overview', icon: '📊' },
-            { id: 'products', name: 'Products', icon: '📦' },
-            { id: 'orders', name: 'Orders', icon: '🛒' },
-            { id: 'customers', name: 'Customers', icon: '👥' },
-            { id: 'analytics', name: 'Analytics', icon: '📈' },
-            { id: 'settings', name: 'Settings', icon: '⚙️' }
-          ].map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              style={{
-                backgroundColor: activeTab === tab.id ? '#f97316' : 'transparent',
-                color: activeTab === tab.id ? 'white' : '#374151',
-                border: 'none',
-                padding: '16px 24px',
-                cursor: 'pointer',
-                fontSize: '14px',
-                fontWeight: '500',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                borderBottom: activeTab === tab.id ? 'none' : '2px solid transparent'
-              }}
-            >
-              <span>{tab.icon}</span>
-              {tab.name}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Main Content */}
-      <div style={{ 
-        maxWidth: '1400px', 
-        margin: '0 auto',
-        padding: '40px 20px'
-      }}>
+      {/* Recent Activity Grid */}
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         
-        {activeTab === 'overview' && (
-          <div>
-            {/* Stats Grid */}
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
-              gap: '24px',
-              marginBottom: '40px'
-            }}>
-              <StatCard 
-                title="Total Products" 
-                value={dashboardStats.totalProducts}
-                subtitle="Active in catalog"
-                icon="📦"
-                color="#3b82f6"
-              />
-              <StatCard 
-                title="Total Orders" 
-                value={dashboardStats.totalOrders}
-                subtitle="This month"
-                icon="🛒"
-                color="#22c55e"
-              />
-              <StatCard 
-                title="Total Customers" 
-                value={dashboardStats.totalCustomers}
-                subtitle="Registered users"
-                icon="👥"
-                color="#8b5cf6"
-              />
-              <StatCard 
-                title="Monthly Revenue" 
-                value={formatPrice(dashboardStats.monthlyRevenue)}
-                subtitle="August 2024"
-                icon="💰"
-                color="#f97316"
-              />
-              <StatCard 
-                title="Low Stock Items" 
-                value={dashboardStats.lowStockItems}
-                subtitle="Need restocking"
-                icon="⚠️"
-                color="#ef4444"
-              />
-              <StatCard 
-                title="Pending Orders" 
-                value={dashboardStats.pendingOrders}
-                subtitle="Require attention"
-                icon="⏳"
-                color="#facc15"
-              />
-            </div>
-
-            {/* Recent Activity */}
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: '2fr 1fr',
-              gap: '40px'
-            }}>
-              
-              {/* Recent Orders */}
-              <div style={{
-                backgroundColor: 'white',
-                borderRadius: '12px',
-                padding: '24px',
-                boxShadow: '0 4px 15px rgba(0,0,0,0.08)'
-              }}>
-                <div style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  marginBottom: '24px'
-                }}>
-                  <h3 style={{ 
-                    fontSize: '18px', 
-                    fontWeight: 'bold',
-                    color: '#0f172a',
-                    margin: 0
-                  }}>
-                    Recent Orders
-                  </h3>
-                  <button style={{
-                    backgroundColor: 'transparent',
-                    color: '#f97316',
-                    border: '1px solid #f97316',
-                    padding: '6px 12px',
-                    borderRadius: '4px',
-                    cursor: 'pointer',
-                    fontSize: '12px'
-                  }}>
-                    View All
-                  </button>
-                </div>
-                
-                <div style={{ overflowX: 'auto' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                    <thead>
-                      <tr style={{ borderBottom: '1px solid #e5e7eb' }}>
-                        <th style={{ textAlign: 'left', padding: '12px 0', fontSize: '12px', fontWeight: '600', color: '#6b7280' }}>ORDER ID</th>
-                        <th style={{ textAlign: 'left', padding: '12px 0', fontSize: '12px', fontWeight: '600', color: '#6b7280' }}>CUSTOMER</th>
-                        <th style={{ textAlign: 'left', padding: '12px 0', fontSize: '12px', fontWeight: '600', color: '#6b7280' }}>AMOUNT</th>
-                        <th style={{ textAlign: 'left', padding: '12px 0', fontSize: '12px', fontWeight: '600', color: '#6b7280' }}>STATUS</th>
-                        <th style={{ textAlign: 'left', padding: '12px 0', fontSize: '12px', fontWeight: '600', color: '#6b7280' }}>DATE</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {recentOrders.map(order => (
-                        <tr key={order.id} style={{ borderBottom: '1px solid #f3f4f6' }}>
-                          <td style={{ padding: '12px 0', fontSize: '14px', fontWeight: '500', color: '#0f172a' }}>
-                            {order.id}
-                          </td>
-                          <td style={{ padding: '12px 0', fontSize: '14px', color: '#374151' }}>
-                            {order.customer}
-                          </td>
-                          <td style={{ padding: '12px 0', fontSize: '14px', fontWeight: '500', color: '#0f172a' }}>
-                            {formatPrice(order.amount)}
-                          </td>
-                          <td style={{ padding: '12px 0' }}>
-                            <span style={{
-                              backgroundColor: order.status === 'completed' ? '#dcfce7' : order.status === 'processing' ? '#fef3c7' : '#fef2f2',
-                              color: order.status === 'completed' ? '#166534' : order.status === 'processing' ? '#92400e' : '#991b1b',
-                              padding: '4px 8px',
-                              borderRadius: '12px',
-                              fontSize: '12px',
-                              fontWeight: '500',
-                              textTransform: 'capitalize'
-                            }}>
-                              {order.status}
-                            </span>
-                          </td>
-                          <td style={{ padding: '12px 0', fontSize: '14px', color: '#6b7280' }}>
-                            {order.date}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              {/* Low Stock Alert */}
-              <div style={{
-                backgroundColor: 'white',
-                borderRadius: '12px',
-                padding: '24px',
-                boxShadow: '0 4px 15px rgba(0,0,0,0.08)'
-              }}>
-                <h3 style={{ 
-                  fontSize: '18px', 
-                  fontWeight: 'bold',
-                  color: '#0f172a',
-                  margin: '0 0 20px 0'
-                }}>
-                  Low Stock Alert
-                </h3>
-                
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                  {lowStockProducts.map((product, index) => (
-                    <div key={index} style={{
-                      padding: '16px',
-                      backgroundColor: '#fef2f2',
-                      borderRadius: '8px',
-                      border: '1px solid #fecaca'
-                    }}>
-                      <div style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'flex-start',
-                        marginBottom: '8px'
-                      }}>
-                        <h4 style={{
-                          fontSize: '14px',
-                          fontWeight: '600',
-                          color: '#0f172a',
-                          margin: 0
-                        }}>
-                          {product.name}
-                        </h4>
-                        <span style={{
-                          backgroundColor: '#ef4444',
-                          color: 'white',
-                          padding: '2px 8px',
-                          borderRadius: '12px',
-                          fontSize: '12px',
-                          fontWeight: '500'
-                        }}>
-                          {product.stock} left
-                        </span>
-                      </div>
-                      <p style={{
-                        fontSize: '12px',
-                        color: '#6b7280',
-                        margin: '0 0 12px 0'
-                      }}>
-                        {product.category}
-                      </p>
-                      <button style={{
-                        backgroundColor: '#ef4444',
-                        color: 'white',
-                        border: 'none',
-                        padding: '6px 12px',
-                        borderRadius: '4px',
-                        cursor: 'pointer',
-                        fontSize: '12px',
-                        fontWeight: '500'
-                      }}>
-                        Restock Now
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
+        {/* Recent Orders */}
+        <div className="xl:col-span-2 bg-white rounded-xl shadow-sm border border-gray-200">
+          <div className="p-6 border-b border-gray-200">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-gray-900">Recent Orders</h3>
+              <button 
+                onClick={() => window.location.href = '/admin/orders'}
+                className="text-orange-500 hover:text-orange-600 text-sm font-medium"
+              >
+                View All →
+              </button>
             </div>
           </div>
-        )}
+          
+          <div className="p-6">
+            <div className="space-y-4">
+              {recentOrders.length > 0 ? recentOrders.slice(0, 5).map((order) => (
+                <div key={order.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                  <div>
+                    <p className="font-medium text-gray-900">{order.orderNumber || order.id}</p>
+                    <p className="text-sm text-gray-600">{order.customer}</p>
+                    <p className="text-xs text-gray-500">{new Date(order.date).toLocaleDateString()}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-semibold text-gray-900">{formatPrice(order.total || order.amount)}</p>
+                    <span className={`inline-block px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(order.status)}`}>
+                      {order.status}
+                    </span>
+                  </div>
+                </div>
+              )) : (
+                <div className="text-center py-8 text-gray-500">
+                  <span className="text-4xl mb-4 block">📋</span>
+                  <p>No recent orders</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
 
-        {activeTab === 'products' && (
-          <div style={{
-            backgroundColor: 'white',
-            borderRadius: '12px',
-            padding: '24px',
-            boxShadow: '0 4px 15px rgba(0,0,0,0.08)',
-            textAlign: 'center'
-          }}>
-            <h2 style={{ fontSize: '24px', marginBottom: '16px', color: '#0f172a' }}>
-              Product Management
-            </h2>
-            <p style={{ color: '#6b7280', marginBottom: '24px' }}>
-              Manage your safety equipment catalog
-            </p>
-            <button style={{
-              backgroundColor: '#f97316',
-              color: 'white',
-              border: 'none',
-              padding: '12px 24px',
-              borderRadius: '8px',
-              cursor: 'pointer',
-              fontSize: '16px',
-              fontWeight: '500'
-            }}>
-              Add New Product
+        {/* Low Stock Alert */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+          <div className="p-6 border-b border-gray-200">
+            <h3 className="text-lg font-semibold text-gray-900">Low Stock Alert</h3>
+            <p className="text-sm text-gray-600">Items that need restocking</p>
+          </div>
+          
+          <div className="p-6">
+            <div className="space-y-4">
+              {lowStockProducts.length > 0 ? lowStockProducts.map((product, index) => (
+                <div key={index} className="flex items-center justify-between">
+                  <div>
+                    <p className="font-medium text-gray-900 text-sm">{product.name}</p>
+                    <p className="text-xs text-gray-500">{product.category}</p>
+                  </div>
+                  <div className="text-right">
+                    <span className="inline-block px-2 py-1 text-xs font-bold bg-red-100 text-red-800 rounded-full">
+                      {product.stock} left
+                    </span>
+                  </div>
+                </div>
+              )) : (
+                <div className="text-center py-8 text-gray-500">
+                  <span className="text-4xl mb-4 block">✅</span>
+                  <p className="text-sm">All products in stock</p>
+                </div>
+              )}
+            </div>
+            
+            <button 
+              onClick={() => window.location.href = '/admin/products'}
+              className="w-full mt-4 bg-orange-500 hover:bg-orange-600 text-white py-2 px-4 rounded-lg text-sm font-medium transition-colors"
+            >
+              Manage Inventory
             </button>
           </div>
-        )}
+        </div>
+      </div>
 
-        {['orders', 'customers', 'analytics', 'settings'].includes(activeTab) && (
-          <div style={{
-            backgroundColor: 'white',
-            borderRadius: '12px',
-            padding: '60px 24px',
-            boxShadow: '0 4px 15px rgba(0,0,0,0.08)',
-            textAlign: 'center'
-          }}>
-            <h2 style={{ fontSize: '24px', marginBottom: '16px', color: '#0f172a', textTransform: 'capitalize' }}>
-              {activeTab} Management
-            </h2>
-            <p style={{ color: '#6b7280' }}>
-              {activeTab} management functionality coming soon...
-            </p>
-          </div>
-        )}
+      {/* Quick Actions */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h3>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <button 
+            onClick={() => window.location.href = '/admin/products'}
+            className="bg-blue-500 hover:bg-blue-600 text-white p-4 rounded-lg transition-colors text-center"
+          >
+            <span className="block text-2xl mb-2">📦</span>
+            <span className="text-sm font-medium">Manage Products</span>
+          </button>
+          
+          <button 
+            onClick={() => window.location.href = '/admin/orders'}
+            className="bg-green-500 hover:bg-green-600 text-white p-4 rounded-lg transition-colors text-center"
+          >
+            <span className="block text-2xl mb-2">🛒</span>
+            <span className="text-sm font-medium">Process Orders</span>
+          </button>
+          
+          <button 
+            onClick={() => window.location.href = '/admin/customers'}
+            className="bg-purple-500 hover:bg-purple-600 text-white p-4 rounded-lg transition-colors text-center"
+          >
+            <span className="block text-2xl mb-2">👥</span>
+            <span className="text-sm font-medium">View Customers</span>
+          </button>
+          
+          <button 
+            onClick={() => window.location.href = '/admin/analytics'}
+            className="bg-orange-500 hover:bg-orange-600 text-white p-4 rounded-lg transition-colors text-center"
+          >
+            <span className="block text-2xl mb-2">📈</span>
+            <span className="text-sm font-medium">View Analytics</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Refresh Button */}
+      <div className="flex justify-end">
+        <button
+          onClick={fetchDashboardData}
+          className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+        >
+          <span>🔄</span>
+          Refresh Data
+        </button>
       </div>
     </div>
   )

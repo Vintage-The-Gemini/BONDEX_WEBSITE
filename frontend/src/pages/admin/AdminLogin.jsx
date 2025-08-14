@@ -1,7 +1,7 @@
 // File Path: frontend/src/pages/admin/AdminLogin.jsx
-
 import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import axios from 'axios'
 
 const AdminLogin = () => {
   const [formData, setFormData] = useState({
@@ -11,6 +11,9 @@ const AdminLogin = () => {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
   const navigate = useNavigate()
+
+  // API client setup
+  const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
 
   const handleInputChange = (e) => {
     const { name, value } = e.target
@@ -28,288 +31,165 @@ const AdminLogin = () => {
     setError('')
 
     try {
-      // TODO: Replace with actual API call
-      // For now, using demo credentials
-      if (formData.email === 'admin@bondexsafety.com' && formData.password === 'admin123') {
-        // Store admin session
-        localStorage.setItem('bondex_admin_token', 'demo_admin_token')
-        localStorage.setItem('bondex_admin_user', JSON.stringify({
-          id: 1,
-          name: 'Admin User',
-          email: 'admin@bondexsafety.com',
-          role: 'admin'
-        }))
-        
-        // Redirect to admin dashboard
-        navigate('/admin/dashboard')
+      console.log('🔐 Attempting admin login with:', formData.email)
+      
+      // Make real API call to backend
+      const response = await axios.post(`${API_BASE_URL}/admin/login`, {
+        email: formData.email,
+        password: formData.password
+      })
+
+      console.log('✅ Login successful:', response.data)
+      console.log('🔍 Full response structure:', JSON.stringify(response.data, null, 2))
+
+      // Check response structure
+      const responseData = response.data
+      let token, admin
+
+      // Handle different possible response structures
+      if (responseData.data && responseData.data.token) {
+        // Structure: { success: true, data: { token: "...", user: {...} } }
+        token = responseData.data.token
+        admin = responseData.data.user
+      } else if (responseData.token) {
+        // Structure: { success: true, token: "...", data: { user: {...} } }
+        token = responseData.token
+        admin = responseData.data?.user
       } else {
-        setError('Invalid email or password')
+        console.error('❌ Unexpected response structure:', responseData)
+        throw new Error('Invalid response structure from server')
       }
+      
+      // Check if token exists
+      if (!token) {
+        console.error('❌ No token found in response')
+        throw new Error('No token received from server')
+      }
+      
+      if (!admin) {
+        console.error('❌ No user data found in response')
+        throw new Error('No user data received from server')
+      }
+
+      // Store the real token and user data
+      localStorage.setItem('bondex_admin_token', token)
+      localStorage.setItem('bondex_admin_user', JSON.stringify(admin))
+      
+      console.log('💾 Token stored:', token.substring(0, 20) + '...')
+      console.log('👤 User data stored:', admin.email)
+      
+      // Redirect to admin dashboard
+      navigate('/admin/dashboard')
+      
     } catch (err) {
-      setError('Login failed. Please try again.')
+      console.error('❌ Login error:', err)
+      
+      if (err.response?.status === 401) {
+        setError('Invalid email or password')
+      } else if (err.response?.status === 400) {
+        setError(err.response.data.message || 'Please fill in all fields')
+      } else if (err.code === 'ECONNREFUSED') {
+        setError('Cannot connect to server. Please make sure the backend is running.')
+      } else {
+        setError(err.response?.data?.message || 'Login failed. Please try again.')
+      }
     } finally {
       setIsLoading(false)
     }
   }
 
   return (
-    <div style={{ 
-      minHeight: '100vh',
-      backgroundColor: '#f9fafb',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: '20px'
-    }}>
-      <div style={{
-        backgroundColor: 'white',
-        borderRadius: '12px',
-        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
-        overflow: 'hidden',
-        width: '100%',
-        maxWidth: '400px'
-      }}>
-        {/* Header */}
-        <div style={{
-          backgroundColor: '#0f172a',
-          color: 'white',
-          padding: '32px 32px 24px',
-          textAlign: 'center'
-        }}>
-          <div style={{
-            backgroundColor: 'white',
-            color: '#0f172a',
-            padding: '12px 16px',
-            borderRadius: '6px',
-            display: 'inline-block',
-            marginBottom: '16px'
-          }}>
-            <span style={{ 
-              fontSize: '20px', 
-              fontWeight: 'bold' 
-            }}>
-              BONDEX
-            </span>
-            <br />
-            <span style={{ 
-              fontSize: '12px', 
-              fontWeight: 'bold',
-              backgroundColor: '#facc15',
-              color: '#000',
-              padding: '2px 8px',
-              borderRadius: '3px'
-            }}>
-              SAFETY
-            </span>
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-md w-full space-y-8">
+        <div>
+          <div className="mx-auto h-12 w-12 bg-orange-500 rounded-lg flex items-center justify-center">
+            <span className="text-white text-2xl font-bold">B</span>
           </div>
-          <h1 style={{ 
-            fontSize: '24px', 
-            fontWeight: 'bold',
-            margin: '0 0 8px 0'
-          }}>
+          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
             Admin Login
-          </h1>
-          <p style={{ 
-            fontSize: '14px',
-            opacity: 0.8,
-            margin: 0
-          }}>
-            Access the admin dashboard
+          </h2>
+          <p className="mt-2 text-center text-sm text-gray-600">
+            Bondex Safety Equipment Admin Panel
           </p>
         </div>
+        
+        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
+          {error && (
+            <div className="bg-red-50 border border-red-200 rounded-md p-4">
+              <div className="flex">
+                <span className="text-red-400 text-lg mr-3">⚠️</span>
+                <div>
+                  <h3 className="text-sm font-medium text-red-800">Login Error</h3>
+                  <p className="text-sm text-red-700 mt-1">{error}</p>
+                </div>
+              </div>
+            </div>
+          )}
 
-        {/* Login Form */}
-        <div style={{ padding: '32px' }}>
-          {/* Demo Credentials Info */}
-          <div style={{
-            backgroundColor: '#fef3c7',
-            border: '1px solid #f59e0b',
-            borderRadius: '8px',
-            padding: '16px',
-            marginBottom: '24px'
-          }}>
-            <h4 style={{ 
-              fontSize: '14px', 
-              fontWeight: '600',
-              color: '#92400e',
-              margin: '0 0 8px 0'
-            }}>
-              Demo Credentials
-            </h4>
-            <p style={{ 
-              fontSize: '12px',
-              color: '#92400e',
-              margin: '0 0 8px 0'
-            }}>
-              <strong>Email:</strong> admin@bondexsafety.com
-            </p>
-            <p style={{ 
-              fontSize: '12px',
-              color: '#92400e',
-              margin: 0
-            }}>
-              <strong>Password:</strong> admin123
-            </p>
-          </div>
-
-          <form onSubmit={handleSubmit}>
-            {/* Email Field */}
-            <div style={{ marginBottom: '20px' }}>
-              <label style={{ 
-                display: 'block',
-                fontSize: '14px',
-                fontWeight: '500',
-                color: '#374151',
-                marginBottom: '6px'
-              }}>
+          <div className="space-y-4">
+            <div>
+              <label htmlFor="email" className="block text-sm font-medium text-gray-700">
                 Email Address
               </label>
               <input
-                type="email"
+                id="email"
                 name="email"
+                type="email"
+                autoComplete="email"
+                required
+                className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-orange-500 focus:border-orange-500 focus:z-10 sm:text-sm"
+                placeholder="Enter your email"
                 value={formData.email}
                 onChange={handleInputChange}
-                placeholder="Enter your email"
-                required
-                style={{
-                  width: '100%',
-                  padding: '12px 16px',
-                  border: '1px solid #d1d5db',
-                  borderRadius: '8px',
-                  fontSize: '14px',
-                  outline: 'none',
-                  transition: 'border-color 0.2s ease',
-                  boxSizing: 'border-box'
-                }}
-                onFocus={(e) => e.target.style.borderColor = '#f97316'}
-                onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
               />
             </div>
-
-            {/* Password Field */}
-            <div style={{ marginBottom: '24px' }}>
-              <label style={{ 
-                display: 'block',
-                fontSize: '14px',
-                fontWeight: '500',
-                color: '#374151',
-                marginBottom: '6px'
-              }}>
+            
+            <div>
+              <label htmlFor="password" className="block text-sm font-medium text-gray-700">
                 Password
               </label>
               <input
-                type="password"
+                id="password"
                 name="password"
+                type="password"
+                autoComplete="current-password"
+                required
+                className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-orange-500 focus:border-orange-500 focus:z-10 sm:text-sm"
+                placeholder="Enter your password"
                 value={formData.password}
                 onChange={handleInputChange}
-                placeholder="Enter your password"
-                required
-                style={{
-                  width: '100%',
-                  padding: '12px 16px',
-                  border: '1px solid #d1d5db',
-                  borderRadius: '8px',
-                  fontSize: '14px',
-                  outline: 'none',
-                  transition: 'border-color 0.2s ease',
-                  boxSizing: 'border-box'
-                }}
-                onFocus={(e) => e.target.style.borderColor = '#f97316'}
-                onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
               />
             </div>
+          </div>
 
-            {/* Error Message */}
-            {error && (
-              <div style={{
-                backgroundColor: '#fef2f2',
-                border: '1px solid #fecaca',
-                borderRadius: '8px',
-                padding: '12px 16px',
-                marginBottom: '20px'
-              }}>
-                <p style={{ 
-                  fontSize: '14px',
-                  color: '#dc2626',
-                  margin: 0
-                }}>
-                  {error}
-                </p>
-              </div>
-            )}
-
-            {/* Submit Button */}
+          <div>
             <button
               type="submit"
               disabled={isLoading}
-              style={{
-                width: '100%',
-                backgroundColor: isLoading ? '#9ca3af' : '#f97316',
-                color: 'white',
-                border: 'none',
-                padding: '12px 24px',
-                borderRadius: '8px',
-                fontSize: '16px',
-                fontWeight: '600',
-                cursor: isLoading ? 'not-allowed' : 'pointer',
-                transition: 'background-color 0.2s ease',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '8px'
-              }}
+              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-orange-600 hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isLoading ? (
-                <>
-                  <div style={{
-                    width: '16px',
-                    height: '16px',
-                    border: '2px solid #ffffff',
-                    borderTop: '2px solid transparent',
-                    borderRadius: '50%',
-                    animation: 'spin 1s linear infinite'
-                  }}></div>
+                <div className="flex items-center">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
                   Logging in...
-                </>
+                </div>
               ) : (
-                'Login to Admin Panel'
+                'Sign in to Admin Panel'
               )}
             </button>
-          </form>
-
-          {/* Back to Site */}
-          <div style={{ 
-            textAlign: 'center',
-            marginTop: '24px',
-            paddingTop: '24px',
-            borderTop: '1px solid #e5e7eb'
-          }}>
-            <a 
-              href="/"
-              style={{
-                color: '#6b7280',
-                textDecoration: 'none',
-                fontSize: '14px',
-                transition: 'color 0.2s ease'
-              }}
-              onMouseEnter={(e) => e.target.style.color = '#f97316'}
-              onMouseLeave={(e) => e.target.style.color = '#6b7280'}
-            >
-              ← Back to Bondex Safety
-            </a>
           </div>
-        </div>
-      </div>
 
-      {/* Spinner Animation */}
-      <style>
-        {`
-          @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-          }
-        `}
-      </style>
+          <div className="text-center">
+            <div className="mt-4 p-4 bg-blue-50 rounded-md">
+              <h3 className="text-sm font-medium text-blue-800 mb-2">Demo Credentials</h3>
+              <p className="text-xs text-blue-700">
+                <strong>Email:</strong> admin@bondexsafety.com<br />
+                <strong>Password:</strong> admin123
+              </p>
+            </div>
+          </div>
+        </form>
+      </div>
     </div>
   )
 }
