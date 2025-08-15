@@ -26,7 +26,7 @@ const useAuth = () => {
   return context;
 };
 
-// API Client with environment variable support
+// API Client with environment variable support (Fixed for browser)
 const getApiUrl = () => {
   // Check if we're in development or production
   if (typeof window !== 'undefined' && window.location) {
@@ -78,8 +78,11 @@ const AuthProvider = ({ children }) => {
       
       return { success: true };
     } catch (error) {
-      console.error('Login error:', error);
-      return { success: false, error: error.response?.data?.message || 'Login failed' };
+      console.error('Login failed:', error);
+      return { 
+        success: false, 
+        message: error.response?.data?.message || 'Login failed' 
+      };
     }
   };
 
@@ -91,66 +94,19 @@ const AuthProvider = ({ children }) => {
     setUser(null);
   };
 
+  const value = {
+    isAuthenticated,
+    user,
+    isLoading,
+    login,
+    logout,
+    apiClient
+  };
+
   return (
-    <AuthContext.Provider value={{ isAuthenticated, user, isLoading, login, logout }}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
-  );
-};
-
-// Loading Spinner Component
-const LoadingSpinner = () => (
-  <div style={{
-    minHeight: '100vh',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#f8fafc'
-  }}>
-    <div style={{
-      width: '48px',
-      height: '48px',
-      border: '3px solid #e5e7eb',
-      borderTop: '3px solid #f97316',
-      borderRadius: '50%',
-      animation: 'spin 1s linear infinite'
-    }}></div>
-    <style>
-      {`
-        @keyframes spin {
-          0% { transform: rotate(0deg); }
-          100% { transform: rotate(360deg); }
-        }
-      `}
-    </style>
-  </div>
-);
-
-// Protected Route for Admin
-const ProtectedRoute = ({ children }) => {
-  const { isAuthenticated, isLoading } = useAuth();
-  
-  if (isLoading) return <LoadingSpinner />;
-  return isAuthenticated ? children : <Navigate to="/admin/login" replace />;
-};
-
-// Customer Layout Wrapper
-const CustomerLayout = ({ children }) => {
-  return (
-    <div style={{ 
-      minHeight: '100vh',
-      display: 'flex',
-      flexDirection: 'column'
-    }}>
-      <Header />
-      <main style={{ 
-        flex: 1,
-        paddingTop: '0' // Header has its own spacing
-      }}>
-        {children}
-      </main>
-      <Footer />
-    </div>
   );
 };
 
@@ -166,60 +122,49 @@ class ErrorBoundary extends React.Component {
   }
 
   componentDidCatch(error, errorInfo) {
-    console.error('App Error:', error, errorInfo);
+    console.error('ErrorBoundary caught an error:', error, errorInfo);
   }
 
   render() {
     if (this.state.hasError) {
       return (
         <div style={{
+          padding: '40px',
+          textAlign: 'center',
           minHeight: '100vh',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          flexDirection: 'column',
-          backgroundColor: '#f8fafc',
-          padding: '20px',
-          textAlign: 'center'
+          flexDirection: 'column'
         }}>
-          <div style={{
-            backgroundColor: 'white',
-            padding: '40px',
-            borderRadius: '8px',
-            boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
+          <h1 style={{ 
+            fontSize: '24px', 
+            color: '#ef4444', 
+            marginBottom: '16px' 
+          }}>
+            Something went wrong
+          </h1>
+          <p style={{ 
+            color: '#6b7280', 
+            marginBottom: '24px',
             maxWidth: '500px'
           }}>
-            <h1 style={{
-              fontSize: '24px',
-              fontWeight: 'bold',
-              color: '#ef4444',
-              marginBottom: '16px'
-            }}>
-              Something went wrong
-            </h1>
-            <p style={{
-              color: '#6b7280',
-              marginBottom: '24px',
-              lineHeight: '1.6'
-            }}>
-              We're sorry, but there was an error loading the application. 
-              Please refresh the page or contact support if the problem persists.
-            </p>
-            <button
-              onClick={() => window.location.reload()}
-              style={{
-                backgroundColor: '#f97316',
-                color: 'white',
-                border: 'none',
-                padding: '12px 24px',
-                borderRadius: '6px',
-                cursor: 'pointer',
-                fontWeight: '500'
-              }}
-            >
-              Refresh Page
-            </button>
-          </div>
+            We're sorry, but something unexpected happened. Please try refreshing the page.
+          </p>
+          <button
+            onClick={() => window.location.reload()}
+            style={{
+              backgroundColor: '#f97316',
+              color: 'white',
+              border: 'none',
+              padding: '12px 24px',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              fontWeight: '500'
+            }}
+          >
+            Refresh Page
+          </button>
         </div>
       );
     }
@@ -228,20 +173,70 @@ class ErrorBoundary extends React.Component {
   }
 }
 
-// Not Found Page Component
-const NotFoundPage = () => (
+// Protected Route Component
+const ProtectedRoute = ({ children }) => {
+  const { isAuthenticated, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div style={{
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        minHeight: '100vh'
+      }}>
+        <div style={{
+          width: '48px',
+          height: '48px',
+          border: '3px solid #e5e7eb',
+          borderTop: '3px solid #f97316',
+          borderRadius: '50%',
+          animation: 'spin 1s linear infinite'
+        }}></div>
+        <style>
+          {`
+            @keyframes spin {
+              0% { transform: rotate(0deg); }
+              100% { transform: rotate(360deg); }
+            }
+          `}
+        </style>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <Navigate to="/admin/login" replace />;
+  }
+
+  return children;
+};
+
+// Customer Layout Component
+const CustomerLayout = ({ children }) => (
+  <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+    <Header />
+    <main style={{ flex: 1 }}>
+      {children}
+    </main>
+    <Footer />
+  </div>
+);
+
+// 404 Not Found Component
+const NotFound = () => (
   <CustomerLayout>
     <div style={{
-      minHeight: '400px',
       display: 'flex',
+      flexDirection: 'column',
       alignItems: 'center',
       justifyContent: 'center',
-      flexDirection: 'column',
+      minHeight: '60vh',
       textAlign: 'center',
-      padding: '60px 20px'
+      padding: '40px 20px'
     }}>
       <h1 style={{
-        fontSize: '48px',
+        fontSize: '72px',
         fontWeight: 'bold',
         color: '#f97316',
         marginBottom: '16px'
@@ -252,18 +247,17 @@ const NotFoundPage = () => (
         fontSize: '24px',
         fontWeight: 'bold',
         color: '#0f172a',
-        marginBottom: '16px'
+        marginBottom: '12px'
       }}>
         Page Not Found
       </h2>
       <p style={{
         color: '#6b7280',
         marginBottom: '32px',
-        maxWidth: '400px',
+        maxWidth: '500px',
         lineHeight: '1.6'
       }}>
-        Sorry, we couldn't find the page you're looking for. 
-        The page might have been moved or doesn't exist.
+        The page you are looking for doesn't exist or has been moved.
       </p>
       <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
         <button
@@ -342,28 +336,8 @@ function App() {
                   </CustomerLayout>
                 } 
               />
-
-              {/* Category-specific product routes */}
-              <Route 
-                path="/products/category/:category" 
-                element={
-                  <CustomerLayout>
-                    <ProductsPage />
-                  </CustomerLayout>
-                } 
-              />
-
-              {/* Industry-specific product routes */}
-              <Route 
-                path="/products/industry/:industry" 
-                element={
-                  <CustomerLayout>
-                    <ProductsPage />
-                  </CustomerLayout>
-                } 
-              />
-
-              {/* Individual product page */}
+              
+              {/* Product Detail Page */}
               <Route 
                 path="/product/:id" 
                 element={
@@ -373,67 +347,51 @@ function App() {
                 } 
               />
 
-              {/* Contact page (placeholder) */}
+              {/* ============================================ */}
+              {/* ADMIN ROUTES (with Admin Layout) */}
+              {/* ============================================ */}
+              
+              {/* Admin Login - Public */}
               <Route 
-                path="/contact" 
+                path="/admin/login" 
+                element={<AdminLogin />} 
+              />
+              
+              {/* Protected Admin Routes */}
+              <Route 
+                path="/admin/dashboard" 
                 element={
-                  <CustomerLayout>
-                    <div style={{ 
-                      minHeight: '400px', 
-                      display: 'flex', 
-                      alignItems: 'center', 
-                      justifyContent: 'center',
-                      flexDirection: 'column',
-                      textAlign: 'center',
-                      padding: '60px 20px'
-                    }}>
-                      <h2 style={{ fontSize: '24px', fontWeight: 'bold', color: '#0f172a', marginBottom: '16px' }}>
-                        Contact Us
-                      </h2>
-                      <p style={{ color: '#6b7280', marginBottom: '16px' }}>
-                        Email: info@bondexsafety.co.ke
-                      </p>
-                      <p style={{ color: '#6b7280', marginBottom: '16px' }}>
-                        Phone: +254 700 000 000
-                      </p>
-                      <p style={{ color: '#6b7280' }}>
-                        Address: Nairobi, Kenya
-                      </p>
-                    </div>
-                  </CustomerLayout>
+                  <ProtectedRoute>
+                    <AdminLayout>
+                      <AdminDashboard />
+                    </AdminLayout>
+                  </ProtectedRoute>
+                } 
+              />
+              
+              <Route 
+                path="/admin/products" 
+                element={
+                  <ProtectedRoute>
+                    <AdminLayout>
+                      <AdminProducts />
+                    </AdminLayout>
+                  </ProtectedRoute>
                 } 
               />
 
+              {/* Admin Root Redirect */}
+              <Route 
+                path="/admin" 
+                element={<Navigate to="/admin/dashboard" replace />} 
+              />
+
               {/* ============================================ */}
-              {/* ADMIN ROUTES (separate layout) */}
-              {/* ============================================ */}
-              
-              {/* Admin Login (no layout) */}
-              <Route path="/admin/login" element={<AdminLogin />} />
-              
-              {/* Protected Admin Routes */}
-              <Route path="/admin/*" element={
-                <ProtectedRoute>
-                  <AdminLayout>
-                    <Routes>
-                      <Route index element={<Navigate to="/admin/dashboard" replace />} />
-                      <Route path="dashboard" element={<AdminDashboard />} />
-                      <Route path="products" element={<AdminProducts />} />
-                      {/* Add more admin routes here as you build them */}
-                    </Routes>
-                  </AdminLayout>
-                </ProtectedRoute>
-              } />
-              
-              {/* Admin redirect */}
-              <Route path="/admin" element={<Navigate to="/admin/dashboard" replace />} />
-              
-              {/* ============================================ */}
-              {/* CATCH-ALL ROUTES */}
+              {/* FALLBACK ROUTES */}
               {/* ============================================ */}
               
               {/* 404 Not Found */}
-              <Route path="*" element={<NotFoundPage />} />
+              <Route path="*" element={<NotFound />} />
             </Routes>
           </Router>
         </AuthProvider>
@@ -442,6 +400,5 @@ function App() {
   );
 }
 
-// Export auth hook for use in other components
-export { useAuth };
 export default App;
+export { useAuth, getApiUrl };
