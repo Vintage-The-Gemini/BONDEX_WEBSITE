@@ -381,6 +381,74 @@ const industryCategories = [
     metaTitle: 'Laboratory Safety Equipment | Research PPE | Bondex Safety Kenya',
     metaDescription: 'Laboratory and research safety equipment including chemical protection, laboratory gloves, and scientific safety gear.',
     keywords: ['laboratory safety', 'research PPE', 'chemical protection', 'lab safety equipment']
+  },
+  {
+    name: 'Tourism & Hospitality',
+    slug: 'tourism-hospitality',
+    type: 'industry',
+    description: 'Hotels, resorts, tour operations, and hospitality services',
+    icon: '🏨',
+    colors: {
+      primary: '#20B2AA',
+      secondary: '#AFEEEE'
+    },
+    status: 'active',
+    sortOrder: 11,
+    isFeatured: false,
+    metaTitle: 'Tourism & Hospitality Safety Equipment | Bondex Safety Kenya',
+    metaDescription: 'Safety equipment for tourism and hospitality industry including first aid kits, emergency equipment, and staff safety gear.',
+    keywords: ['tourism safety', 'hospitality PPE', 'hotel safety equipment', 'tour operator safety']
+  },
+  {
+    name: 'Security Services',
+    slug: 'security-services',
+    type: 'industry',
+    description: 'Private security firms, guard services, and protective services',
+    icon: '🛡️',
+    colors: {
+      primary: '#000080',
+      secondary: '#ADD8E6'
+    },
+    status: 'active',
+    sortOrder: 12,
+    isFeatured: false,
+    metaTitle: 'Security Services Safety Equipment | Bondex Safety Kenya',
+    metaDescription: 'Professional safety equipment for security personnel including protective gear, communication devices, and security uniforms.',
+    keywords: ['security equipment', 'guard safety gear', 'protective services PPE', 'security uniforms']
+  },
+  {
+    name: 'Corporate Institutions',
+    slug: 'corporate-institutions',
+    type: 'industry',
+    description: 'Offices, corporate headquarters, and business facilities',
+    icon: '🏢',
+    colors: {
+      primary: '#696969',
+      secondary: '#D3D3D3'
+    },
+    status: 'active',
+    sortOrder: 13,
+    isFeatured: false,
+    metaTitle: 'Corporate Safety Equipment | Office PPE | Bondex Safety Kenya',
+    metaDescription: 'Safety equipment for corporate environments including first aid kits, emergency equipment, and office safety gear.',
+    keywords: ['corporate safety', 'office PPE', 'business safety equipment', 'workplace safety gear']
+  },
+  {
+    name: 'Education Institutions',
+    slug: 'education-institutions',
+    type: 'industry',
+    description: 'Schools, universities, colleges, and training centers',
+    icon: '🎓',
+    colors: {
+      primary: '#800080',
+      secondary: '#D8BFD8'
+    },
+    status: 'active',
+    sortOrder: 14,
+    isFeatured: false,
+    metaTitle: 'Education Safety Equipment | School PPE | Bondex Safety Kenya',
+    metaDescription: 'Safety equipment for educational institutions including first aid kits, lab safety gear, and emergency equipment for schools and universities.',
+    keywords: ['school safety', 'education PPE', 'university safety equipment', 'lab safety gear']
   }
 ];
 

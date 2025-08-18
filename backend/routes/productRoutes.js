@@ -1,4 +1,5 @@
-// File Path: backend/routes/productRoutes.js - FIXED VERSION
+// File Path: backend/routes/productRoutes.js - FIXED VERSION with Industry Support
+
 import express from 'express';
 import Product from '../models/Product.js';
 import Category from '../models/Category.js';
@@ -10,7 +11,7 @@ const router = express.Router();
 // ============================================
 
 // @route   GET /api/products
-// @desc    Get all products with filtering, sorting, pagination
+// @desc    Get all products with filtering, sorting, pagination (SUPPORTS INDUSTRIES)
 // @access  Public
 router.get('/', async (req, res) => {
   try {
@@ -20,7 +21,8 @@ router.get('/', async (req, res) => {
     const {
       page = 1,
       limit = 12,
-      category,
+      category,      // For protection types
+      industry,      // For industry types
       search,
       minPrice,
       maxPrice,
@@ -34,24 +36,23 @@ router.get('/', async (req, res) => {
     // Build filter object
     let filter = { status: 'active' };
 
-    // 🔧 FIX: Handle category filtering with slug support
-    if (category) {
-      console.log('🏷️ Filtering by category:', category);
+    // 🔧 PROTECTION TYPE FILTERING (category parameter)
+    if (category && category !== 'all') {
+      console.log('🛡️ Filtering by protection type:', category);
       
       try {
-        // First, try to find the category by slug
-        const categoryDoc = await Category.findOne({ 
+        // Find the protection type category by slug
+        const protectionCategory = await Category.findOne({ 
           slug: category,
+          type: 'protection_type',
           status: 'active' 
         });
         
-        if (categoryDoc) {
-          console.log('✅ Found category by slug:', categoryDoc.name);
-          // Use the ObjectId for filtering
-          filter.primaryCategory = categoryDoc._id;
+        if (protectionCategory) {
+          console.log('✅ Found protection type:', protectionCategory.name);
+          filter.primaryCategory = protectionCategory._id;
         } else {
-          console.log('⚠️ Category not found for slug:', category);
-          // If category doesn't exist, return empty results
+          console.log('⚠️ Protection type not found:', category);
           return res.json({
             success: true,
             data: [],
@@ -63,14 +64,55 @@ router.get('/', async (req, res) => {
               hasNext: false,
               hasPrev: false
             },
-            message: `No products found for category: ${category}`
+            message: `No products found for protection type: ${category}`
           });
         }
       } catch (categoryError) {
-        console.error('❌ Error finding category:', categoryError);
+        console.error('❌ Error finding protection type:', categoryError);
         return res.status(400).json({
           success: false,
-          message: 'Invalid category parameter'
+          message: 'Invalid protection type parameter'
+        });
+      }
+    }
+
+    // 🔧 INDUSTRY FILTERING (industry parameter) 
+    if (industry && industry !== 'all') {
+      console.log('🏭 Filtering by industry:', industry);
+      
+      try {
+        // Find the industry category by slug
+        const industryCategory = await Category.findOne({ 
+          slug: industry,
+          type: 'industry',
+          status: 'active' 
+        });
+        
+        if (industryCategory) {
+          console.log('✅ Found industry:', industryCategory.name);
+          // Filter by secondary categories that include this industry
+          filter.secondaryCategories = { $in: [industryCategory._id] };
+        } else {
+          console.log('⚠️ Industry not found:', industry);
+          return res.json({
+            success: true,
+            data: [],
+            pagination: {
+              current: parseInt(page),
+              total: 0,
+              count: 0,
+              totalProducts: 0,
+              hasNext: false,
+              hasPrev: false
+            },
+            message: `No products found for industry: ${industry}`
+          });
+        }
+      } catch (industryError) {
+        console.error('❌ Error finding industry:', industryError);
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid industry parameter'
         });
       }
     }
@@ -180,6 +222,7 @@ router.get('/', async (req, res) => {
       },
       filters: {
         category: category || 'all',
+        industry: industry || 'all',
         search: search || '',
         priceRange: { min: minPrice, max: maxPrice },
         featured: featured === 'true',
@@ -223,11 +266,10 @@ router.get('/search', async (req, res) => {
         { keywords: { $regex: searchQuery, $options: 'i' } }
       ]
     })
-    .populate('primaryCategory', 'name slug type icon')
+    .populate('primaryCategory', 'name slug icon')
     .limit(parseInt(limit))
     .lean();
 
-    // Format response
     const formattedProducts = products.map(product => ({
       ...product,
       formattedPrice: `KES ${product.product_price.toLocaleString()}`,
@@ -238,6 +280,7 @@ router.get('/search', async (req, res) => {
     res.json({
       success: true,
       data: formattedProducts,
+      query: searchQuery,
       count: products.length
     });
 
@@ -246,92 +289,6 @@ router.get('/search', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Error searching products',
-      error: error.message
-    });
-  }
-});
-
-// @route   GET /api/products/featured
-// @desc    Get featured products
-// @access  Public
-router.get('/featured', async (req, res) => {
-  try {
-    console.log('⭐ Featured products route hit');
-    
-    const { limit = 8 } = req.query;
-
-    const products = await Product.find({
-      status: 'active',
-      isFeatured: true
-    })
-    .populate('primaryCategory', 'name slug type icon')
-    .sort({ createdAt: -1 })
-    .limit(parseInt(limit))
-    .lean();
-
-    // Format response
-    const formattedProducts = products.map(product => ({
-      ...product,
-      formattedPrice: `KES ${product.product_price.toLocaleString()}`,
-      category: product.primaryCategory?.slug || 'uncategorized',
-      categoryName: product.primaryCategory?.name || 'Uncategorized'
-    }));
-
-    res.json({
-      success: true,
-      data: formattedProducts,
-      count: products.length
-    });
-
-  } catch (error) {
-    console.error('❌ Error fetching featured products:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Error fetching featured products',
-      error: error.message
-    });
-  }
-});
-
-// @route   GET /api/products/sale
-// @desc    Get products on sale
-// @access  Public
-router.get('/sale', async (req, res) => {
-  try {
-    console.log('💰 Sale products route hit');
-    
-    const { limit = 12 } = req.query;
-
-    const products = await Product.find({
-      status: 'active',
-      isOnSale: true,
-      salePrice: { $exists: true, $ne: null }
-    })
-    .populate('primaryCategory', 'name slug type icon')
-    .sort({ createdAt: -1 })
-    .limit(parseInt(limit))
-    .lean();
-
-    // Format response
-    const formattedProducts = products.map(product => ({
-      ...product,
-      formattedPrice: `KES ${product.product_price.toLocaleString()}`,
-      saleFormattedPrice: `KES ${product.salePrice.toLocaleString()}`,
-      category: product.primaryCategory?.slug || 'uncategorized',
-      categoryName: product.primaryCategory?.name || 'Uncategorized'
-    }));
-
-    res.json({
-      success: true,
-      data: formattedProducts,
-      count: products.length
-    });
-
-  } catch (error) {
-    console.error('❌ Error fetching sale products:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Error fetching sale products',
       error: error.message
     });
   }
@@ -379,21 +336,24 @@ router.get('/categories/:categorySlug', async (req, res) => {
     // Calculate pagination
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
-    // Find products in this category
-    const products = await Product.find({
-      primaryCategory: category._id,
-      status: 'active'
-    })
-    .populate('primaryCategory', 'name slug type icon colors')
-    .sort(sortObj)
-    .skip(skip)
-    .limit(parseInt(limit))
-    .lean();
+    // Find products in this category (check both primary and secondary categories)
+    const filter = {
+      status: 'active',
+      $or: [
+        { primaryCategory: category._id },
+        { secondaryCategories: { $in: [category._id] } }
+      ]
+    };
 
-    const total = await Product.countDocuments({
-      primaryCategory: category._id,
-      status: 'active'
-    });
+    const products = await Product.find(filter)
+      .populate('primaryCategory', 'name slug type icon colors')
+      .populate('secondaryCategories', 'name slug type icon')
+      .sort(sortObj)
+      .skip(skip)
+      .limit(parseInt(limit))
+      .lean();
+
+    const total = await Product.countDocuments(filter);
 
     // Format response
     const formattedProducts = products.map(product => ({
@@ -414,7 +374,8 @@ router.get('/categories/:categorySlug', async (req, res) => {
         slug: category.slug,
         description: category.description,
         icon: category.icon,
-        colors: category.colors
+        colors: category.colors,
+        type: category.type
       },
       pagination: {
         current: parseInt(page),

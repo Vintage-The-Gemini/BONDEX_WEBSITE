@@ -16,73 +16,21 @@ const HomePage = () => {
     try {
       setLoading(true)
       
-      // Use the correct API URL function
-      const getApiUrl = () => {
-        if (typeof window !== 'undefined' && window.location) {
-          const hostname = window.location.hostname
-          if (hostname === 'localhost' || hostname === '127.0.0.1') {
-            return 'http://localhost:5000/api'
-          }
-        }
-        return 'http://localhost:5000/api'
-      }
-
-      const apiUrl = getApiUrl()
-      
-      // Fetch featured products using your backend API structure
-      const featuredResponse = await fetch(`${apiUrl}/products/featured?limit=8`)
-      let featuredData = { data: [] }
-      
-      if (featuredResponse.ok) {
-        featuredData = await featuredResponse.json()
-        console.log('Featured products response:', featuredData)
-      } else {
-        console.warn('Featured products endpoint not available, trying general products with featured filter')
-        // Fallback: try general products endpoint with featured filter
-        const fallbackResponse = await fetch(`${apiUrl}/products?isFeatured=true&limit=8&status=active`)
-        if (fallbackResponse.ok) {
-          featuredData = await fallbackResponse.json()
-        }
-      }
+      // Fetch featured products
+      const featuredResponse = await fetch(
+        `${process.env.REACT_APP_API_URL}/api/products?status=active&isFeatured=true&limit=8`
+      )
+      const featuredData = await featuredResponse.json()
 
       // Fetch new arrivals
-      const newResponse = await fetch(`${apiUrl}/products?isNewArrival=true&limit=8&status=active&sort=-createdAt`)
-      let newData = { data: [] }
-      
-      if (newResponse.ok) {
-        newData = await newResponse.json()
-        console.log('New arrivals response:', newData)
-      } else {
-        console.warn('New arrivals filter not working, trying recent products')
-        // Fallback: get recent products
-        const fallbackResponse = await fetch(`${apiUrl}/products?limit=8&status=active&sort=-createdAt`)
-        if (fallbackResponse.ok) {
-          newData = await fallbackResponse.json()
-        }
-      }
+      const newResponse = await fetch(
+        `${process.env.REACT_APP_API_URL}/api/products?status=active&isNewArrival=true&limit=8`
+      )
+      const newData = await newResponse.json()
 
-      // Handle different response structures
-      const extractProducts = (response) => {
-        if (response.success && response.data) {
-          return Array.isArray(response.data) ? response.data : [response.data]
-        } else if (response.products) {
-          return Array.isArray(response.products) ? response.products : [response.products]
-        } else if (Array.isArray(response)) {
-          return response
-        }
-        return []
-      }
-
-      const featuredProducts = extractProducts(featuredData)
-      const newProducts = extractProducts(newData)
-
-      console.log('Final featured products:', featuredProducts)
-      console.log('Final new products:', newProducts)
-
-      setFeaturedProducts(featuredProducts)
-      setNewArrivals(newProducts)
+      setFeaturedProducts(featuredData.products || [])
+      setNewArrivals(newData.products || [])
     } catch (err) {
-      console.error('Error fetching homepage data:', err)
       setError(err.message)
     } finally {
       setLoading(false)
